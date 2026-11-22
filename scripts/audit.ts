@@ -46,8 +46,9 @@ const checks: Array<[string, () => Promise<void>]> = [
     const required = ['core/render-engine.ts','core/render-pipeline.ts','core/render-target.ts','core/shader-manager.ts','lighting/lighting-system.ts','lighting/shadow-system.ts','lighting/eclipse-system.ts','atmosphere/atmosphere-system.ts','atmosphere/scattering.ts','atmosphere/cloud-system.ts','atmosphere/atmosphere-material.ts','effects/bloom.ts','effects/glare.ts','effects/lens-flare.ts','effects/tone-mapping.ts','materials/planet-material.ts','materials/star-material.ts','materials/ring-material.ts','materials/surface-material.ts','quality/quality-settings.ts','quality/adaptive-quality.ts','environment/environment-systems.ts'];
     for (const path of required) await readFile(new URL('../src/rendering/' + path, import.meta.url), 'utf8');
     const settings = await readFile(new URL('../lab/graphics-settings.ts', import.meta.url), 'utf8');
+    const graphicsHtml = await readFile(new URL('../lab/index.html', import.meta.url), 'utf8');
     if (!settings.includes('graphics-settings-change') || !settings.includes('localStorage')) throw new Error('Graphics settings must persist and publish changes.');
-    if (!labHtml.includes('id="window-settings"') || !labHtml.includes('id="graphics-preset"') || !labHtml.includes('src="./graphics-settings.ts"')) throw new Error('Graphics settings UI is incomplete.');
+    if (!graphicsHtml.includes('id="window-settings"') || !graphicsHtml.includes('id="graphics-preset"') || !graphicsHtml.includes('src="./graphics-settings.ts"')) throw new Error('Graphics settings UI is incomplete.');
     const compatibility = await readFile(new URL('../src/rendering/lighting/lighting-system.ts', import.meta.url), 'utf8');
     if (!compatibility.includes('extends LightingEngine')) throw new Error('New lighting system must preserve the legacy LightingEngine API.');
   }],

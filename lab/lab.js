@@ -11,7 +11,7 @@ const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;
 let world, vessel, paused = false, lastFrame = 0, trail = [];
-const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };
+const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };\nconst cameraPan = { x: 0, y: 0 };\nlet highestWindowZ = 50;
 const MIN_ZOOM = 0.08, MAX_ZOOM = 64, ZOOM_FACTOR = 1.25;
 const PLANET_IDS = ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
 const PLANET_COLORS = { mercury:'#a6a6a6',venus:'#e5bd82',earth:'#5b9dff',mars:'#df806b',jupiter:'#d8a77c',saturn:'#d8ca9b',uranus:'#81d9dd',neptune:'#6089ed' };
@@ -64,7 +64,7 @@ function label(ctx,text,x,y,color='#9aabc2',font='10px Segoe UI,Arial') {
 function drawSolar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);ctx.clearRect(0,0,w,h);
   const sun=getBody('sun'),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-  const maxPx=Math.min(w*.43,h*.42)*cameraZoom.solar,cx=w*.5,cy=h*.52;
+  const maxPx=Math.min(w*.43,h*.42)*cameraZoom.solar,cx=w*.5+cameraPan.x,cy=h*.5+cameraPan.y;
   const displayRadius=distance=>Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx;
   ctx.save();ctx.strokeStyle='#22364e';ctx.lineWidth=1;ctx.setLineDash([2,6]);
   for(const id of PLANET_IDS){
@@ -123,9 +123,60 @@ function changeZoom(view,direction){if(!(view in cameraZoom))return;cameraZoom[v
 function resetZoom(view){if(!(view in cameraZoom))return;cameraZoom[view]=view==='lunar'?.34:1;drawAll();}
 function bindCameraControls(view){
   canvases[view].addEventListener('wheel',event=>{event.preventDefault();changeZoom(view,event.deltaY<0?1:-1);},{passive:false});
-  document.querySelectorAll('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')changeZoom(view,1);else if(action==='out')changeZoom(view,-1);else if(action==='reset')resetZoom(view);}));
+  document.querySelectorAll('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')changeZoom(view,1);else if(action==='out')changeZoom(view,-1);else if(action==='reset'){resetZoom(view);if(view==='solar')cameraPan.x=cameraPan.y=0;drawAll();}}));
 }
 for(const view of Object.keys(canvases))bindCameraControls(view);
+
+// Full-screen solar-system camera: left mouse drag pans, wheel zooms around the view.
+{
+  const canvas=canvases.solar;
+  let dragging=false,lastX=0,lastY=0;
+  canvas.addEventListener('pointerdown',event=>{
+    if(event.button!==0)return;
+    dragging=true;lastX=event.clientX;lastY=event.clientY;
+    canvas.classList.add('dragging');canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove',event=>{
+    if(!dragging)return;
+    cameraPan.x+=event.clientX-lastX;cameraPan.y+=event.clientY-lastY;
+    lastX=event.clientX;lastY=event.clientY;drawSolar();
+  });
+  const stop=()=>{dragging=false;canvas.classList.remove('dragging');};
+  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
+}
+$('camera-home').addEventListener('click',()=>{cameraPan.x=0;cameraPan.y=0;cameraZoom.solar=1;drawAll();});
+
+// Independent utility windows can be opened, closed and dragged by their title bars.
+function openWindow(id){
+  const win=$(id);if(!win)return;
+  win.style.display='block';win.style.zIndex=String(++highestWindowZ);
+  document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
+  requestAnimationFrame(()=>{drawAll();});
+}
+document.querySelectorAll('[data-open-window]').forEach(button=>button.addEventListener('click',()=>openWindow(button.dataset.openWindow)));
+document.querySelectorAll('.floating-window').forEach(win=>{
+  win.querySelector('.window-close').addEventListener('click',()=>{
+    win.style.display='none';
+    document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow==='window-system'));
+  });
+  win.addEventListener('pointerdown',()=>{win.style.zIndex=String(++highestWindowZ);});
+  const bar=win.querySelector('.window-titlebar');
+  let drag=null;
+  bar.addEventListener('pointerdown',event=>{
+    if(event.target.closest('button'))return;
+    const rect=win.getBoundingClientRect();
+    drag={pointerId:event.pointerId,x:event.clientX-rect.left,y:event.clientY-rect.top};
+    bar.setPointerCapture(event.pointerId);win.style.zIndex=String(++highestWindowZ);
+  });
+  bar.addEventListener('pointermove',event=>{
+    if(!drag||drag.pointerId!==event.pointerId)return;
+    const maxX=window.innerWidth-win.offsetWidth,maxY=window.innerHeight-52;
+    win.style.left=Math.max(204,Math.min(maxX,event.clientX-drag.x))+'px';
+    win.style.top=Math.max(62,Math.min(maxY,event.clientY-drag.y))+'px';
+  });
+  const end=()=>{drag=null;};
+  bar.addEventListener('pointerup',end);bar.addEventListener('pointercancel',end);
+});
 
 function updateTelemetry(){
   if(!vessel)return;

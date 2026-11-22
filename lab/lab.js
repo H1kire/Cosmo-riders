@@ -310,7 +310,8 @@ function bindCameraControls(view){
 }
 for(const view of ['lunar','vessel'])bindCameraControls(view);
 
-// The 3D renderer owns solar-camera input; legacy 2D map handlers are intentionally removed.\nfunction drawAll(){
+// The 3D renderer owns solar-camera input; legacy 2D map handlers are intentionally removed.
+function drawAll(){
   drawSolar();
   // Дополнительные сцены не перерисовываются, пока их окна закрыты.
   if($('window-local').style.display==='block')drawLunar();

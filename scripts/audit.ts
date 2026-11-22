@@ -15,7 +15,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!html.includes('href="./lab/style.css"') || !labHtml.includes('href="./style.css"')) throw new Error('A page stylesheet path is broken.');
     for (const match of app.matchAll(/\$\('([^']+)'\)/g)) {
       const id = match[1];
-      if (id !== 'window-system' && !html.includes('id="' + id + '"') && !html.includes("id='" + id + "'")) throw new Error('Missing DOM element id: ' + id);
+      if (id !== 'window-system' && !html.includes(`id="${id}"`) && !html.includes(`id='${id}'`)) throw new Error('Missing DOM element id: ' + id);
     }
     if (css.includes('\\n.body-label-layer')) throw new Error('A literal escaped newline breaks the map overlay stylesheet.');
     if (!app.includes('drawFallbackSolar()') || !app.includes('activateSolarFallback(error)')) throw new Error('A non-WebGL map fallback is missing.');

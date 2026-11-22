@@ -70,13 +70,13 @@ export class PhysicsWorld {
   return states;
  }
  /** Interpolate a vessel from the last committed physics step without mutating simulation state. */
- getVesselStateAt(id,timeSeconds){
+ getVesselStateAt(id,timeSeconds,bodyStates=this.getBodyStatesAt(timeSeconds)){
   const vessel=this.vessels.get(id);
   if(!vessel)throw new Error('Unknown vessel: '+id);
   if(!Number.isFinite(timeSeconds))throw new TypeError('timeSeconds must be finite.');
   const elapsed=timeSeconds-this.simulationTimeSeconds;
   const primary=this.bodies.get(vessel.primaryBodyId);
-  const bodyStates=this.getBodyStatesAt(timeSeconds),primaryState=bodyStates.get(primary.id);
+  const primaryState=bodyStates.get(primary.id);
   const relative=propagateKepler({position:vessel.relativePosition,velocity:vessel.relativeVelocity,mu:primary.mu,deltaTimeSeconds:elapsed});
   return {position:add(primaryState.position,relative.position),velocity:add(primaryState.velocity,relative.velocity),primaryBodyId:vessel.primaryBodyId,massKg:vessel.massKg};
  }

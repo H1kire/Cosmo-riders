@@ -103,6 +103,7 @@ export const SOLAR_SYSTEM_DATA = Object.freeze({
   saturn: planet('saturn', 'Saturn', 5.6834e26, 58232000, 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448),
   uranus: planet('uranus', 'Uranus', 8.6810e25, 25362000, 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503),
   neptune: planet('neptune', 'Neptune', 1.02413e26, 24622000, 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574),
+  moon: satellites[0],
   ...Object.fromEntries(satellites.map(body => [body.id, body]))
 });
 

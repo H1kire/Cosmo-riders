@@ -67,6 +67,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('far=focusState?Math.max(.01,this.distance*100):100') || !source.includes('Math.min(this.distance*.001,far*1e-6)')) throw new Error('Focused planetary views must use an adaptive depth range to preserve depth-buffer precision.');
     if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');
+    if (!source.includes('sunStrength=clamp(uLightIntensity,.35,1.)') || !source.includes('l=.24+.76*sunStrength*sunFacing')) throw new Error('Planetary shading must retain ambient visibility on night sides and clamp direct illumination.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');

@@ -3,142 +3,110 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#080d18">
-  <title>Cosmo-riders — Physics Lab</title>
+  <meta name="theme-color" content="#070b14">
+  <title>Cosmo-riders — Flight Operations</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <div class="eyebrow">COSMO-RIDERS / ENGINEERING</div>
-      <h1>Физическая лаборатория</h1>
-      <p>Иерархия Солнце → Земля → Луна · J2000.0 · SI</p>
-    </div>
-    <div class="status"><span class="status-dot"></span> PHYSICS CORE ONLINE</div>
+    <a class="brand" href="./" aria-label="Cosmo-riders">
+      <span class="brand-mark">C</span>
+      <span><strong>COSMO-RIDERS</strong><small>FLIGHT OPERATIONS</small></span>
+    </a>
+    <div class="top-status"><span class="live-dot"></span><span>СИМУЛЯЦИЯ АКТИВНА</span><span class="divider"></span><span>ЭПОХА J2000.0</span></div>
+    <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 с</strong></div>
   </header>
 
-  <main>
-    <section class="toolbar panel">
-      <div class="control-group">
-        <label for="scenario">Начальное положение корабля</label>
-        <select id="scenario">
-          <option value="earth-orbit">Низкая орбита Земли</option>
-          <option value="moon-approach">Внутри сферы влияния Луны</option>
-          <option value="moon-orbit">Орбита вокруг Луны</option>
-        </select>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="side-label">НАВИГАЦИЯ</div>
+      <a class="nav-item active" href="#flight"><span>◉</span> Обзор полёта</a>
+      <a class="nav-item" href="#system"><span>◎</span> Солнечная система</a>
+      <a class="nav-item" href="#ship"><span>⌁</span> Корабль</a>
+      <a class="nav-item" href="#maneuvers"><span>△</span> Манёвры</a>
+      <div class="side-divider"></div>
+      <div class="side-label">ЦЕНТР УПРАВЛЕНИЯ</div>
+      <div class="mission-card">
+        <span class="mission-tag">ТЕКУЩАЯ МИССИЯ</span>
+        <strong>ORBITAL TEST</strong>
+        <small>Проверка орбитальной динамики</small>
+        <div class="mission-progress"><i></i></div>
+        <small>Система: Земля · НОО</small>
       </div>
-      <div class="control-group">
-        <label for="time-scale">Ускорение времени</label>
-        <select id="time-scale">
-          <option value="1">1×</option>
-          <option value="60">60×</option>
-          <option value="600">600×</option>
-          <option value="3600" selected>3 600×</option>
-          <option value="21600">21 600×</option>
-          <option value="86400">86 400×</option>
-        </select>
-      </div>
-      <div class="toolbar-actions">
-        <button id="pause-button" class="button primary">Пауза</button>
-        <button id="step-button" class="button">Шаг +1 с</button>
-        <button id="reset-button" class="button">Сбросить</button>
-      </div>
-    </section>
+      <div class="sidebar-bottom"><span class="status-dot"></span> PHYSICS CORE <b>READY</b></div>
+    </aside>
 
-    <section class="visual-grid">
-      <article class="panel visual-panel">
-        <div class="panel-heading">
-          <div><span class="panel-kicker">01 / HELIOCENTRIC</span><h2>Солнце — Земля</h2></div>
-          <div class="panel-tools"><span class="scale-note">Схематичная проекция XY</span><div class="camera-controls" aria-label="Управление масштабом проекции">
-            <button class="zoom-button" type="button" data-zoom-view="solar" data-zoom-action="out" aria-label="Отдалить">−</button>
-            <output id="zoom-value-solar" class="zoom-value">100%</output>
-            <button class="zoom-button" type="button" data-zoom-view="solar" data-zoom-action="in" aria-label="Приблизить">+</button>
-            <button class="zoom-button zoom-reset" type="button" data-zoom-view="solar" data-zoom-action="reset">Сброс</button>
-          </div></div>
+    <main class="workspace">
+      <section class="page-heading" id="flight">
+        <div><div class="eyebrow">MISSION CONTROL / FLIGHT DECK</div><h1>Центр управления полётом</h1><p>Космическая навигация и динамика небесных тел</p></div>
+        <div class="heading-actions">
+          <label class="select-wrap"><span>СЦЕНАРИЙ</span><select id="scenario">
+            <option value="earth-orbit">Орбита Земли</option>
+            <option value="moon-approach">Сближение с Луной</option>
+            <option value="moon-orbit">Орбита Луны</option>
+          </select></label>
+          <button id="reset-button" class="button subtle">Перезапуск миссии</button>
         </div>
-        <canvas id="solar-view" aria-label="Орбита Земли вокруг Солнца" title="Колесо мыши: приблизить или отдалить"></canvas>
-        <div class="legend">
-          <span><i class="dot sun"></i>Солнце</span><span><i class="dot earth"></i>Земля</span>
-          <span><i class="ring soi"></i>SOI Земли</span>
-        </div>
-      </article>
+      </section>
 
-      <article class="panel visual-panel">
-        <div class="panel-heading">
-          <div><span class="panel-kicker">02 / LUNAR SYSTEM</span><h2>Земля — Луна</h2></div>
-          <div class="panel-tools"><span class="scale-note">Локальная система</span><div class="camera-controls" aria-label="Управление масштабом проекции">
-            <button class="zoom-button" type="button" data-zoom-view="lunar" data-zoom-action="out" aria-label="Отдалить">−</button>
-            <output id="zoom-value-lunar" class="zoom-value">100%</output>
-            <button class="zoom-button" type="button" data-zoom-view="lunar" data-zoom-action="in" aria-label="Приблизить">+</button>
-            <button class="zoom-button zoom-reset" type="button" data-zoom-view="lunar" data-zoom-action="reset">Сброс</button>
-          </div></div>
-        </div>
-        <canvas id="lunar-view" aria-label="Орбита Луны вокруг Земли" title="Колесо мыши: приблизить или отдалить"></canvas>
-        <div class="legend">
-          <span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span>
-          <span><i class="ring soi"></i>SOI Земли</span><span><i class="ring moon-soi"></i>SOI Луны</span>
-        </div>
-      </article>
+      <section class="flight-grid">
+        <article class="panel system-panel" id="system">
+          <div class="panel-heading">
+            <div><span class="panel-kicker">STARMAP / 01</span><h2>Солнечная система</h2><p class="panel-subtitle">Гелиоцентрическая проекция · орбиты планет</p></div>
+            <span class="badge green">8 ПЛАНЕТ</span>
+          </div>
+          <div class="map-wrap"><canvas id="solar-view" aria-label="Карта орбит планет Солнечной системы"></canvas><div class="map-overlay"><span class="map-dot"></span> СИСТЕМА СОЛНЦА <span>·</span> МАСШТАБНАЯ СХЕМА</div></div>
+          <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span></div>
+          <div class="zoom-row"><span>МАСШТАБ КАРТЫ</span><div class="camera-controls"><button class="zoom-button" data-zoom-view="solar" data-zoom-action="out" type="button">−</button><output id="zoom-value-solar">100%</output><button class="zoom-button" data-zoom-view="solar" data-zoom-action="in" type="button">+</button><button class="zoom-button reset-zoom" data-zoom-view="solar" data-zoom-action="reset" type="button">СБРОС</button></div></div>
+        </article>
 
-      <article class="panel visual-panel detail-panel">
-        <div class="panel-heading">
-          <div><span class="panel-kicker">03 / VESSEL TRACK</span><h2>Корабль и активный центр</h2></div>
-          <div class="panel-tools"><span class="scale-note" id="detail-scale">Масштаб: локальный</span><div class="camera-controls" aria-label="Управление масштабом проекции">
-            <button class="zoom-button" type="button" data-zoom-view="vessel" data-zoom-action="out" aria-label="Отдалить">−</button>
-            <output id="zoom-value-vessel" class="zoom-value">100%</output>
-            <button class="zoom-button" type="button" data-zoom-view="vessel" data-zoom-action="in" aria-label="Приблизить">+</button>
-            <button class="zoom-button zoom-reset" type="button" data-zoom-view="vessel" data-zoom-action="reset">Сброс</button>
-          </div></div>
-        </div>
-        <canvas id="vessel-view" aria-label="Орбита пробного корабля относительно активного гравитационного центра" title="Колесо мыши: приблизить или отдалить"></canvas>
-        <div class="legend">
-          <span><i class="dot primary-body"></i>Активный центр</span>
-          <span><i class="dot vessel"></i>Корабль</span>
-          <span><i class="ring soi"></i>Сфера влияния</span>
-        </div>
-      </article>
-    </section>
+        <article class="panel vessel-panel" id="ship">
+          <div class="panel-heading"><div><span class="panel-kicker">VESSEL TELEMETRY / 02</span><h2>Корабль «Rider-01»</h2><p class="panel-subtitle">Текущее состояние аппарата</p></div><span id="primary-badge" class="badge blue">Земля</span></div>
+          <div class="vessel-view"><canvas id="vessel-view" aria-label="Положение корабля относительно активного гравитационного центра"></canvas><div class="vessel-caption" id="detail-scale">Локальная система координат</div></div>
+          <div class="telemetry-grid">
+            <div class="metric"><span>ВЫСОТА / РАДИУС</span><strong id="distance-value">—</strong></div>
+            <div class="metric"><span>ОРБИТАЛЬНАЯ СКОРОСТЬ</span><strong id="speed-value">—</strong></div>
+            <div class="metric"><span>ПЕРИОД</span><strong id="period-value">—</strong></div>
+            <div class="metric"><span>ЭКСЦЕНТРИСИТЕТ</span><strong id="eccentricity-value">—</strong></div>
+          </div>
+          <div class="wide-metric"><span>СФЕРА ВЛИЯНИЯ / SOI</span><strong id="soi-value">—</strong></div>
+          <div class="wide-metric"><span>ПОСЛЕДНЯЯ СМЕНА ЦЕНТРА</span><strong id="switch-value">Не было</strong></div>
+        </article>
+      </section>
 
-    <section class="data-grid">
-      <article class="panel data-panel">
-        <div class="panel-heading"><div><span class="panel-kicker">LIVE TELEMETRY</span><h2>Пробный корабль</h2></div><span id="primary-badge" class="badge">Земля</span></div>
-        <div class="telemetry">
-          <div><span>Положение относительно центра</span><strong id="distance-value">—</strong></div>
-          <div><span>Скорость относительно центра</span><strong id="speed-value">—</strong></div>
-          <div><span>Орбитальный период*</span><strong id="period-value">—</strong></div>
-          <div><span>Эксцентриситет*</span><strong id="eccentricity-value">—</strong></div>
-          <div><span>Активная сфера влияния</span><strong id="soi-value">—</strong></div>
-          <div><span>Последнее переключение</span><strong id="switch-value">—</strong></div>
-        </div>
-        <p class="footnote">* Мгновенные осцулирующие элементы двухтельной модели. Для незамкнутой траектории период не определён.</p>
-      </article>
-      <article class="panel data-panel">
-        <div class="panel-heading"><div><span class="panel-kicker">SIMULATION CLOCK</span><h2>Время и управление</h2></div></div>
-        <div class="clock" id="clock-value">J2000.0 + 0 с</div>
-        <div class="telemetry compact">
-          <div><span>Физический шаг</span><strong>60 с</strong></div>
-          <div><span>Модель</span><strong>Patched conics</strong></div>
-          <div><span>SOI вход / выход</span><strong>90% / 110%</strong></div>
-        </div>
-        <div class="impulse-actions">
-          <button id="retro-button" class="button">−10 м/с · против движения</button>
-          <button id="pro-button" class="button">+10 м/с · по движению</button>
-        </div>
-        <p class="footnote">Импульс мгновенно меняет скорость корабля относительно текущего центра. Ручное управление двигателем здесь не моделируется.</p>
-      </article>
-    </section>
+      <section class="operations-grid">
+        <article class="panel operations-panel">
+          <div class="panel-heading"><div><span class="panel-kicker">FLIGHT CONTROL / 03</span><h2>Управление полётом</h2></div><span class="control-hint">ФИКСИРОВАННЫЙ ШАГ ФИЗИКИ: 1 С</span></div>
+          <div class="time-controls">
+            <label class="select-wrap"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale">
+              <option value="1">1× · Реальное время</option><option value="60">60×</option><option value="600">600×</option><option value="3600" selected>3 600×</option><option value="21600">21 600×</option><option value="86400">86 400×</option>
+            </select></label>
+            <div class="button-row"><button id="pause-button" class="button primary">Ⅱ Пауза</button><button id="step-button" class="button subtle">Шаг +1 с</button></div>
+          </div>
+          <div class="engine-box">
+            <div><span class="panel-kicker">MAIN ENGINE / CHEMICAL</span><strong>R-200 · 200 kN</strong><small>Удельный импульс: 340 с · вакуум</small></div>
+            <div class="engine-stats"><span>МАССА <b id="mass-value">12 000 кг</b></span><span>ТЯГООРУЖЁННОСТЬ <b id="twr-value">—</b></span></div>
+            <div class="button-row"><button id="retro-button" class="button engine-button">−10 м/с · РЕТРОГРАД</button><button id="pro-button" class="button engine-button">+10 м/с · ПРОГРАД</button></div>
+            <p id="burn-status" class="inline-status">Двигатель готов к импульсному включению</p>
+          </div>
+        </article>
 
-    <section class="panel notes-panel">
-      <div><span class="panel-kicker">MODEL NOTES</span><h2>Что именно мы проверяем</h2></div>
-      <ul>
-        <li>Орбитальное движение тел рассчитывается физическим ядром, а не анимацией интерфейса.</li>
-        <li>Сферы влияния вычисляются по формуле Лапласа; визуальные окружности показаны в своих локальных масштабах.</li>
-        <li>При смене активного центра абсолютные положение и скорость корабля должны сохраняться.</li>
-        <li>Это двухтельная аппроксимация с patched-conics, а не N-body и не высокоточные эфемериды JPL.</li>
-      </ul>
-    </section>
-  </main>
-  <footer>Cosmo-riders · Physics Lab · экспериментальная сборка ветки test</footer>
+        <article class="panel maneuver-panel" id="maneuvers">
+          <div class="panel-heading"><div><span class="panel-kicker">TRAJECTORY DESIGN / 04</span><h2>Планировщик манёвров</h2></div><span class="badge">HOHMANN</span></div>
+          <p class="panel-subtitle">Теоретический переход с круговой орбиты Земли на орбиту Марса вокруг Солнца</p>
+          <div class="maneuver-result"><div><span>ИМПУЛЬС ОТЛЁТА Δv₁</span><strong id="hohmann-departure">—</strong></div><div><span>ИМПУЛЬС ПРИБЫТИЯ Δv₂</span><strong id="hohmann-arrival">—</strong></div><div><span>ОБЩИЙ Δv</span><strong id="hohmann-total">—</strong></div></div>
+          <div class="transfer-time"><span>ВРЕМЯ ПЕРЕЛЁТА</span><strong id="hohmann-time">—</strong></div>
+          <p class="footnote">Идеализированный переход Хомана между копланарными круговыми орбитами. Не учитывает старт с поверхности, наклонение, фазовый угол и гравитационные возмущения.</p>
+        </article>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="panel local-panel"><div class="panel-heading"><div><span class="panel-kicker">LOCAL SYSTEM / 05</span><h2>Земля — Луна</h2></div><span class="panel-subtitle">Локальная проекция</span></div><canvas id="lunar-view" aria-label="Орбита Луны вокруг Земли"></canvas><div class="local-footer"><span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span><span><i class="ring soi"></i>Сферы влияния</span><div class="camera-controls"><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="out" type="button">−</button><output id="zoom-value-lunar">34%</output><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="in" type="button">+</button><button class="zoom-button reset-zoom" data-zoom-view="lunar" data-zoom-action="reset" type="button">СБРОС</button></div></div></article>
+        <article class="panel system-data"><div class="panel-heading"><div><span class="panel-kicker">SIMULATION MODEL / 06</span><h2>Параметры модели</h2></div></div><div class="data-list"><div><span>Модель движения</span><b>Patched conics</b></div><div><span>Эфемериды</span><b>Kepler · J2000.0</b></div><div><span>Сфера влияния</span><b>Лаплас · 90 / 110%</b></div><div><span>Единицы расчёта</span><b>SI · m / kg / s</b></div><div><span>Гравитационные тела</span><b>Солнце + 8 планет + Луна</b></div><div><span>Текущий центр</span><b id="model-primary">Земля</b></div></div></article>
+      </section>
+      <footer class="footer">COSMO-RIDERS <span>·</span> FLIGHT OPERATIONS <span>·</span> BUILD TEST</footer>
+    </main>
+  </div>
   <script type="module" src="./lab.js"></script>
 </body>
 </html>

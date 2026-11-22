@@ -63,12 +63,12 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
     if (!source.includes("getContext('webgl'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL renderer or high-detail sphere mesh is missing.');
-    if (!source.includes('const localMode=Boolean(focus&&focusState)')) throw new Error('Focused camera must remain local at every zoom distance.');
+    if (!source.includes('this.target=this.mapPosition(') || !source.includes('const mapper=(b,p)=>this.mapPosition(')) throw new Error('Camera must track the selected body in the shared solar-system coordinate space.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');
     if (!source.includes('uColor*(1.15+b*.12)') || source.includes('uColor*(1.15+fine*.12)')) throw new Error('Sun fragment shader contains an invalid or unresolved variable.');
-    if (!source.includes('drawOrbit(world,b,states,sun,vp,mapper)') || !source.includes('localMode')) throw new Error('3D orbit or hierarchical local rendering is missing.');
+    if (!source.includes('for(const b of bodies)this.drawOrbit(world,b,states,sun,vp,mapper)') || source.includes('localMode')) throw new Error('All solar-system orbits must remain in one shared scene without local-scene filtering.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

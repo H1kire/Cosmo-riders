@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AU,DAY,G,CelestialBody,PhysicsWorld,add,dot,gravitationalAcceleration,gravitationalParameter,magnitude,orbitalElementsToState,orbitalPeriod,propagateKepler,sphereOfInfluence,stateToOrbitalElements,vector3,createSolarSystemWorld,SOLAR_SYSTEM_DATA,SOLAR_SYSTEM_REFERENCE} from '../src/physics/index.js';
+import {AU,DAY,G,CelestialBody,PhysicsWorld,add,dot,gravitationalAcceleration,gravitationalParameter,magnitude,orbitalElementsToState,orbitalPeriod,propagateKepler,sphereOfInfluence,stateToOrbitalElements,vector3,createSolarSystemWorld,SOLAR_SYSTEM_DATA,SOLAR_SYSTEM_REFERENCE,executeIdealizedBurn,hohmannTransfer,engineThrustAtPressure,thrustToWeightRatio} from '../src/physics/index.js';
 import {formatScientific} from '../src/presentation/math-format.js';
 const earthMass=5.9722e24,earthMu=gravitationalParameter(earthMass);
 test('SI constants and gravitational parameter',()=>{assert.equal(AU,149597870700);assert.equal(G,6.67430e-11);assert.ok(Number.isFinite(earthMu)&&earthMu>0);});
@@ -25,3 +25,52 @@ test('patched-conic primary changes from Earth to Moon inside Moon SOI',()=>{con
 test('patched-conic primary exits Moon SOI back to Earth',()=>{const w=createSolarSystemWorld({fixedStepSeconds:1});const earth=w.getBodyState('earth'),moon=w.getBodyState('moon');const offset=vector3(moon.position.x-earth.position.x,moon.position.y-earth.position.y,moon.position.z-earth.position.z);const radial=vector3(offset.x/magnitude(offset),offset.y/magnitude(offset),offset.z/magnitude(offset));const p=vector3(moon.position.x-radial.x*1e6,moon.position.y-radial.y*1e6,moon.position.z-radial.z*1e6);w.addVessel({id:'returning-probe',primaryBodyId:'moon',position:p,velocity:moon.velocity});const vessel=w.vessels.get('returning-probe');vessel.position=vector3(moon.position.x+radial.x*1e8,moon.position.y+radial.y*1e8,moon.position.z+radial.z*1e8);vessel.velocity=moon.velocity;vessel.relativePosition=vector3(radial.x*1e8,radial.y*1e8,radial.z*1e8);vessel.relativeVelocity=vector3(0,0,0);w.step();assert.equal(vessel.primaryBodyId,'earth');});
 test('body hierarchy rejects missing parent and multiple roots',()=>{const w=new PhysicsWorld();assert.throws(()=>w.addBody(new CelestialBody({id:'moon',name:'Moon',massKg:7.34e22,meanRadiusM:1.7e6,parentId:'earth'})),/Parent body not found/);w.addBody(new CelestialBody({id:'sun',name:'Sun',massKg:1.98847e30,meanRadiusM:6.957e8}));assert.throws(()=>w.addBody(new CelestialBody({id:'other',name:'Other',massKg:1e20,meanRadiusM:1e5})),/Only one root/);});
 test('ephemeris is deterministic for equal J2000 elapsed time',()=>{const a=createSolarSystemWorld({fixedStepSeconds:3600}),b=createSolarSystemWorld({fixedStepSeconds:3600});for(let i=0;i<24;i++){a.step();b.step();}for(const id of ['sun','earth','moon']){const x=a.getBodyState(id),y=b.getBodyState(id);assert.deepEqual(x.position,y.position);assert.deepEqual(x.velocity,y.velocity);}});
+
+
+test('elliptic orbit exposes correct periapsis and apoapsis radii',()=>{
+ const a=10e6,e=0.2,rp=a*(1-e),vp=Math.sqrt(earthMu*(2/rp-1/a));
+ const elements=stateToOrbitalElements(vector3(rp,0,0),vector3(0,vp,0),earthMu);
+ assert.ok(Math.abs(elements.semiMajorAxis-a)<1e-5);
+ assert.ok(Math.abs(elements.eccentricity-e)<1e-10);
+ assert.ok(Math.abs(elements.semiMajorAxis*(1-elements.eccentricity)-rp)<1e-5);
+ assert.ok(Math.abs(elements.semiMajorAxis*(1+elements.eccentricity)-a*(1+e))<1e-5);
+});
+test('specific angular momentum is conserved during Kepler propagation',()=>{
+ const p=vector3(8e6,0,0),v=vector3(0,7000,900),h0=Math.sqrt((p.y*v.z-p.z*v.y)**2+(p.z*v.x-p.x*v.z)**2+(p.x*v.y-p.y*v.x)**2);
+ const s=propagateKepler({position:p,velocity:v,mu:earthMu,deltaTimeSeconds:5400});
+ const h1=Math.sqrt((s.position.y*s.velocity.z-s.position.z*s.velocity.y)**2+(s.position.z*s.velocity.x-s.position.x*s.velocity.z)**2+(s.position.x*s.velocity.y-s.position.y*s.velocity.x)**2);
+ assert.ok(Math.abs(h1-h0)/h0<1e-10);
+});
+test('Solar System includes all eight planets and the Earth-Moon hierarchy',()=>{
+ const w=createSolarSystemWorld();
+ assert.equal(w.bodies.size,10);
+ for(const id of ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune']) {
+  assert.equal(w.bodies.get(id).parentId,'sun');
+  assert.ok(magnitude(w.getBodyState(id).position)>0);
+ }
+ assert.equal(w.bodies.get('moon').parentId,'earth');
+});
+test('Hohmann transfer returns positive burns and half-ellipse transfer time',()=>{
+ const result=hohmannTransfer({primaryMu:gravitationalParameter(1.98847e30),initialRadiusM:AU,targetRadiusM:1.52371034*AU});
+ assert.ok(result.departureDeltaVMS>0);
+ assert.ok(result.arrivalDeltaVMS>0);
+ assert.equal(result.totalDeltaVMS,result.departureDeltaVMS+result.arrivalDeltaVMS);
+ assert.ok(result.transferTimeSeconds>0);
+});
+test('engine thrust decreases with ambient pressure and TWR is dimensionless',()=>{
+ const vacuum=engineThrustAtPressure({vacuumThrustN:1e6,seaLevelThrustN:900000,ambientPressurePa:0});
+ const sea=engineThrustAtPressure({vacuumThrustN:1e6,seaLevelThrustN:900000,ambientPressurePa:101325});
+ assert.equal(vacuum,1e6);
+ assert.equal(sea,900000);
+ assert.ok(thrustToWeightRatio(10000,1000,9.80665)>1);
+});
+test('idealized rocket-equation burn consumes propellant and changes velocity',()=>{
+ const w=createSolarSystemWorld();
+ const earth=w.getBodyState('earth');
+ const vessel=w.addVessel({id:'burn-test',primaryBodyId:'earth',position:add(earth.position,vector3(7e6,0,0)),velocity:add(earth.velocity,vector3(0,7500,0)),massKg:1000});
+ const result=executeIdealizedBurn(w,'burn-test',{direction:vector3(0,1,0),deltaVMS:100,engine:{vacuumThrustN:20000,seaLevelThrustN:18000,ispSeconds:300},dryMassKg:700});
+ assert.ok(result.propellantUsedKg>0);
+ assert.ok(result.burnDurationSeconds>0);
+ assert.ok(vessel.massKg<1000&&vessel.massKg>700);
+ assert.ok(Math.abs(vessel.relativeVelocity.y-7600)<1e-8);
+});

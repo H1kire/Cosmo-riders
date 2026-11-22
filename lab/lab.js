@@ -475,7 +475,7 @@ function animate(timestamp){
 
   const renderTime=world.simulationTimeSeconds+(!paused?world.accumulator:0);
   renderedBodyStates=world.getBodyStatesAt(renderTime);
-  renderedVesselState=world.getVesselStateAt('test-vessel',renderTime);
+  renderedVesselState=world.getVesselStateAt('test-vessel',renderTime,renderedBodyStates);
 
   const previousZoom=cameraZoom.solar;
   const cameraEase=1-Math.exp(-12*delta);

@@ -11,6 +11,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const app = await readFile(new URL('../lab/lab.ts', import.meta.url), 'utf8');
     const css = await readFile(new URL('../lab/style.css', import.meta.url), 'utf8');
     if (!html.includes('id="solar-view"') || !html.includes('src="./lab/main.ts"')) throw new Error('Root page is missing the solar canvas or TypeScript entry point.');
+    if (!html.includes('id="menu-toggle"') || !html.includes('id="app-sidebar"') || !html.includes('id="window-settings"') || !html.includes('id="graphics-preset"') || !html.includes('src="./lab/graphics-settings.ts"') || !html.includes('src="./lab/menu.ts"')) throw new Error('Published root page must expose the menu and graphics settings modules.');
     if (!labHtml.includes('id="solar-view"') || !labHtml.includes('src="./main.ts"')) throw new Error('Lab page is missing the solar canvas or TypeScript entry point.');
     if (!html.includes('href="./lab/style.css"') || !labHtml.includes('href="./style.css"')) throw new Error('A page stylesheet path is broken.');
     for (const match of app.matchAll(/\$\('([^']+)'\)/g)) {
@@ -82,6 +83,8 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!source.includes('far=100,near=Math.max(1e-10,this.distance*.001)')) throw new Error('Focused planetary views must retain the full 100 AU scene range while keeping the near plane proportional to camera distance.');
     if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');
     if (!source.includes('sunStrength=clamp(uLightIntensity,0.,1.)') || !source.includes('l=.12+.88*sunStrength*sunFacing')) throw new Error('Planetary shading must retain ambient visibility on night sides and clamp direct illumination.');
+    if (!source.includes('if(uKind>5.5){gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.);return;}') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
+    if (!source.includes('vec3 c=pow(uColor,vec3(2.2));')) throw new Error('Material colors must be linearized before HDR lighting and tone mapping.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');

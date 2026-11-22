@@ -1,0 +1,15 @@
+import { assertPositiveFinite } from './constants.js';
+import { add,subtract } from './vector3.js';
+import { propagateKepler } from './kepler.js';
+import { sphereOfInfluence } from './orbital-elements.js';
+/** Fixed-step world. Each vessel currently follows one active patched-conic primary. */
+export class PhysicsWorld {
+ constructor({fixedStepSeconds=1,maxSubSteps=10000}={}){assertPositiveFinite(fixedStepSeconds,'fixedStepSeconds');if(!Number.isInteger(maxSubSteps)||maxSubSteps<1)throw new RangeError('maxSubSteps must be positive.');Object.assign(this,{fixedStepSeconds,maxSubSteps,timeScale:1,paused:false,simulationTimeSeconds:0,accumulator:0,bodies:new Map(),vessels:new Map()});}
+ addBody(body){if(!body?.id||!Number.isFinite(body.mu))throw new TypeError('Expected a valid CelestialBody.');if(this.bodies.has(body.id))throw new Error('Duplicate body id: '+body.id);if(body.parentId&&!this.bodies.has(body.parentId))throw new Error('Parent body not found: '+body.parentId);this.bodies.set(body.id,body);return body;}
+ addVessel({id,primaryBodyId,position,velocity}){if(typeof id!=='string'||!id.trim())throw new TypeError('Vessel id must be non-empty.');if(this.vessels.has(id))throw new Error('Duplicate vessel id: '+id);const primary=this.bodies.get(primaryBodyId);if(!primary)throw new Error('Primary body not found: '+primaryBodyId);const relativePosition=subtract(position,primary.position),relativeVelocity=subtract(velocity,primary.velocity),v={id,primaryBodyId,relativePosition,relativeVelocity,position,velocity};this.vessels.set(id,v);return v;}
+ setTimeScale(value){if(!Number.isFinite(value)||value<0)throw new RangeError('timeScale must be finite and non-negative.');this.timeScale=value;}
+ setPaused(value){this.paused=Boolean(value);}
+ step(){for(const vessel of this.vessels.values()){const primary=this.bodies.get(vessel.primaryBodyId),next=propagateKepler({position:vessel.relativePosition,velocity:vessel.relativeVelocity,mu:primary.mu,deltaTimeSeconds:this.fixedStepSeconds});vessel.relativePosition=next.position;vessel.relativeVelocity=next.velocity;vessel.position=add(primary.position,next.position);vessel.velocity=add(primary.velocity,next.velocity);}this.simulationTimeSeconds+=this.fixedStepSeconds;}
+ advance(realDeltaSeconds){if(!Number.isFinite(realDeltaSeconds)||realDeltaSeconds<0)throw new RangeError('realDeltaSeconds must be finite and non-negative.');if(this.paused||this.timeScale===0||realDeltaSeconds===0)return 0;this.accumulator+=realDeltaSeconds*this.timeScale;const available=Math.floor(this.accumulator/this.fixedStepSeconds);if(available>this.maxSubSteps)throw new RangeError('Physics backlog exceeds maxSubSteps; reduce frame delta or time scale.');for(let i=0;i<available;i++)this.step();this.accumulator-=available*this.fixedStepSeconds;return available;}
+ getSphereOfInfluence(bodyId){const body=this.bodies.get(bodyId);if(!body||!body.parentId||body.semiMajorAxisM===null)return null;const parent=this.bodies.get(body.parentId);return sphereOfInfluence(body.semiMajorAxisM,body.massKg,parent.massKg);}
+}

@@ -7,6 +7,9 @@ Browser-first JavaScript ES modules. The physics core has no runtime dependencie
 - Modern browser with ES module support.
 - Run `npm test`, `npm run audit`, or `npm run check`.
 
+## Browser physics laboratory
+Open `lab/index.html` through a local HTTP server (for example, `python -m http.server 8000` from the repository root, then visit `http://localhost:8000/lab/`). The lab visualizes the Sun–Earth and Earth–Moon systems, their Laplace SOI estimates, and a test vessel with selectable initial scenarios, time controls, single-step advance, and small prograde/retrograde impulses. The canvas views use separate local scales; they are schematic projections, not a common-scale map.
+
 ## Structure
 - `src/physics/` — SI-only calculations, ephemerides and simulation state.
 - `src/presentation/` — TeX formatting adapters, no physics.

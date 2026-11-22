@@ -1,9 +1,19 @@
 {
-  "name": "cosmo-riders-physics",
-  "version": "0.1.0",
+  "name": "cosmo-riders",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Deterministic SI-unit physics foundation for Cosmo-riders.",
-  "scripts": {"test":"node --test","audit":"node scripts/audit.js","check":"npm run test && npm run audit"},
-  "engines": {"node": ">=20"}
+  "description": "Cosmo-riders browser space simulation with a TypeScript build pipeline.",
+  "scripts": {
+    "test": "node --test",
+    "audit": "node scripts/audit.js",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "check": "npm run test && npm run audit && npm run typecheck && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  },
+  "engines": { "node": ">=20" }
 }

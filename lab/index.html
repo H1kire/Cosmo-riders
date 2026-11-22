@@ -22,13 +22,13 @@
  <button class="nav-item" data-open-window="window-model"><span>▤</span> Параметры модели</button>
  <div class="side-divider"></div>
  <div class="side-label">ИНСТРУМЕНТЫ КАМЕРЫ</div>
- <div class="camera-tools"><button id="camera-home" class="button subtle">⌖ Сбросить камеру</button><small>ЛКМ + перетаскивание — перемещение<br>Двойной клик по объекту — слежение<br>ПКМ — отключить слежение<br>Колесо мыши — масштаб</small></div>
+ <div class="camera-tools"><button id="camera-home" class="button subtle">⌖ Сбросить камеру</button><small>ЛКМ + перетаскивание — вращение 3D-камеры<br>Колесо мыши — приближение / удаление<br>Клик по телу — перейти к нему<br>ПКМ + перетаскивание — сдвиг камеры<br>Home — сброс камеры</small></div>
  <div class="sidebar-bottom"><i class="status-dot"></i> PHYSICS CORE <b>READY</b></div>
 </aside>
 <main class="universe">
  <div class="universe-title"><span>STARMAP / SOLAR SYSTEM</span><b>СОЛНЕЧНАЯ СИСТЕМА</b><small>Перемещайте камеру и исследуйте орбиты планет</small></div>
  <canvas id="solar-view" aria-label="Интерактивная карта Солнечной системы"></canvas>
- <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ЛКМ — ПЕРЕМЕЩЕНИЕ</span><span>ДВОЙНОЙ КЛИК — СЛЕЖЕНИЕ</span><span>ПКМ — ОТВЯЗАТЬ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
+ <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ЛКМ — ВРАЩЕНИЕ 3D-КАМЕРЫ</span><span>КЛИК — ФОКУС НА ТЕЛЕ</span><span>ПКМ — ПАНОРАМИРОВАНИЕ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
  <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span><span><i class="dot moon"></i>Луна · спутник</span></div>
  <div class="zoom-dock"><button class="zoom-button" data-zoom-view="solar" data-zoom-action="out">−</button><output id="zoom-value-solar">100%</output><button class="zoom-button" data-zoom-view="solar" data-zoom-action="in">+</button></div>
 </main>

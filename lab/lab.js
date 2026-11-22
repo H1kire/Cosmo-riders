@@ -149,7 +149,7 @@ $('camera-home').addEventListener('click',()=>{cameraPan.x=0;cameraPan.y=0;camer
 // Independent utility windows can be opened, closed and dragged by their title bars.
 function openWindow(id){
   const win=$(id);if(!win)return;
-  win.style.display='block';win.style.zIndex=String(++highestWindowZ);
+  win.style.display='block';\n  const sidebarWidth=document.querySelector('.sidebar').getBoundingClientRect().width;\n  const rect=win.getBoundingClientRect();\n  win.style.left=Math.max(sidebarWidth+8,Math.min(window.innerWidth-rect.width-8,parseFloat(win.style.left)||sidebarWidth+24))+'px';\n  win.style.top=Math.max(66,Math.min(window.innerHeight-rect.height-8,parseFloat(win.style.top)||90))+'px';\n  win.style.zIndex=String(++highestWindowZ);
   document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
   requestAnimationFrame(()=>{drawAll();});
 }

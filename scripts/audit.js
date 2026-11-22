@@ -26,6 +26,10 @@ const checks = [
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.js', import.meta.url), 'utf8');
     if (!source.includes("getContext('webgl'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL renderer or high-detail sphere mesh is missing.');
+    if (!source.includes('const localMode=Boolean(focus&&focusState)')) throw new Error('Focused camera must remain local at every zoom distance.');
+    if (!source.includes('this.lighting.directionAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
+    const lighting = await readFile(new URL('../src/presentation/lighting-engine.js', import.meta.url), 'utf8');
+    if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight')) throw new Error('Extensible lighting engine is missing.');
     if (!source.includes('uColor*(1.15+b*.12)') || source.includes('uColor*(1.15+fine*.12)')) throw new Error('Sun fragment shader contains an invalid or unresolved variable.');
     if (!source.includes('drawOrbit(world,b,states,sun,vp,mapper)') || !source.includes('localMode')) throw new Error('3D orbit or hierarchical local rendering is missing.');
   }],

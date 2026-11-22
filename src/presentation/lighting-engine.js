@@ -22,7 +22,11 @@ export class LightingEngine {
     const length = Math.hypot(dx, dy, dz) || 1;
     return [dx / length, dy / length, dz / length];
   }
-  colorAt(id) {\n    const light = this.pointLights.get(id);\n    return light ? [...light.color] : [0, 0, 0];\n  }\n  intensityAt(point, id) {
+  colorAt(id) {
+    const light = this.pointLights.get(id);
+    return light ? [...light.color] : [0, 0, 0];
+  }
+  intensityAt(point, id) {
     const light = this.pointLights.get(id);
     if (!light) return 0;
     const dx = light.position[0] - point[0];

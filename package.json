@@ -6,7 +6,7 @@
   "description": "Cosmo-riders browser space simulation with a TypeScript build pipeline.",
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
-    "audit": "node scripts/audit.js",
+    "audit": "tsx scripts/audit.ts",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "check": "npm run test && npm run audit && npm run typecheck && npm run build"

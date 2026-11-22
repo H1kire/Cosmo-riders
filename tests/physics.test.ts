@@ -43,7 +43,7 @@ test('specific angular momentum is conserved during Kepler propagation',()=>{
 });
 test('Solar System includes all eight planets and the Earth-Moon hierarchy',()=>{
  const w=createSolarSystemWorld();
- assert.equal(w.bodies.size,10);
+ assert.equal(w.bodies.size,48);
  for(const id of ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune']) {
   assert.equal(w.bodies.get(id).parentId,'sun');
   assert.ok(magnitude(w.getBodyState(id).position)>0);
@@ -94,4 +94,28 @@ test('fractional vessel state advances smoothly without mutating the physical ve
  assert.ok(magnitude(vector3(half.position.x-committed.position.x,half.position.y-committed.position.y,half.position.z-committed.position.z))>0);
  assert.deepEqual(v.position,committed.position);
  assert.deepEqual(v.velocity,committed.velocity);
+});
+
+test('JPL satellite systems use physical semi-major axes and mean radii',()=>{
+ const w=createSolarSystemWorld();
+ const expected=[
+  ['moon','earth',384400000,1737400],
+  ['phobos','mars',9375000,11080],
+  ['io','jupiter',421800000,1821490],
+  ['europa','jupiter',671100000,1560800],
+  ['ganymede','jupiter',1070400000,2631200],
+  ['callisto','jupiter',1882700000,2410300],
+  ['titan','saturn',1221860000,2574760],
+  ['miranda','uranus',129900000,235800],
+  ['triton','neptune',354760000,1352600]
+ ];
+ for(const [id,parent,a,r] of expected){
+  const body=w.bodies.get(id);
+  assert.ok(body, 'missing '+id);
+  assert.equal(body.parentId,parent);
+  assert.equal(body.semiMajorAxisM,a);
+  assert.equal(body.meanRadiusM,r);
+ }
+ assert.equal(w.bodies.size,48);
+ assert.equal([...w.bodies.values()].filter(body=>body.parentId!=='sun'&&body.parentId!==null).length,39);
 });

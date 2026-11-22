@@ -1,12 +1,44 @@
-import {readFile} from 'node:fs/promises';
-import {spawnSync} from 'node:child_process';
-const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
-const checks=[
- ['SI unit policy',async()=>{const s=await readFile(new URL('../src/physics/constants.js',import.meta.url),'utf8');if(!s.includes('G = 6.67430e-11')||!s.includes('AU = 149_597_870_700'))throw Error('Expected SI constants missing.');}],
- ['No runtime dependencies',async()=>{if(Object.keys(pkg.dependencies??{}).length)throw Error('Physics core must remain dependency-free.');}],
- ['No suspicious NaN/Infinity defaults',async()=>{const s=await readFile(new URL('../src/physics/kepler.js',import.meta.url),'utf8');if(/\\b(?:NaN|Infinity)\\s*[,;]/.test(s))throw Error('Suspicious numeric literal.');}]
+import { readFile, readdir } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+
+const root = new URL('..', import.meta.url);
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const checks = [
+  ['SI unit constants', async () => {
+    const source = await readFile(new URL('../src/physics/constants.js', import.meta.url), 'utf8');
+    if (!source.includes('G = 6.67430e-11') || !source.includes('AU = 149_597_870_700')) throw new Error('Expected SI constants are missing.');
+  }],
+  ['No runtime dependencies', async () => {
+    if (Object.keys(pkg.dependencies ?? {}).length !== 0) throw new Error('Physics core must remain dependency-free.');
+  }],
+  ['No hard-coded NaN or Infinity defaults', async () => {
+    const source = await readFile(new URL('../src/physics/kepler.js', import.meta.url), 'utf8');
+    if (/\b(?:NaN|Infinity)\b/.test(source)) throw new Error('Unexpected NaN/Infinity literal in Kepler solver.');
+  }]
 ];
-let failed=0;for(const [name,run] of checks){try{await run();process.stdout.write('PASS '+name+'\\n');}catch(e){failed++;process.stderr.write('FAIL '+name+': '+e.message+'\\n');}}
-const syntax=spawnSync(process.execPath,['--check','src/physics/index.js'],{cwd:new URL('..',import.meta.url),encoding:'utf8'});
-if(syntax.status===0)process.stdout.write('PASS JavaScript syntax smoke-check\\n');else{failed++;process.stderr.write('FAIL syntax: '+syntax.stderr+'\\n');}
-if(failed)process.exitCode=1;else process.stdout.write('AUDIT PASSED\\n');
+
+let failed = 0;
+for (const [name, run] of checks) {
+  try { await run(); process.stdout.write('PASS ' + name + '\n'); }
+  catch (error) { failed += 1; process.stderr.write('FAIL ' + name + ': ' + error.message + '\n'); }
+}
+
+async function collectJavaScript(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const paths = [];
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) paths.push(...await collectJavaScript(path));
+    else if (entry.isFile() && path.endsWith('.js')) paths.push(path);
+  }
+  return paths;
+}
+const jsFiles = await collectJavaScript(root.pathname);
+for (const file of jsFiles) {
+  const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+  if (result.status === 0) process.stdout.write('PASS syntax ' + file.replace(root.pathname, '') + '\n');
+  else { failed += 1; process.stderr.write('FAIL syntax ' + file + ': ' + result.stderr + '\n'); }
+}
+if (failed) process.exitCode = 1;
+else process.stdout.write('AUDIT PASSED (' + jsFiles.length + ' JavaScript files)\n');

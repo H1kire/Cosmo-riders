@@ -114,14 +114,7 @@ function drawSolar() {
 
   // At close zoom, reveal the Earth-Moon system as a local-scale inset on the same map.
   if(cameraZoom.solar>=1e6 && bodyScreen.earth){
-    const earth=getBody('earth'),moon=getBody('moon'),earthScreen=bodyScreen.earth;
-    const earthDistance=Math.hypot(earth.position.x-sun.position.x,earth.position.y-sun.position.y);
-    const localScale=pixelsPerMetre(earthDistance);
-    const orbitRadius=SOLAR_SYSTEM_DATA.moon.elements.semiMajorAxisM*localScale;
-    if(orbitRadius>2){
-      ctx.save();ctx.strokeStyle='#b6c9df';ctx.globalAlpha=.65;ctx.lineWidth=1;
-      ctx.setLineDash([3,4]);ctx.beginPath();ctx.arc(earthScreen.x,earthScreen.y,orbitRadius,0,Math.PI*2);ctx.stroke();ctx.restore();
-    }
+    const earthScreen=bodyScreen.earth;
     const moonPoint=solarMoonScreenPoint(earthScreen,w,h);
     ring(ctx,earthScreen.x,earthScreen.y,moonPoint.orbitRadius,'#b6c9df',[3,5],.75);
     if(selectedPlanetId==='moon'){

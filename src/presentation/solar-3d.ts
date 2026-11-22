@@ -37,7 +37,50 @@ export class Solar3DView{
  [key: string]: any;
  constructor(canvas){this.canvas=canvas;this.gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});if(!this.gl)throw Error('WebGL недоступен');const g=this.gl;this.bodyProgram=makeProgram(g,BODY_VERTEX,BODY_FRAGMENT);this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60)];this.lineBuffer=g.createBuffer();this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uLight','uLightColor','uLightIntensity','uKind','uDetail','uSeed']);this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);this.yaw=.72;this.pitch=1.28;this.distance=86;this.target=[0,0,0];this.lighting=new LightingEngine();this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;this.localModePrev=false;this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);this.labelNodes=new Map();this.bind();g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);}
  locations(p,names){const g=this.gl,o={};for(const n of names)o[n]=n.startsWith('a')?g.getAttribLocation(p,n):g.getUniformLocation(p,n);return o;}
- bind(){const c=this.canvas;c.tabIndex=0;c.addEventListener('contextmenu',e=>e.preventDefault());c.addEventListener('pointerdown',e=>{this.drag={x:e.clientX,y:e.clientY,moved:false,button:e.button};c.setPointerCapture(e.pointerId);});c.addEventListener('pointermove',e=>{if(!this.drag)return;const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;this.drag.moved ||= Math.hypot(dx,dy)>3;if(this.drag.button===0){this.yaw-=dx*.006;this.pitch=Math.max(-1.48,Math.min(1.48,this.pitch+dy*.006));}else if(this.drag.button===2){this.target[0]-=dx*.025;this.target[1]+=dy*.025;}this.drag.x=e.clientX;this.drag.y=e.clientY;});const end=e=>{if(!this.drag)return;if(!this.drag.moved&&this.drag.button===0)this.pick(e);if(!this.drag.moved&&this.drag.button===2){this.focusId=null;this.target=[0,0,0];}this.drag=null;};c.addEventListener('pointerup',end);c.addEventListener('pointercancel',()=>this.drag=null);c.addEventListener('wheel',e=>{e.preventDefault();const nextDistance=this.distance*Math.exp(e.deltaY*.001);if(Number.isFinite(nextDistance))this.distance=Math.max(1e-7,nextDistance);},{passive:false});c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});}
+ bind(){
+  const c=this.canvas;
+  c.tabIndex=0;
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+  c.addEventListener('pointerdown',e=>{
+    if(e.button!==0&&e.button!==1&&e.button!==2)return;
+    e.preventDefault();
+    c.focus({preventScroll:true});
+    this.drag={x:e.clientX,y:e.clientY,moved:false,button:e.button,pointerId:e.pointerId};
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove',e=>{
+    if(!this.drag||this.drag.pointerId!==e.pointerId)return;
+    const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;
+    this.drag.moved ||= Math.hypot(dx,dy)>3;
+    // KSP-style map controls: RMB orbits the camera around the current target.
+    if(this.drag.button===2){
+      this.yaw-=dx*.006;
+      this.pitch=Math.max(-1.48,Math.min(1.48,this.pitch+dy*.006));
+    // MMB pans in the camera's screen plane, with speed scaled to zoom level.
+    }else if(this.drag.button===1){
+      const scalePerPixel=2*this.distance*Math.tan(Math.PI/6)/Math.max(1,c.clientHeight);
+      const right=[Math.cos(this.yaw),0,-Math.sin(this.yaw)];
+      const up=[-Math.sin(this.yaw)*Math.sin(this.pitch),Math.cos(this.pitch),-Math.cos(this.yaw)*Math.sin(this.pitch)];
+      for(let axis=0;axis<3;axis++)this.target[axis]+=(-right[axis]*dx+up[axis]*dy)*scalePerPixel;
+    }
+    this.drag.x=e.clientX;
+    this.drag.y=e.clientY;
+  });
+  const end=e=>{
+    if(!this.drag||this.drag.pointerId!==e.pointerId)return;
+    if(!this.drag.moved&&this.drag.button===0)this.pick(e);
+    this.drag=null;
+  };
+  c.addEventListener('pointerup',end);
+  c.addEventListener('pointercancel',()=>{this.drag=null;});
+  c.addEventListener('lostpointercapture',()=>{this.drag=null;});
+  c.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const nextDistance=this.distance*Math.exp(e.deltaY*.001);
+    if(Number.isFinite(nextDistance))this.distance=Math.max(1e-7,Math.min(1e7,nextDistance));
+  },{passive:false});
+  c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
+ }
  home(){this.yaw=.72;this.pitch=1.28;this.distance=86;this.target=[0,0,0];this.focusId=null;this.localModePrev=false;}
  mapPosition(p){const d=Math.hypot(p.x,p.y,p.z);if(d<1)return[0,0,0];const k=Math.log1p(d/149597870700)/Math.log(31.1);return[p.x/d*k*42,p.z/d*k*42,p.y/d*k*42];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.target=[0,0,0];this.focusId=best;this.distance=16;this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}

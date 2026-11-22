@@ -5,9 +5,11 @@ import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-el
 import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propulsion.js';
 import { hohmannTransfer } from '../src/physics/maneuvers.js';
 import { orbitalElementsToState } from '../src/physics/orbital-state.js';
+import { Solar3DView } from '../src/presentation/solar-3d.js';
 
 const $ = id => document.getElementById(id);
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
+const solar3D = new Solar3DView(canvases.solar);
 const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;
@@ -185,10 +187,7 @@ function drawLocalSolar(ctx,width,height){
   label(ctx,'ЛОКАЛЬНАЯ СИСТЕМА · '+focus.name.toUpperCase(),14,24,'#a9caff','10px Segoe UI,Arial');
 }
 function drawSolar(){
-  const {ctx,width,height}=resizeCanvas(canvases.solar);
-  ctx.clearRect(0,0,width,height);
-  if(focusBodyId&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM)drawLocalSolar(ctx,width,height);
-  else drawGlobalSolar(ctx,width,height);
+  solar3D.render(world, renderedBodyStates ?? world.bodyStates, world.simulationTimeSeconds);
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);
@@ -309,7 +308,7 @@ function bindCameraControls(view){
     else if(action==='reset')resetZoom(view);
   }));
 }
-for(const view of Object.keys(canvases))bindCameraControls(view);
+for(const view of ['lunar','vessel'])bindCameraControls(view);
 
 // Smooth camera easing and click-vs-drag detection for the solar map.
 {

@@ -9,7 +9,17 @@ import { Solar3DView } from '../src/presentation/solar-3d.js';
 
 const $ = id => document.getElementById(id);
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
-const solar3D = new Solar3DView(canvases.solar);
+let solar3D;
+try {
+  solar3D = new Solar3DView(canvases.solar);
+} catch (error) {
+  console.error('Не удалось запустить 3D-карту:', error);
+  const notice = document.createElement('div');
+  notice.className = 'render-error';
+  notice.textContent = '3D-карта не загрузилась: ' + (error?.message ?? 'неизвестная ошибка');
+  canvases.solar.parentElement.append(notice);
+  solar3D = { distance: 52, home() {}, render() {} };
+}
 const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;

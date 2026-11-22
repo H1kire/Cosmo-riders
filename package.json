@@ -1,17 +1,18 @@
 {
   "name": "cosmo-riders",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Cosmo-riders browser space simulation with a TypeScript build pipeline.",
   "scripts": {
-    "test": "node --test",
+    "test": "tsx --test tests/*.test.ts",
     "audit": "node scripts/audit.js",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "check": "npm run test && npm run audit && npm run typecheck && npm run build"
   },
   "devDependencies": {
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
   },

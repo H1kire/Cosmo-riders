@@ -2,8 +2,11 @@ import { orbitalElementsToState } from '../physics/orbital-state.js';
 
 const BODY_VERTEX = `attribute vec3 aPosition; attribute vec3 aNormal;
 uniform mat4 uViewProjection; uniform mat4 uModel;
+uniform float uKind; uniform float uDetail; uniform float uSeed;
 varying vec3 vNormal; varying vec3 vPosition;
-void main(){vec4 p=uModel*vec4(aPosition,1.0);vPosition=p.xyz;vNormal=mat3(uModel)*aNormal;gl_Position=uViewProjection*p;}`;
+float vhash(vec3 p){p=fract(p*.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float vnoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(vhash(i),vhash(i+vec3(1.,0.,0.)),f.x),mix(vhash(i+vec3(0.,1.,0.)),vhash(i+vec3(1.,1.,0.)),f.x),f.y),mix(mix(vhash(i+vec3(0.,0.,1.)),vhash(i+vec3(1.,0.,1.)),f.x),mix(vhash(i+vec3(0.,1.,1.)),vhash(i+vec3(1.,1.,1.)),f.x),f.y),f.z);}
+void main(){vec3 n=normalize(aNormal);float h=vnoise(n*(16.+uDetail*48.)+uSeed);float relief=0.;if(uKind>1.4&&uKind<2.5)relief=(h-.5)*.035;else if(uKind>.5&&uKind<1.5)relief=(h-.5)*.012;else if(uKind>3.5)relief=(h-.5)*.004;vec4 p=uModel*vec4(aPosition*(1.+relief),1.0);vPosition=p.xyz;vNormal=mat3(uModel)*n;gl_Position=uViewProjection*p;}`;
 const BODY_FRAGMENT = `precision highp float;
 uniform vec3 uColor;uniform vec3 uLight;uniform float uKind;uniform float uDetail;uniform float uSeed;
 varying vec3 vNormal;varying vec3 vPosition;

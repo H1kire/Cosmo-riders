@@ -81,7 +81,7 @@ function drawSolar() {
     ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);
     ctx.strokeStyle=id===selectedPlanetId?'#9bd5ff':'#22364e';
     ctx.lineWidth=id===selectedPlanetId?2.2:1;
-    ctx.globalAlpha=id===selectedPlanetId?.95:.65;
+    ctx.globalAlpha=id===selectedPlanetId ? 0.95 : 0.65;
     ctx.setLineDash(id===selectedPlanetId?[]:[2,6]);ctx.stroke();
   }
   ctx.restore();

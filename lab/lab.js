@@ -28,7 +28,7 @@ const currentPrimary = () => body(vessel.primaryBodyId);
 const currentPrimaryState = () => getBody(vessel.primaryBodyId);
 
 function createScenario(name) {
-  world = createSolarSystemWorld({fixedStepSeconds:60,maxSubSteps:10000});
+  world = createSolarSystemWorld({fixedStepSeconds:1,maxSubSteps:10000});
   const earth = getBody('earth');
   const moon = getBody('moon');
   const earthMu = body('earth').mu;

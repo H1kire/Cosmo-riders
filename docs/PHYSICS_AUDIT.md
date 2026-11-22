@@ -11,10 +11,10 @@
 - The flight deck exposes planetary mapping, vessel telemetry, engine pulses and transfer estimates.
 
 ## Browser map / rendering audit
-- The global solar-system view uses a logarithmic display projection so the planetary system fits on screen; this is presentation only and does not alter SI physics.
+- The WebGL 3D solar-system view uses a logarithmic spatial display projection so the planetary system fits on screen; this is presentation only and does not alter SI physics.
 - On zooming into a selected/targeted body, the map transitions to a local linear projection. Parent and child bodies use their actual relative position vectors; satellite visibility is determined by real separation and camera scale, not a screen-space offset.
 - Orbit paths are sampled from stored orbital elements, including inclination and orientation, then projected into the map view.
-- Celestial bodies and the vessel are rendered from synchronized, non-mutating fractional-time snapshots between fixed physics steps.
+- Celestial bodies and the vessel are rendered from synchronized, non-mutating fractional-time snapshots between fixed physics steps. The renderer reuses the same body snapshot for vessel interpolation instead of propagating all bodies twice per frame.\n- The 3D camera supports free-look rotation, wheel zoom, right-button panning, body picking and a local linear 3D view for a focused body's direct parent/children.\n- Sphere geometry uses three LOD tiers (10×14, 22×30 and 44×60 segments) selected from projected body size. Procedural shader patterns add broad surface variation; this is not a real heightmap or satellite texture dataset.\n- Orbital paths are drawn in 3D from the same stored orbital elements used by the physics model.
 - The current catalogue contains the Earth-Moon pair only. The renderer discovers direct children generically, so further moons can be added with physical data without one-off drawing code.
 
 ## Automated checks
@@ -34,6 +34,6 @@ Run `npm run check` with Node.js 20+. Tests cover SI constants, vector arithmeti
 - SOI switching uses hysteresis and checks direct parent/child bodies after each fixed step; high-speed crossings may still be missed.
 - Engine burns are currently idealized impulses: the model computes mass loss and burn duration but does not integrate continuous thrust and gravity during the burn.
 - Hohmann transfers assume circular coplanar orbits; launch windows, phase targeting and capture are not solved.
-- The map is currently a 2D projection of 3D inertial coordinates; a full 3D free camera, terrain/surface LOD, textures, lighting/shadows and body rotation are future work.
+- Planet rendering is procedural and currently has no high-resolution real surface textures, tiled/quadtree terrain, true heightmap displacement, atmospheric scattering, shadows, eclipses or body rotation. The current geometry LOD is a first visual tier, not the final terrain system.
 - The planetary ephemeris remains a compact Keplerian approximation, not a precision JPL ephemeris.
 - N-body gravity, attitude, staging, aerodynamics, heating, collisions and surface physics are not implemented.

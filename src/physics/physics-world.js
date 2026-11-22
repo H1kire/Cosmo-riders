@@ -48,7 +48,8 @@ export class PhysicsWorld {
   const primary=this.bodies.get(primaryBodyId);if(!primary)throw new Error('Primary body not found: '+primaryBodyId);
   const primaryState=this.getBodyState(primaryBodyId);
   const relativePosition=subtract(position,primaryState.position),relativeVelocity=subtract(velocity,primaryState.velocity);
-  const vessel={id,primaryBodyId,relativePosition,relativeVelocity,position,velocity,lastPrimarySwitch:null};
+  if(!Number.isFinite(massKg)||massKg<=0)throw new RangeError('massKg must be positive.');
+  const vessel={id,primaryBodyId,relativePosition,relativeVelocity,position,velocity,massKg,lastPrimarySwitch:null};
   this.vessels.set(id,vessel);return vessel;
  }
  setTimeScale(value){if(!Number.isFinite(value)||value<0)throw new RangeError('timeScale must be finite and non-negative.');this.timeScale=value;}

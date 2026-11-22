@@ -49,6 +49,7 @@ const satellites = [
   satellite('thebe','Thebe','jupiter',.03015,49.3,221900,.018,1.1,26.6,182.1,340.4),
   satellite('adrastea','Adrastea','jupiter',.00014,8.2,129000,0,0,0,214.5,0),
   satellite('metis','Metis','jupiter',.00250,21.5,128000,0,0,0,166,0),
+  satellite('himalia','Himalia','jupiter',.15155,85,11439000,.160,28.4,321.1,78.3,64.2),
 
   satellite('mimas','Mimas','saturn',2.50349,198.2,186000,.020,1.6,160.4,275.3,66.2),
   satellite('enceladus','Enceladus','saturn',7.21037,252.1,238400,.005,0,119.5,57,0),
@@ -79,7 +80,9 @@ const satellites = [
   satellite('galatea','Galatea','neptune',.18990,79,61953,.0002,.1,0,0,0),
   satellite('larissa','Larissa','neptune',.25484,96,73548,.0014,.2,0,0,0),
   satellite('proteus','Proteus','neptune',2.58342,208,117647,.0005,.5,0,0,0),
-  satellite('triton','Triton','neptune',1428.49546,1352.60,354760,.000016,156.8,0,0,0)
+  satellite('triton','Triton','neptune',1428.49546,1352.60,354760,.000016,156.8,0,0,0),
+  // Nereid's mass is not measured in the JPL parameter table; this low-impact estimate assumes 1.5 g/cm³.
+  satellite('nereid','Nereid','neptune',.206,170,5513400,.751,7.2,0,0,0)
 ] as const;
 
 /** Approximate J2000.0 planetary elements. Planetary values follow the JPL

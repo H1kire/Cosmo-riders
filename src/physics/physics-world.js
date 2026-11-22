@@ -55,6 +55,31 @@ export class PhysicsWorld {
  setTimeScale(value){if(!Number.isFinite(value)||value<0)throw new RangeError('timeScale must be finite and non-negative.');this.timeScale=value;}
  setPaused(value){this.paused=Boolean(value);}
  getBodyState(id){this.initializeEphemerides();const state=this.bodyStates.get(id);if(!state)throw new Error('Unknown body: '+id);return state;}
+ /** Return an independent ephemeris snapshot at an arbitrary simulation time. */
+ getBodyStatesAt(timeSeconds){
+  this.initializeEphemerides();
+  if(!Number.isFinite(timeSeconds))throw new TypeError('timeSeconds must be finite.');
+  const states=new Map();
+  for(const body of this.bodies.values()){
+   if(!body.parentId){states.set(body.id,{position:body.position,velocity:body.velocity});continue;}
+   const parent=this.bodies.get(body.parentId),initial=this.bodyInitialRelativeStates.get(body.id);
+   const relative=propagateKepler({position:initial.position,velocity:initial.velocity,mu:parent.mu,deltaTimeSeconds:timeSeconds});
+   const parentState=states.get(parent.id);
+   states.set(body.id,{position:add(parentState.position,relative.position),velocity:add(parentState.velocity,relative.velocity)});
+  }
+  return states;
+ }
+ /** Interpolate a vessel from the last committed physics step without mutating simulation state. */
+ getVesselStateAt(id,timeSeconds){
+  const vessel=this.vessels.get(id);
+  if(!vessel)throw new Error('Unknown vessel: '+id);
+  if(!Number.isFinite(timeSeconds))throw new TypeError('timeSeconds must be finite.');
+  const elapsed=timeSeconds-this.simulationTimeSeconds;
+  const primary=this.bodies.get(vessel.primaryBodyId);
+  const bodyStates=this.getBodyStatesAt(timeSeconds),primaryState=bodyStates.get(primary.id);
+  const relative=propagateKepler({position:vessel.relativePosition,velocity:vessel.relativeVelocity,mu:primary.mu,deltaTimeSeconds:elapsed});
+  return {position:add(primaryState.position,relative.position),velocity:add(primaryState.velocity,relative.velocity),primaryBodyId:vessel.primaryBodyId,massKg:vessel.massKg};
+ }
  getVesselState(id){const v=this.vessels.get(id);if(!v)throw new Error('Unknown vessel: '+id);return {position:v.position,velocity:v.velocity,primaryBodyId:v.primaryBodyId};}
  getSphereOfInfluence(bodyId){
   const body=this.bodies.get(bodyId);if(!body||!body.parentId||body.semiMajorAxisM===null)return null;

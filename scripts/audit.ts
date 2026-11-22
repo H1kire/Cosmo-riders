@@ -63,7 +63,8 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
     if (!source.includes("getContext('webgl'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL renderer or high-detail sphere mesh is missing.');
-    if (!source.includes('mapPosition(p){return[p.x/AU,p.z/AU,p.y/AU];}') || !source.includes('this.cameraOrigin=focusPosition;') || !source.includes('this.target=this.focusOffset.slice();') || !source.includes('value-this.cameraOrigin[index]') || !source.includes('radius=b.meanRadiusM/AU')) throw new Error('Solar renderer must use true AU distances and physical radii with a camera-relative origin.');
+    if (!source.includes('mapPosition(p){return[p.x/AU,p.z/AU,p.y/AU];}') || !source.includes('const renderOrigin=focusState?focusState.position:sun;') || !source.includes('x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z') || !source.includes('this.target=this.focusOffset.slice();') || !source.includes('radius=b.meanRadiusM/AU')) throw new Error('Solar renderer must use true AU distances and physical radii with a high-precision camera-relative origin.');
+    if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');

@@ -11,8 +11,8 @@ Use Node.js 20+ for the test suite. From the repository root:
 
 ## Project structure
 - `src/physics/` — SI-only vector, gravity, orbital, ephemeris, propulsion and maneuver calculations.
-- `src/presentation/` — number/TeX formatting adapters.
-- `lab/` — browser flight operations interface and canvas projections.
+- `src/presentation/` — number/TeX formatting and the WebGL 3D planetary renderer.
+- `lab/` — browser flight operations interface, 3D solar-system view and auxiliary telemetry canvases.
 - `tests/` — deterministic regression tests.
 - `docs/PHYSICS_AUDIT.md` — validation scope and known limitations.
 - `docs/SOLAR_SYSTEM_DATA.md` — orbital data, sources and accuracy notes.
@@ -26,7 +26,7 @@ Use Node.js 20+ for the test suite. From the repository root:
 - Chemical-engine performance model: pressure-adjusted thrust, specific impulse, mass flow, rocket equation, propellant use, burn duration and TWR.
 - Idealized impulsive burn execution with vessel mass tracking.
 - Coplanar Hohmann-transfer and plane-change Δv utilities.
-- KSP-inspired hierarchical map: logarithmic Solar System overview, then a local linear body-system view with physical parent-relative satellite positions and orbital-element-based orbit paths.
+- KSP-inspired interactive WebGL 3D overview with free-look orbit camera, zoom, pan, orbital paths, a spacecraft marker and hierarchical transition from logarithmic system scale to a local linear body scale.\n- Planet surface rendering uses three geometry LOD tiers selected by projected size plus procedural shader detail; LOD is visual only and does not change physical radii or SI coordinates.
 - Synchronized fractional-time rendering for celestial bodies and the vessel between fixed physics steps.
 - Flight deck with planetary map, local Earth–Moon view, vessel telemetry, time controls, engine pulses and Earth-to-Mars Hohmann estimate.
 
@@ -35,6 +35,6 @@ The planetary ephemeris is a compact Keplerian J2000 approximation, not a DE440/
 
 The propulsion layer currently calculates a burn's rocket-equation mass loss and duration, then applies its Δv as an idealized instantaneous impulse. It does not yet integrate thrust, changing mass and gravity continuously throughout the burn; attitude control, staging, aerodynamic drag, heating, collisions and surface operations remain future work.
 
-The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The browser map is a 2D XY projection with a logarithmic global overview and a local linear scale around the focused body; map projection never changes the underlying SI physics.
+The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The 3D browser view uses a logarithmic global spatial projection and a local linear scale around the focused body; projection never changes the underlying SI physics. Planet appearance is procedural rather than sourced from high-resolution satellite texture maps, and the current LOD does not yet provide a tiled terrain/quadtree surface system.
 
 All internal physical quantities use metres, kilograms, seconds, metres per second, metres per second squared, pascals, newtons and cubic metres per second squared. Convert units only for display.

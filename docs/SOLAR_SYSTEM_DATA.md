@@ -4,7 +4,7 @@
 The planetary fixture is initialized at J2000.0 (2000-01-01 12:00 TT/TDB convention). It is a reproducible approximate Keplerian reference, not a substitute for JPL DE ephemerides or spacecraft navigation data.
 
 ## Planetary elements
-The eight planets use the JPL Solar System Dynamics *Approximate Positions of the Planets* secular-element set (1800–2050 fit). The table lists semimajor axis in AU, eccentricity and inclination in degrees. Longitude fields are converted to the classical Ω, ω and M convention in `solar-system.js`.
+The eight planets use the JPL Solar System Dynamics *Approximate Positions of the Planets* secular-element set (1800–2050 fit). The table lists semimajor axis in AU, eccentricity and inclination in degrees. Longitude fields are converted to the classical Ω, ω and M convention in `solar-system.ts`.
 
 | Body | a (AU) | e | i (deg) |
 |---|---:|---:|---:|

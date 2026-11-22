@@ -26,6 +26,8 @@ Use Node.js 20+ for the test suite. From the repository root:
 - Chemical-engine performance model: pressure-adjusted thrust, specific impulse, mass flow, rocket equation, propellant use, burn duration and TWR.
 - Idealized impulsive burn execution with vessel mass tracking.
 - Coplanar Hohmann-transfer and plane-change Δv utilities.
+- KSP-inspired hierarchical map: logarithmic Solar System overview, then a local linear body-system view with physical parent-relative satellite positions and orbital-element-based orbit paths.
+- Synchronized fractional-time rendering for celestial bodies and the vessel between fixed physics steps.
 - Flight deck with planetary map, local Earth–Moon view, vessel telemetry, time controls, engine pulses and Earth-to-Mars Hohmann estimate.
 
 ## Model boundaries
@@ -33,6 +35,6 @@ The planetary ephemeris is a compact Keplerian J2000 approximation, not a DE440/
 
 The propulsion layer currently calculates a burn's rocket-equation mass loss and duration, then applies its Δv as an idealized instantaneous impulse. It does not yet integrate thrust, changing mass and gravity continuously throughout the burn; attitude control, staging, aerodynamic drag, heating, collisions and surface operations remain future work.
 
-The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The browser map is a schematic XY projection with non-uniform display scale; physics remains three-dimensional.
+The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The browser map is a 2D XY projection with a logarithmic global overview and a local linear scale around the focused body; map projection never changes the underlying SI physics.
 
 All internal physical quantities use metres, kilograms, seconds, metres per second, metres per second squared, pascals, newtons and cubic metres per second squared. Convert units only for display.

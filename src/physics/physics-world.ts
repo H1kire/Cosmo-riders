@@ -46,7 +46,7 @@ export class PhysicsWorld {
    if(!body.parentId){this.bodyStates.set(body.id,{position:body.position,velocity:body.velocity});continue;}
    const parent=this.bodies.get(body.parentId);
    if(body.orbitalElements){
-    const state=orbitalElementsToState(body.orbitalElements,parent.mu);
+    let state;try{state=orbitalElementsToState(body.orbitalElements,parent.mu);}catch(error){throw new Error('Failed to initialize orbital elements for '+body.id+': '+error.message);}
     this.bodyInitialRelativeStates.set(body.id,state);
     this.bodyStates.set(body.id,{position:add(this.bodyStates.get(parent.id).position,state.position),velocity:add(this.bodyStates.get(parent.id).velocity,state.velocity)});
    }else{

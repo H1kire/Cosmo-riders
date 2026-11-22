@@ -195,7 +195,7 @@ function solarMoonScreenPoint(earthScreen,width,height){
   const dx=moon.position.x-earth.position.x,dy=moon.position.y-earth.position.y;
   const angle=Math.atan2(dy,dx);
   // Масштаб спутника условный: иначе реальная орбита Луны теряется на масштабе всей Солнечной системы.
-  const orbitRadius=Math.min(Math.max(earthScreen.radius*60,26),Math.min(width,height)*.32);
+  const orbitRadius=Math.min(Math.max(earthScreen.radius*60,42),Math.min(width,height)*.42);
   return {x:earthScreen.x+Math.cos(angle)*orbitRadius,y:earthScreen.y-Math.sin(angle)*orbitRadius,
     radius:Math.max(2.2,Math.min(8,orbitRadius*.035)),orbitRadius};
 }

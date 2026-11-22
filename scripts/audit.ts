@@ -13,11 +13,11 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!html.includes('id="solar-view"') || !html.includes('src="./lab/main.ts"')) throw new Error('Root page is missing the solar canvas or TypeScript entry point.');
     if (!labHtml.includes('id="solar-view"') || !labHtml.includes('src="./main.ts"')) throw new Error('Lab page is missing the solar canvas or TypeScript entry point.');
     if (!html.includes('href="./lab/style.css"') || !labHtml.includes('href="./style.css"')) throw new Error('A page stylesheet path is broken.');
-    for (const match of app.matchAll(/\\$\\('([^']+)'\\)/g)) {
+    for (const match of app.matchAll(/\$\('([^']+)'\)/g)) {
       const id = match[1];
-      if (id !== 'window-system' && !new RegExp('id=["\\\\\\']' + id + '["\\\\\\']').test(html)) throw new Error('Missing DOM element id: ' + id);
+      if (id !== 'window-system' && !html.includes('id="' + id + '"') && !html.includes("id='" + id + "'")) throw new Error('Missing DOM element id: ' + id);
     }
-    if (css.includes('\\\\n.body-label-layer')) throw new Error('A literal escaped newline breaks the map overlay stylesheet.');
+    if (css.includes('\\n.body-label-layer')) throw new Error('A literal escaped newline breaks the map overlay stylesheet.');
     if (!app.includes('drawFallbackSolar()') || !app.includes('activateSolarFallback(error)')) throw new Error('A non-WebGL map fallback is missing.');
   }],
   ['Every local TypeScript import resolves to a tracked source file', async () => {
@@ -35,9 +35,9 @@ const checks: Array<[string, () => Promise<void>]> = [
     const known = new Set(files.map(file => resolve(file)));
     for (const file of files) {
       const source = await readFile(file, 'utf8');
-      for (const match of source.matchAll(/(?:from\\s*|import\\s*)["'](\\.{1,2}\\/[^"']+)["']/g)) {
+      for (const match of source.matchAll(/(?:from\s*|import\s*)["'](\.{1,2}\/[^"']+)["']/g)) {
         const target = resolve(dirname(file), match[1]);
-        const candidates = /\\.[cm]?tsx?$/.test(target) ? [target] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
+        const candidates = /\.[cm]?tsx?$/.test(target) ? [target] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
         if (!candidates.some(candidate => known.has(resolve(candidate)))) throw new Error('Unresolved import in ' + file.replace(root.pathname, '') + ': ' + match[1]);
       }
     }

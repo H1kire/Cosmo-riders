@@ -12,9 +12,12 @@ const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, i
 const SHIP_DRY_MASS_KG = 7000;
 let world, vessel, paused = false, lastFrame = 0, trail = [];
 const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };
+const cameraTargetZoom = { solar: 1, lunar: 0.34, vessel: 1 };
 const cameraPan = { x: 0, y: 0 };
+const cameraTargetPan = { x: 0, y: 0 };
+let selectedPlanetId = null;
 let highestWindowZ = 50;
-const MIN_ZOOM = 0.08, MAX_ZOOM = 64, ZOOM_FACTOR = 1.25;
+const MIN_ZOOM = 0.08, MAX_ZOOM = 1e8, ZOOM_FACTOR = 1.22;
 const PLANET_IDS = ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
 const PLANET_COLORS = { mercury:'#a6a6a6',venus:'#e5bd82',earth:'#5b9dff',mars:'#df806b',jupiter:'#d8a77c',saturn:'#d8ca9b',uranus:'#81d9dd',neptune:'#6089ed' };
 const fmt = (value,digits=2) => Number.isFinite(value) ? new Intl.NumberFormat('ru-RU',{maximumFractionDigits:digits}).format(value) : '—';
@@ -64,27 +67,66 @@ function label(ctx,text,x,y,color='#9aabc2',font='10px Segoe UI,Arial') {
   ctx.save();ctx.fillStyle=color;ctx.font=font;ctx.fillText(text,x,y);ctx.restore();
 }
 function drawSolar() {
-  const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);ctx.clearRect(0,0,w,h);
+  const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);
+  ctx.clearRect(0,0,w,h);
   const sun=getBody('sun'),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-  const maxPx=Math.min(w*.43,h*.42)*cameraZoom.solar,cx=w*.5+cameraPan.x,cy=h*.5+cameraPan.y;
-  const displayRadius=distance=>Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx;
-  ctx.save();ctx.strokeStyle='#22364e';ctx.lineWidth=1;ctx.setLineDash([2,6]);
+  const maxPx=Math.min(w*.43,h*.42),cx=w*.5+cameraPan.x,cy=h*.5+cameraPan.y;
+  const logDenominator=Math.log1p(maxRadius/AU);
+  const displayRadius=distance=>Math.log1p(Math.max(0,distance)/AU)/logDenominator*maxPx*cameraZoom.solar;
+  const pixelsPerMetre=distance=>maxPx*cameraZoom.solar/(logDenominator*(AU+Math.max(0,distance)));
+  const bodyScreen={};
+  ctx.save();
   for(const id of PLANET_IDS){
     const data=SOLAR_SYSTEM_DATA[id],a=data.elements.semiMajorAxisM,e=data.elements.eccentricity,r=displayRadius(a);
-    ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);
+    ctx.strokeStyle=id===selectedPlanetId?'#9bd5ff':'#22364e';
+    ctx.lineWidth=id===selectedPlanetId?2.2:1;
+    ctx.globalAlpha=id===selectedPlanetId?.95:.65;
+    ctx.setLineDash(id===selectedPlanetId?[]:[2,6]);ctx.stroke();
   }
   ctx.restore();
-  point(ctx,cx,cy,6,'#ffd27b',true);label(ctx,'СОЛНЦЕ',cx+10,cy-10,'#ffdc9b','9px Segoe UI,Arial');
+
+  point(ctx,cx,cy,Math.max(5,Math.min(695700000*pixelsPerMetre(0),90)),'#ffd27b',true);
+  label(ctx,'СОЛНЦЕ',cx+10,cy-10,'#ffdc9b','9px Segoe UI,Arial');
+
   for(const id of PLANET_IDS){
-    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id],dx=state.position.x-sun.position.x,dy=state.position.y-sun.position.y;
-    const actualRadius=Math.hypot(dx,dy),shownRadius=displayRadius(actualRadius),x=cx+dx/actualRadius*shownRadius,y=cy-dy/actualRadius*shownRadius;
-    const radius=id==='jupiter'?4.2:id==='saturn'?3.8:id==='earth'?3.2:2.6;
-    point(ctx,x,y,radius,PLANET_COLORS[id],id==='earth');
-    label(ctx,data.name,x+6,y-6,PLANET_COLORS[id],'9px Segoe UI,Arial');
+    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id];
+    const dx=state.position.x-sun.position.x,dy=state.position.y-sun.position.y;
+    const actualRadius=Math.hypot(dx,dy),shownRadius=displayRadius(actualRadius);
+    const x=cx+dx/actualRadius*shownRadius,y=cy-dy/actualRadius*shownRadius;
+    const physicalRadius=data.meanRadiusM*pixelsPerMetre(actualRadius);
+    const radius=Math.max(2.4,Math.min(90,physicalRadius));
+    bodyScreen[id]={x,y,radius};
+    if(id===selectedPlanetId){
+      ctx.save();ctx.strokeStyle='#b8e4ff';ctx.globalAlpha=.9;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(x,y,radius+7,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
+    point(ctx,x,y,radius,PLANET_COLORS[id],id===selectedPlanetId||id==='earth');
+    label(ctx,data.name,x+radius+5,y-5,PLANET_COLORS[id],'9px Segoe UI,Arial');
   }
-  const ship=world.getVesselState('test-vessel'),sx=ship.position.x-sun.position.x,sy=ship.position.y-sun.position.y,shipRadius=Math.hypot(sx,sy),shipShown=displayRadius(shipRadius);
-  point(ctx,cx+sx/shipRadius*shipShown,cy-sy/shipRadius*shipShown,2.7,'#fff',true);
-  label(ctx,'30 AU',cx+maxPx*.83,cy+13,'#647f9d','9px Segoe UI,Arial');
+
+  // At close zoom, reveal the Earth-Moon system as a local-scale inset on the same map.
+  if(cameraZoom.solar>=1e6){
+    const earth=getBody('earth'),moon=getBody('moon'),earthScreen=bodyScreen.earth;
+    const earthDistance=Math.hypot(earth.position.x-sun.position.x,earth.position.y-sun.position.y);
+    const localScale=pixelsPerMetre(earthDistance);
+    const orbitRadius=SOLAR_SYSTEM_DATA.moon.elements.semiMajorAxisM*localScale;
+    if(orbitRadius>2){
+      ctx.save();ctx.strokeStyle='#b6c9df';ctx.globalAlpha=.65;ctx.lineWidth=1;
+      ctx.setLineDash([3,4]);ctx.beginPath();ctx.arc(earthScreen.x,earthScreen.y,orbitRadius,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
+    const mdx=moon.position.x-earth.position.x,mdy=moon.position.y-earth.position.y;
+    const moonX=earthScreen.x+mdx*localScale,moonY=earthScreen.y-mdy*localScale;
+    const moonRadius=Math.max(2,Math.min(35,SOLAR_SYSTEM_DATA.moon.meanRadiusM*localScale));
+    point(ctx,moonX,moonY,moonRadius,'#c5cfdb',true);
+    label(ctx,'ЛУНА',moonX+moonRadius+4,moonY-4,'#d9e4f0','9px Segoe UI,Arial');
+  }
+
+  const ship=world.getVesselState('test-vessel');
+  const sx=ship.position.x-sun.position.x,sy=ship.position.y-sun.position.y,shipRadius=Math.hypot(sx,sy);
+  const shipShown=displayRadius(shipRadius);
+  point(ctx,cx+sx/shipRadius*shipShown,cy-sy/shipRadius*shipShown,3,'#fff',true);
+  label(ctx,'30 AU',cx+maxPx*.83*cameraZoom.solar,cy+13,'#647f9d','9px Segoe UI,Arial');
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);
@@ -119,7 +161,91 @@ function drawVessel() {
   label(ctx,primary.name,cx+11,cy-10,'#c3d8f0');label(ctx,'RIDER-01',cx+relative.x*px+8,cy-relative.y*px-8,'#fff','9px Segoe UI,Arial');
   $('detail-scale').textContent='АКТИВНЫЙ ЦЕНТР · '+primary.name.toUpperCase();
 }
-function updateZoomLabels(){for(const view of Object.keys(cameraZoom)){const output=$('zoom-value-'+view);if(output)output.textContent=Math.round(cameraZoom[view]*100)+'%';}}
+function updateZoomLabels(){
+  for(const view of Object.keys(cameraZoom)){
+    const output=$('zoom-value-'+view);
+    if(output)output.textContent=view==='solar'?fmt(cameraTargetZoom[view],2)+'×':Math.round(cameraZoom[view]*100)+'%';
+  }
+}
+function solarMapPoint(id){
+  const sun=getBody('sun'),state=getBody(id),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
+  const maxPx=Math.min(canvases.solar.clientWidth*.43,canvases.solar.clientHeight*.42);
+  const distance=Math.hypot(state.position.x-sun.position.x,state.position.y-sun.position.y);
+  const radius=Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx*cameraZoom.solar;
+  return {x:canvases.solar.clientWidth*.5+cameraPan.x+(state.position.x-sun.position.x)/distance*radius,
+    y:canvases.solar.clientHeight*.5+cameraPan.y-(state.position.y-sun.position.y)/distance*radius};
+}
+function setSolarZoom(nextZoom,anchorX=canvases.solar.clientWidth*.5,anchorY=canvases.solar.clientHeight*.5){
+  const oldZoom=cameraTargetZoom.solar;
+  const ratio=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,nextZoom))/oldZoom;
+  const cx=canvases.solar.clientWidth*.5,cy=canvases.solar.clientHeight*.5;
+  const worldX=anchorX-cx-cameraTargetPan.x,worldY=anchorY-cy-cameraTargetPan.y;
+  cameraTargetPan.x=anchorX-cx-worldX*ratio;
+  cameraTargetPan.y=anchorY-cy-worldY*ratio;
+  cameraTargetZoom.solar=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,nextZoom));
+}
+function changeZoom(view,direction){
+  if(!(view in cameraZoom))return;
+  if(view==='solar')setSolarZoom(cameraTargetZoom.solar*(direction>0?ZOOM_FACTOR:1/ZOOM_FACTOR));
+  else cameraTargetZoom[view]=Math.min(64,Math.max(.08,cameraTargetZoom[view]*(direction>0?ZOOM_FACTOR:1/ZOOM_FACTOR)));
+  drawAll();
+}
+function resetZoom(view){
+  if(!(view in cameraZoom))return;
+  cameraTargetZoom[view]=view==='lunar'?.34:1;
+  if(view==='solar')cameraTargetPan.x=cameraTargetPan.y=0;
+  drawAll();
+}
+function bindCameraControls(view){
+  canvases[view].addEventListener('wheel',event=>{
+    event.preventDefault();
+    if(view==='solar'){
+      const rect=canvases.solar.getBoundingClientRect();
+      setSolarZoom(cameraTargetZoom.solar*(event.deltaY<0?ZOOM_FACTOR:1/ZOOM_FACTOR),event.clientX-rect.left,event.clientY-rect.top);
+    }else changeZoom(view,event.deltaY<0?1:-1);
+  },{passive:false});
+  document.querySelectorAll('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{
+    const action=button.dataset.zoomAction;
+    if(action==='in')changeZoom(view,1);
+    else if(action==='out')changeZoom(view,-1);
+    else if(action==='reset')resetZoom(view);
+  }));
+}
+for(const view of Object.keys(canvases))bindCameraControls(view);
+
+// Smooth camera easing and click-vs-drag detection for the solar map.
+{
+  const canvas=canvases.solar;
+  let pointer=null,moved=false;
+  canvas.addEventListener('pointerdown',event=>{
+    if(event.button!==0)return;
+    pointer={id:event.pointerId,x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY};
+    moved=false;canvas.classList.add('dragging');canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove',event=>{
+    if(!pointer||pointer.id!==event.pointerId)return;
+    const dx=event.clientX-pointer.lastX,dy=event.clientY-pointer.lastY;
+    if(Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>4)moved=true;
+    if(moved){cameraTargetPan.x+=dx;cameraTargetPan.y+=dy;}
+    pointer.lastX=event.clientX;pointer.lastY=event.clientY;
+  });
+  const stop=event=>{
+    if(!pointer||event.pointerId!==pointer.id)return;
+    if(!moved){
+      const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+      let nearest=null,nearestDistance=Infinity;
+      for(const id of PLANET_IDS){
+        const p=solarMapPoint(id),distance=Math.hypot(x-p.x,y-p.y);
+        if(distance<Math.max(12,Math.min(28,4+SOLAR_SYSTEM_DATA[id].meanRadiusM/1e6))&&distance<nearestDistance){
+          nearest=id;nearestDistance=distance;
+        }
+      }
+      selectedPlanetId=nearest;
+    }
+    pointer=null;canvas.classList.remove('dragging');
+  };
+  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
+}
 function drawAll(){drawSolar();drawLunar();drawVessel();updateZoomLabels();}
 function changeZoom(view,direction){if(!(view in cameraZoom))return;cameraZoom[view]=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,cameraZoom[view]*(direction>0?ZOOM_FACTOR:1/ZOOM_FACTOR)));drawAll();}
 function resetZoom(view){if(!(view in cameraZoom))return;cameraZoom[view]=view==='lunar'?.34:1;drawAll();}
@@ -146,7 +272,7 @@ for(const view of Object.keys(canvases))bindCameraControls(view);
   const stop=()=>{dragging=false;canvas.classList.remove('dragging');};
   canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
 }
-$('camera-home').addEventListener('click',()=>{cameraPan.x=0;cameraPan.y=0;cameraZoom.solar=1;drawAll();});
+$('camera-home').addEventListener('click',()=>{cameraTargetPan.x=0;cameraTargetPan.y=0;cameraTargetZoom.solar=1;selectedPlanetId=null;drawAll();});
 
 // Independent utility windows can be opened, closed and dragged by their title bars.
 function openWindow(id){
@@ -240,7 +366,14 @@ function animate(timestamp){
       updateTelemetry();advanced=true;
     }
   }
-  if(advanced||expired)drawAll();
+  const cameraEase=1-Math.exp(-12*delta);
+  const zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
+  cameraZoom.solar+= (cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
+  cameraPan.x+=(cameraTargetPan.x-cameraPan.x)*cameraEase;
+  cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;
+  for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
+  const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
+  if(advanced||expired||cameraMoving)drawAll();
   requestAnimationFrame(animate);
 }
 

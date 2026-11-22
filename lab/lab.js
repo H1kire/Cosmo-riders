@@ -247,32 +247,12 @@ for(const view of Object.keys(canvases))bindCameraControls(view);
   canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
 }
 function drawAll(){drawSolar();drawLunar();drawVessel();updateZoomLabels();}
-function changeZoom(view,direction){if(!(view in cameraZoom))return;cameraZoom[view]=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,cameraZoom[view]*(direction>0?ZOOM_FACTOR:1/ZOOM_FACTOR)));drawAll();}
-function resetZoom(view){if(!(view in cameraZoom))return;cameraZoom[view]=view==='lunar'?.34:1;drawAll();}
-function bindCameraControls(view){
-  canvases[view].addEventListener('wheel',event=>{event.preventDefault();changeZoom(view,event.deltaY<0?1:-1);},{passive:false});
-  document.querySelectorAll('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')changeZoom(view,1);else if(action==='out')changeZoom(view,-1);else if(action==='reset'){resetZoom(view);if(view==='solar')cameraPan.x=cameraPan.y=0;drawAll();}}));
-}
-for(const view of Object.keys(canvases))bindCameraControls(view);
 
-// Full-screen solar-system camera: left mouse drag pans, wheel zooms around the view.
-{
-  const canvas=canvases.solar;
-  let dragging=false,lastX=0,lastY=0;
-  canvas.addEventListener('pointerdown',event=>{
-    if(event.button!==0)return;
-    dragging=true;lastX=event.clientX;lastY=event.clientY;
-    canvas.classList.add('dragging');canvas.setPointerCapture(event.pointerId);
-  });
-  canvas.addEventListener('pointermove',event=>{
-    if(!dragging)return;
-    cameraPan.x+=event.clientX-lastX;cameraPan.y+=event.clientY-lastY;
-    lastX=event.clientX;lastY=event.clientY;drawSolar();
-  });
-  const stop=()=>{dragging=false;canvas.classList.remove('dragging');};
-  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
-}
-$('camera-home').addEventListener('click',()=>{cameraTargetPan.x=0;cameraTargetPan.y=0;cameraTargetZoom.solar=1;selectedPlanetId=null;drawAll();});
+$('camera-home').addEventListener('click',()=>{
+  resetZoom('solar');
+  selectedPlanetId=null;
+  drawAll();
+});
 
 // Independent utility windows can be opened, closed and dragged by their title bars.
 function openWindow(id){

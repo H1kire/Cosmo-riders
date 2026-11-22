@@ -20,3 +20,27 @@ export interface SimulationClock {
   readonly timeScale: number;
   readonly paused: boolean;
 }
+
+export interface KeplerPropagationInput {
+  readonly position: Vector3;
+  readonly velocity: Vector3;
+  readonly mu: number;
+  readonly deltaTimeSeconds: number;
+  readonly tolerance?: number;
+  readonly maxIterations?: number;
+}
+
+export interface PropagatedState {
+  readonly position: Vector3;
+  readonly velocity: Vector3;
+  readonly iterations: number;
+}
+
+export interface ClassicalOrbitalElements {
+  readonly semiMajorAxisM: number;
+  readonly eccentricity: number;
+  readonly inclination?: number;
+  readonly longitudeAscendingNode?: number;
+  readonly argumentOfPeriapsis?: number;
+  readonly meanAnomaly?: number;
+}

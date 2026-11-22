@@ -187,7 +187,7 @@ function drawLocalSolar(ctx,width,height){
   label(ctx,'ЛОКАЛЬНАЯ СИСТЕМА · '+focus.name.toUpperCase(),14,24,'#a9caff','10px Segoe UI,Arial');
 }
 function drawSolar(){
-  solar3D.render(world, renderedBodyStates ?? world.bodyStates, world.simulationTimeSeconds);
+  solar3D.render(world, renderedBodyStates ?? world.bodyStates, world.simulationTimeSeconds, getRenderedVessel());
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);

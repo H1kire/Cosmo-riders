@@ -1,7 +1,9 @@
 /** Простая расширяемая система источников света для 3D-сцены. */
 export class LightingEngine {
+  pointLights: Map<string, { position: number[]; intensity: number; color: number[] }>;
+
   constructor() { this.pointLights = new Map(); }
-  setPointLight(id, position, options = {}) {
+  setPointLight(id: string, position: number[], options: { intensity?: number; color?: number[] } = {}) {
     if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) {
       throw new TypeError('Позиция источника света должна содержать три конечные координаты.');
     }

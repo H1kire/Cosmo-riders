@@ -23,11 +23,11 @@ const checks = [
     if (!source.includes('LOCAL_VIEW_START_ZOOM')) throw new Error('Hierarchical local-view transition is missing.');
     if (!source.includes('orbitalElementsToState')) throw new Error('Orbit paths must use orbital elements.');
   }],
-  ['Rendering uses non-mutating fractional snapshots', async () => {
+  ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {\n    const source = await readFile(new URL('../src/presentation/solar-3d.js', import.meta.url), 'utf8');\n    if (!source.includes("getContext('webgl'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL renderer or high-detail sphere mesh is missing.');\n    if (!source.includes('drawOrbit(world,b,states,sun,vp,mapper)') || !source.includes('localMode')) throw new Error('3D orbit or hierarchical local rendering is missing.');\n  }],\n  ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.js', import.meta.url), 'utf8');
     const lab = await readFile(new URL('../lab/lab.js', import.meta.url), 'utf8');
-    if (!physics.includes('getBodyStatesAt(timeSeconds)') || !physics.includes('getVesselStateAt(id,timeSeconds)')) throw new Error('Fractional state snapshot APIs are missing.');
-    if (!lab.includes('getBodyStatesAt(renderTime)') || !lab.includes("getVesselStateAt('test-vessel',renderTime)")) throw new Error('Renderer is not using synchronized snapshots.');
+    if (!physics.includes('getBodyStatesAt(timeSeconds)') || !physics.includes('getVesselStateAt(id,timeSeconds,bodyStates=')) throw new Error('Fractional state snapshot APIs are missing.');
+    if (!lab.includes('getBodyStatesAt(renderTime)') || !lab.includes("getVesselStateAt('test-vessel',renderTime,renderedBodyStates)")) throw new Error('Renderer is not using synchronized snapshots.');
   }]
 ];
 

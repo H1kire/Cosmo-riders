@@ -8,7 +8,7 @@
 <header class="topbar">
  <a class="brand" href="./" aria-label="Cosmo-riders"><span class="brand-mark">C</span><span><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></span></a>
  <div class="top-status"><i class="live-dot"></i><span>СИМУЛЯЦИЯ АКТИВНА</span><i class="divider"></i><span>J2000.0</span></div>
- <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 суток</strong></div>
+ <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 суток</strong></div><label class="time-scale-control"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale"><option value="1">1× · Реальное время</option><option value="60">60×</option><option value="600">600×</option><option value="3600" selected>3 600×</option><option value="21600">21 600×</option><option value="86400">86 400×</option></select></label>
 </header>
 <aside class="sidebar">
  <div class="side-label">КОСМИЧЕСКИЙ ЦЕНТР</div>
@@ -42,7 +42,7 @@
 <section class="floating-window" id="window-flight" data-window="flight" style="left:280px;top:125px;width:360px;display:none">
  <header class="window-titlebar"><div><span>FLIGHT CONTROL</span><strong>Управление полётом</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
  <div class="window-content"><label class="select-wrap"><span>СЦЕНАРИЙ ПОЛЁТА</span><select id="scenario"><option value="earth-orbit">Орбита Земли</option><option value="moon-approach">Сближение с Луной</option><option value="moon-orbit">Орбита Луны</option></select></label>
- <label class="select-wrap"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale"><option value="1">1× · Реальное время</option><option value="60">60×</option><option value="600">600×</option><option value="3600" selected>3 600×</option><option value="21600">21 600×</option><option value="86400">86 400×</option></select></label>
+ 
  <div class="button-row"><button id="pause-button" class="button primary">Ⅱ Пауза</button><button id="step-button" class="button subtle">Шаг +1 с</button><button id="reset-button" class="button subtle">Перезапуск</button></div>
  <div class="engine-box"><span class="panel-kicker">MAIN ENGINE / R-200</span><strong>200 kN · Isp 340 с</strong><div class="button-row"><button id="retro-button" class="button engine-button">−10 м/с · РЕТРОГРАД</button><button id="pro-button" class="button engine-button">+10 м/с · ПРОГРАД</button></div><p id="burn-status" class="inline-status">Двигатель готов к импульсному включению</p></div></div>
 </section>

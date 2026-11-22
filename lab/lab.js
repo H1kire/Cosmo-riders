@@ -149,9 +149,19 @@ function drawVessel() {
   const orbitRadius=radius*px;
   ring(ctx,cx,cy,orbitRadius,'#536c8a',[2,5],.9);
   if(trail.length>1){
-    ctx.save();ctx.strokeStyle='#d9f5ff';ctx.globalAlpha=.65;ctx.lineWidth=1.5;ctx.beginPath();
-    trail.forEach((p,i)=>{const x=cx+p.x*px,y=cy-p.y*px;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
-    ctx.stroke();ctx.restore();
+    ctx.save();ctx.strokeStyle='#d9f5ff';ctx.lineWidth=1.5;ctx.lineCap='round';
+    for(let i=1;i<trail.length;i++){
+      const a=trail[i-1],b=trail[i];
+      const age=(performance.now()-b.time)/1000;
+      const alpha=Math.max(0,1-age);
+      if(alpha<=0)continue;
+      ctx.globalAlpha=.65*alpha;
+      ctx.beginPath();
+      ctx.moveTo(cx+a.x*px,cy-a.y*px);
+      ctx.lineTo(cx+b.x*px,cy-b.y*px);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   point(ctx,cx,cy,primary.id==='sun'?8:primary.id==='earth'?7:5,primary.id==='earth'?'#5e9cff':primary.id==='moon'?'#b8c7d8':'#ffc86b',true);
   point(ctx,cx+relativePosition.x*px,cy-relativePosition.y*px,4,'#fff',true);
@@ -230,17 +240,29 @@ function animate(timestamp) {
   if(!lastFrame)lastFrame=timestamp;
   const delta=Math.min((timestamp-lastFrame)/1000,.1);
   lastFrame=timestamp;
+
+  // Шлейф живёт одну секунду реального времени, независимо от ускорения симуляции.
+  const previousTrailLength=trail.length;
+  trail=trail.filter(point=>timestamp-point.time<=1000);
+  const trailExpired=trail.length!==previousTrailLength;
+
+  let advanced=false;
   if(!paused){
     const previousPrimary=vessel.primaryBodyId;
     const steps=world.advance(delta);
     if(steps>0){
       if(vessel.primaryBodyId!==previousPrimary)trail=[];
       const s=world.getVesselState('test-vessel');
-      trail.push({x:s.position.x-currentPrimaryState().position.x,y:s.position.y-currentPrimaryState().position.y});
-      if(trail.length>1200)trail.shift();
-      updateTelemetry();drawAll();
+      trail.push({
+        x:s.position.x-currentPrimaryState().position.x,
+        y:s.position.y-currentPrimaryState().position.y,
+        time:timestamp
+      });
+      updateTelemetry();
+      advanced=true;
     }
   }
+  if(advanced||trailExpired)drawAll();
   requestAnimationFrame(animate);
 }
 

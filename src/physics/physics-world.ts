@@ -8,6 +8,7 @@ import { sphereOfInfluence } from './orbital-elements.ts';
  * Simulation epoch is J2000.0; each orbit is a two-body Kepler segment.
  */
 export class PhysicsWorld {
+  [key: string]: any;
  constructor({fixedStepSeconds=60,maxSubSteps=10000,soiEnterFactor=0.9,soiExitFactor=1.1}={}){
   assertPositiveFinite(fixedStepSeconds,'fixedStepSeconds');
   if(!Number.isInteger(maxSubSteps)||maxSubSteps<1)throw new RangeError('maxSubSteps must be positive.');

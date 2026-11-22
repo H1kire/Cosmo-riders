@@ -15,6 +15,12 @@ let paused = false;
 let lastFrame = 0;
 let trail = [];
 let frameAccumulator = 0;
+// Независимый масштаб каждой проекции; лунная система стартует отдалённой,
+// чтобы в кадр помещалась и сфера влияния Земли.
+const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };
+const MIN_ZOOM = 0.08;
+const MAX_ZOOM = 64;
+const ZOOM_FACTOR = 1.25;
 
 const fmt = (value, digits=2) => {
   if (!Number.isFinite(value)) return '—';
@@ -91,7 +97,7 @@ function line(ctx,x1,y1,x2,y2,color='#253b57') {
 function drawSolar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);
   ctx.clearRect(0,0,w,h);
-  const cx=w*.5,cy=h*.52,scalePx= Math.min(w*.39,h*.39);
+  const cx=w*.5,cy=h*.52,scalePx=Math.min(w*.39,h*.39)*cameraZoom.solar;
   const earthState=getBody('earth'),sunState=getBody('sun');
   const ex=cx+(earthState.position.x-sunState.position.x)/SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM*scalePx;
   const ey=cy-(earthState.position.y-sunState.position.y)/SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM*scalePx;
@@ -112,7 +118,7 @@ function drawLunar() {
   ctx.clearRect(0,0,w,h);
   const cx=w*.5,cy=h*.51;
   const moonDistance=SOLAR_SYSTEM_DATA.moon.elements.semiMajorAxisM;
-  const px=Math.min(w*.31,h*.34)/moonDistance;
+  const px=Math.min(w*.31,h*.34)/moonDistance*cameraZoom.lunar;
   const earth=getBody('earth'),moon=getBody('moon');
   const dx=(moon.position.x-earth.position.x)*px,dy=-(moon.position.y-earth.position.y)*px;
   const ex=cx,ey=cy,mx=cx+dx,my=cy+dy;
@@ -137,7 +143,7 @@ function drawVessel() {
   const radius=magnitude(relativePosition);
   const soi=world.getSphereOfInfluence(primary.id);
   const scaleDistance=Math.max(radius*2.4,primary.meanRadiusM*100);
-  const px=Math.min(w*.38,h*.38)/scaleDistance;
+  const px=Math.min(w*.38,h*.38)/scaleDistance*cameraZoom.vessel;
   const cx=w*.5,cy=h*.52;
   if(soi)ring(ctx,cx,cy,soi*px,'#6c9cff',[5,5],.75);
   const orbitRadius=radius*px;
@@ -155,7 +161,46 @@ function drawVessel() {
   label(ctx,'SOI = '+(soi?distanceLabel(soi):'не определена'),12,h-13,'#8ba2c0');
   $('detail-scale').textContent='Окружность: '+primary.name+' · масштаб локальный';
 }
-function drawAll(){drawSolar();drawLunar();drawVessel();}
+function drawAll(){drawSolar();drawLunar();drawVessel();updateZoomLabels();}
+
+function updateZoomLabels() {
+  for (const view of Object.keys(cameraZoom)) {
+    const output = $('zoom-value-' + view);
+    if (output) output.textContent = Math.round(cameraZoom[view] * 100) + '%';
+  }
+}
+
+function changeZoom(view, direction) {
+  if (!(view in cameraZoom)) return;
+  cameraZoom[view] = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM,
+    cameraZoom[view] * (direction > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)));
+  drawAll();
+}
+
+function resetZoom(view) {
+  if (!(view in cameraZoom)) return;
+  cameraZoom[view] = view === 'lunar' ? 0.34 : 1;
+  drawAll();
+}
+
+function bindCameraControls(view) {
+  const canvas = canvases[view];
+  canvas.addEventListener('wheel', event => {
+    event.preventDefault();
+    changeZoom(view, event.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+
+  document.querySelectorAll('[data-zoom-view="' + view + '"]').forEach(button => {
+    button.addEventListener('click', () => {
+      const action = button.dataset.zoomAction;
+      if (action === 'in') changeZoom(view, 1);
+      else if (action === 'out') changeZoom(view, -1);
+      else if (action === 'reset') resetZoom(view);
+    });
+  });
+}
+
+for (const view of Object.keys(canvases)) bindCameraControls(view);
 
 function updateTelemetry() {
   if(!vessel)return;

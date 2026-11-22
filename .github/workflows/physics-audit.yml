@@ -1,7 +1,7 @@
 name: Physics Engine Audit
 on:
   push:
-    branches: [main, physics-engine]
+    branches: [main, test]
   pull_request:
     branches: [main]
 jobs:

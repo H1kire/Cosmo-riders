@@ -15,6 +15,19 @@ const checks = [
   ['No hard-coded NaN or Infinity defaults', async () => {
     const source = await readFile(new URL('../src/physics/kepler.js', import.meta.url), 'utf8');
     if (/\b(?:NaN|Infinity)\b/.test(source)) throw new Error('Unexpected NaN/Infinity literal in Kepler solver.');
+  }],
+  ['Hierarchical map uses physical satellite offsets', async () => {
+    const source = await readFile(new URL('../lab/lab.js', import.meta.url), 'utf8');
+    if (source.includes('solarMoonScreenPoint')) throw new Error('Synthetic Moon screen offset must not be used.');
+    if (!source.includes('targetState.position.x-focusState.position.x')) throw new Error('Local view must use physical parent-relative coordinates.');
+    if (!source.includes('LOCAL_VIEW_START_ZOOM')) throw new Error('Hierarchical local-view transition is missing.');
+    if (!source.includes('orbitalElementsToState')) throw new Error('Orbit paths must use orbital elements.');
+  }],
+  ['Rendering uses non-mutating fractional snapshots', async () => {
+    const physics = await readFile(new URL('../src/physics/physics-world.js', import.meta.url), 'utf8');
+    const lab = await readFile(new URL('../lab/lab.js', import.meta.url), 'utf8');
+    if (!physics.includes('getBodyStatesAt(timeSeconds)') || !physics.includes('getVesselStateAt(id,timeSeconds)')) throw new Error('Fractional state snapshot APIs are missing.');
+    if (!lab.includes('getBodyStatesAt(renderTime)') || !lab.includes("getVesselStateAt('test-vessel',renderTime)")) throw new Error('Renderer is not using synchronized snapshots.');
   }]
 ];
 

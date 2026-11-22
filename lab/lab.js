@@ -310,55 +310,7 @@ function bindCameraControls(view){
 }
 for(const view of ['lunar','vessel'])bindCameraControls(view);
 
-// Smooth camera easing and click-vs-drag detection for the solar map.
-{
-  const canvas=canvases.solar;
-  let pointer=null,moved=false;
-  canvas.addEventListener('contextmenu',event=>{
-    event.preventDefault();
-    trackingTargetId=null;
-  });
-  canvas.addEventListener('pointerdown',event=>{
-    if(event.button===2){trackingTargetId=null;return;}
-    if(event.button!==0)return;
-    pointer={id:event.pointerId,x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY};
-    moved=false;canvas.classList.add('dragging');canvas.setPointerCapture(event.pointerId);
-  });
-  canvas.addEventListener('pointermove',event=>{
-    if(!pointer||pointer.id!==event.pointerId)return;
-    const dx=event.clientX-pointer.lastX,dy=event.clientY-pointer.lastY;
-    if(Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>4)moved=true;
-    if(moved){cameraTargetPan.x+=dx;cameraTargetPan.y+=dy;}
-    pointer.lastX=event.clientX;pointer.lastY=event.clientY;
-  });
-  const stop=event=>{
-    if(!pointer||event.pointerId!==pointer.id)return;
-    if(!moved){
-      const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
-      selectedPlanetId=findMapBodyAt(x,y);
-    }
-    pointer=null;canvas.classList.remove('dragging');
-  };
-  canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
-  canvas.addEventListener('dblclick',event=>{
-    const rect=canvas.getBoundingClientRect();
-    const target=findMapBodyAt(event.clientX-rect.left,event.clientY-rect.top);
-    if(!target)return;
-    selectedPlanetId=target;
-    trackingTargetId=target;
-    if(PLANET_IDS.includes(target))focusBodyId=target;
-    pendingGlobalTransition=false;
-    if(cameraZoom.solar<LOCAL_VIEW_START_ZOOM){
-      const point=globalPointForBody(target,cameraZoom.solar);
-      cameraTargetPan.x=canvas.clientWidth*.5-point.x;
-      cameraTargetPan.y=canvas.clientHeight*.5-point.y;
-    }else{
-      cameraPan.x=cameraPan.y=0;cameraTargetPan.x=cameraTargetPan.y=0;
-    }
-    drawAll();
-  });
-}
-function drawAll(){
+// The 3D renderer owns solar-camera input; legacy 2D map handlers are intentionally removed.\nfunction drawAll(){
   drawSolar();
   // Дополнительные сцены не перерисовываются, пока их окна закрыты.
   if($('window-local').style.display==='block')drawLunar();
@@ -502,7 +454,7 @@ function animate(timestamp){
   cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;
   for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
   const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
-  if(!paused||advanced||expired||cameraMoving)drawAll();
+  drawAll();
 
   renderedBodyStates=null;
   renderedVesselState=null;

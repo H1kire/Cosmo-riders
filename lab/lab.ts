@@ -7,7 +7,7 @@ import { hohmannTransfer } from '../src/physics/maneuvers.ts';
 import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
 
-const $ = id => document.getElementById(id);
+const $ = (id: string): (HTMLElement & { value: string }) | null => document.getElementById(id) as (HTMLElement & { value: string }) | null;
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
 let solar3D;
 try {
@@ -311,7 +311,7 @@ function bindCameraControls(view){
       setSolarZoom(cameraTargetZoom.solar*(event.deltaY<0?ZOOM_FACTOR:1/ZOOM_FACTOR),event.clientX-rect.left,event.clientY-rect.top);
     }else changeZoom(view,event.deltaY<0?1:-1);
   },{passive:false});
-  document.querySelectorAll('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{
+  document.querySelectorAll<HTMLElement>('[data-zoom-view="'+view+'"]').forEach(button=>button.addEventListener('click',()=>{
     const action=button.dataset.zoomAction;
     if(action==='in')changeZoom(view,1);
     else if(action==='out')changeZoom(view,-1);
@@ -329,7 +329,7 @@ function drawAll(){
   updateZoomLabels();
 }
 
-document.querySelectorAll('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D.distance=Math.max(.018,solar3D.distance/1.22);else if(action==='out'){const nextDistance=solar3D.distance*1.22;if(Number.isFinite(nextDistance))solar3D.distance=nextDistance;}updateZoomLabels();}));
+document.querySelectorAll<HTMLElement>('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D.distance=Math.max(.018,solar3D.distance/1.22);else if(action==='out'){const nextDistance=solar3D.distance*1.22;if(Number.isFinite(nextDistance))solar3D.distance=nextDistance;}updateZoomLabels();}));
 $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
   trackingTargetId=null;
@@ -340,12 +340,12 @@ $('camera-home').addEventListener('click',()=>{
 
 // Independent utility windows can be opened, closed and dragged by their title bars.
 function openWindow(id){
-  const sidebarWidth=document.querySelector('.sidebar').getBoundingClientRect().width;
-  document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
+  const sidebarWidth=document.querySelector<HTMLElement>('.sidebar').getBoundingClientRect().width;
+  document.querySelectorAll<HTMLElement>('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
 
   // The solar system is the permanent main view, not a floating window.
   if(id==='window-system'){
-    document.querySelectorAll('.floating-window').forEach(win=>{win.style.display='none';});
+    document.querySelectorAll<HTMLElement>('.floating-window').forEach(win=>{win.style.display='none';});
     requestAnimationFrame(()=>drawAll());
     return;
   }
@@ -361,24 +361,24 @@ function openWindow(id){
   win.style.zIndex=String(++highestWindowZ);
   requestAnimationFrame(()=>drawAll());
 }
-document.querySelectorAll('[data-open-window]').forEach(button=>button.addEventListener('click',()=>openWindow(button.dataset.openWindow)));
-document.querySelectorAll('.floating-window').forEach(win=>{
-  win.querySelector('.window-close').addEventListener('click',()=>{
+document.querySelectorAll<HTMLElement>('[data-open-window]').forEach(button=>button.addEventListener('click',()=>openWindow(button.dataset.openWindow)));
+document.querySelectorAll<HTMLElement>('.floating-window').forEach(win=>{
+  win.querySelector<HTMLElement>('.window-close').addEventListener('click',()=>{
     win.style.display='none';
-    document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow==='window-system'));
+    document.querySelectorAll<HTMLElement>('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow==='window-system'));
   });
   win.addEventListener('pointerdown',()=>{win.style.zIndex=String(++highestWindowZ);});
-  const bar=win.querySelector('.window-titlebar');
+  const bar=win.querySelector<HTMLElement>('.window-titlebar');
   let drag=null;
   bar.addEventListener('pointerdown',event=>{
-    if(event.target.closest('button'))return;
+    if((event.target as Element).closest('button'))return;
     const rect=win.getBoundingClientRect();
     drag={pointerId:event.pointerId,x:event.clientX-rect.left,y:event.clientY-rect.top};
     bar.setPointerCapture(event.pointerId);win.style.zIndex=String(++highestWindowZ);
   });
   bar.addEventListener('pointermove',event=>{
     if(!drag||drag.pointerId!==event.pointerId)return;
-    const minX=document.querySelector('.sidebar').getBoundingClientRect().width+4;
+    const minX=document.querySelector<HTMLElement>('.sidebar').getBoundingClientRect().width+4;
     const maxX=Math.max(minX,window.innerWidth-win.offsetWidth-8),maxY=Math.max(62,window.innerHeight-52);
     win.style.left=Math.max(minX,Math.min(maxX,event.clientX-drag.x))+'px';
     win.style.top=Math.max(62,Math.min(maxY,event.clientY-drag.y))+'px';
@@ -472,7 +472,7 @@ function animate(timestamp){
   renderedVesselState=null;
   requestAnimationFrame(animate);
 }
-$('scenario').addEventListener('change',event=>{createScenario(event.target.value);});
+$('scenario').addEventListener('change',event=>{createScenario((event.target as HTMLInputElement).value);});
 $('time-scale').addEventListener('change',event=>world.setTimeScale(Number(event.target.value)));
 $('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
 $('step-button').addEventListener('click',()=>{if(!paused){paused=true;world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}world.step();updateTelemetry();drawAll();});

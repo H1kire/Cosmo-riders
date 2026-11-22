@@ -329,7 +329,7 @@ function drawAll(){
   updateZoomLabels();
 }
 
-document.querySelectorAll('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D.distance=Math.max(.018,solar3D.distance/1.22);else if(action==='out')solar3D.distance=Math.min(1e15,solar3D.distance*1.22);updateZoomLabels();}));
+document.querySelectorAll('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D.distance=Math.max(.018,solar3D.distance/1.22);else if(action==='out'){const nextDistance=solar3D.distance*1.22;if(Number.isFinite(nextDistance))solar3D.distance=nextDistance;}updateZoomLabels();}));
 $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
   trackingTargetId=null;

@@ -113,7 +113,7 @@ function drawSolar() {
   }
 
   // At close zoom, reveal the Earth-Moon system as a local-scale inset on the same map.
-  if(cameraZoom.solar>=1e6 && bodyScreen.earth){
+  if(bodyScreen.earth){
     const earthScreen=bodyScreen.earth;
     const moonPoint=solarMoonScreenPoint(earthScreen,w,h);
     ring(ctx,earthScreen.x,earthScreen.y,moonPoint.orbitRadius,'#b6c9df',[3,5],.75);
@@ -174,7 +174,7 @@ function updateZoomLabels(){
 function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
   const canvas=canvases.solar,w=canvas.clientWidth,h=canvas.clientHeight;
   const panX=includePan?cameraPan.x:0,panY=includePan?cameraPan.y:0;
-  if(id==='moon'&&zoom>=1e6){
+  if(id==='moon'){
     const earthPoint=solarMapPoint('earth',includePan,zoom),sun=getBody('sun'),earth=getBody('earth');
     const maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
     const maxPx=Math.min(w*.43,h*.42);
@@ -195,13 +195,13 @@ function solarMoonScreenPoint(earthScreen,width,height){
   const dx=moon.position.x-earth.position.x,dy=moon.position.y-earth.position.y;
   const angle=Math.atan2(dy,dx);
   // Масштаб спутника условный: иначе реальная орбита Луны теряется на масштабе всей Солнечной системы.
-  const orbitRadius=Math.min(Math.max(earthScreen.radius*60,42),Math.min(width,height)*.42);
+  const orbitRadius=Math.min(Math.max(earthScreen.radius*60,42)*1.25,Math.min(width,height)*.42);
   return {x:earthScreen.x+Math.cos(angle)*orbitRadius,y:earthScreen.y-Math.sin(angle)*orbitRadius,
     radius:Math.max(2.2,Math.min(8,orbitRadius*.035)),orbitRadius};
 }
 function findMapBodyAt(x,y){
   let nearest=null,nearestDistance=Infinity;
-  const ids=cameraZoom.solar>=1e6? [...PLANET_IDS,'moon']:PLANET_IDS;
+  const ids=[...PLANET_IDS,'moon'];
   for(const id of ids){
     const p=solarMapPoint(id),distance=Math.hypot(x-p.x,y-p.y);
     const hitRadius=id==='moon'?16:Math.max(12,Math.min(28,4+SOLAR_SYSTEM_DATA[id].meanRadiusM/1e6));
@@ -385,8 +385,12 @@ function updateManeuverPlanner(){
 }
 let lastTelemetryUpdate=0;
 function animate(timestamp){
-  if(!lastFrame)lastFrame=timestamp;const delta=Math.min((timestamp-lastFrame)/1000,.1);lastFrame=timestamp;
-  const oldLength=trail.length;trail=trail.filter(point=>timestamp-point.time<=1000);const expired=oldLength!==trail.length;
+  if(!lastFrame)lastFrame=timestamp;
+  const delta=Math.min((timestamp-lastFrame)/1000,.1);
+  lastFrame=timestamp;
+  const oldLength=trail.length;
+  trail=trail.filter(point=>timestamp-point.time<=1000);
+  const expired=oldLength!==trail.length;
   let advanced=false;
   if(!paused){
     const oldPrimary=vessel.primaryBodyId,steps=world.advance(delta);
@@ -398,12 +402,19 @@ function animate(timestamp){
       advanced=true;
     }
   }
+
+  // Для визуализации используем точное дробное время между фиксированными шагами физики.
+  // Состояние физического мира после отрисовки полностью восстанавливается.
+  const committedTime=world.simulationTimeSeconds;
+  const committedBodyStates=world.bodyStates;
+  world.simulationTimeSeconds=committedTime+world.accumulator;
+  world.bodyStates=new Map(committedBodyStates);
+  world.updateEphemerides();
+
   const cameraEase=1-Math.exp(-12*delta);
   const zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
-  cameraZoom.solar+= (cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
+  cameraZoom.solar+=(cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
   if(trackingTargetId){
-    // Целевая позиция вычисляется без текущего pan и на конечном масштабе:
-    // так камера не накапливает поправки и не дёргается при прокрутке.
     const target=solarMapPoint(trackingTargetId,false,cameraTargetZoom.solar);
     cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;
     cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;
@@ -413,9 +424,11 @@ function animate(timestamp){
   for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
   const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
   if(advanced||expired||cameraMoving)drawAll();
+
+  world.simulationTimeSeconds=committedTime;
+  world.bodyStates=committedBodyStates;
   requestAnimationFrame(animate);
 }
-
 $('scenario').addEventListener('change',event=>{createScenario(event.target.value);});
 $('time-scale').addEventListener('change',event=>world.setTimeScale(Number(event.target.value)));
 $('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});

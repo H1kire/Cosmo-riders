@@ -14,7 +14,7 @@ uniform vec3 uColor;uniform vec3 uLight;uniform vec3 uLightColor;uniform float u
 varying vec3 vNormal;varying vec3 vPosition;
 float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
 float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(hash(i),hash(i+vec3(1.,0.,0.)),f.x),mix(hash(i+vec3(0.,1.,0.)),hash(i+vec3(1.,1.,0.)),f.x),f.y),mix(mix(hash(i+vec3(0.,0.,1.)),hash(i+vec3(1.,0.,1.)),f.x),mix(hash(i+vec3(0.,1.,1.)),hash(i+vec3(1.,1.,1.)),f.x),f.y),f.z);}
-void main(){if(uKind>4.5){gl_FragColor=vec4(uColor*2.8,1.);return;}vec3 n=normalize(vNormal);float l=.24+uLightIntensity*max(dot(n,normalize(uLight)),0.);float a=noise(n*(4.+uDetail*7.)+uSeed);float b=noise(n*(18.+uDetail*34.)+uSeed*3.);vec3 c=uColor;
+void main(){if(uKind>4.5){gl_FragColor=vec4(uColor*2.8,1.);return;}vec3 n=normalize(vNormal);float sunFacing=max(dot(n,normalize(uLight)),0.);float sunStrength=clamp(uLightIntensity,.35,1.);float l=.24+.76*sunStrength*sunFacing;float a=noise(n*(4.+uDetail*7.)+uSeed);float b=noise(n*(18.+uDetail*34.)+uSeed*3.);vec3 c=uColor;
 if(uKind>4.5){c=uColor*(1.15+b*.12);}
 else if(uKind<.5){float q=sin((n.y*18.+a*2.)*3.14159)*.5+.5;c=mix(c,c*vec3(1.35,.9,.64),q*.32+b*.08);}
 else if(uKind<1.5){float land=smoothstep(.46,.58,a*.7+b*.3);c=mix(c*vec3(.12,.34,.8),c*vec3(.25,.68,.28),land);c=mix(c,vec3(.85,.9,.94),smoothstep(.72,.86,abs(n.y))*.85);}

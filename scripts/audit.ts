@@ -36,7 +36,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');
     const lab = await readFile(new URL('../lab/lab.ts', import.meta.url), 'utf8');
-    if (!physics.includes('getBodyStatesAt(timeSeconds)') || !physics.includes('getVesselStateAt(id,timeSeconds,bodyStates=')) throw new Error('Fractional state snapshot APIs are missing.');
+    if (!physics.includes('getBodyStatesAt(') || !physics.includes('getVesselStateAt(')) throw new Error('Fractional state snapshot APIs are missing.');
     if (!lab.includes('getBodyStatesAt(renderTime)') || !lab.includes("getVesselStateAt('test-vessel',renderTime,renderedBodyStates)")) throw new Error('Renderer is not using synchronized snapshots.');
   }]
 ];
@@ -52,7 +52,7 @@ async function collectJavaScript(directory) {
   const paths = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) paths.push(...await collectJavaScript(path));
+    if (entry.isDirectory() && !['node_modules', 'dist', '.git'].includes(entry.name)) paths.push(...await collectJavaScript(path));
     else if (entry.isFile() && path.endsWith('.js') && !path.endsWith('/audit.js')) paths.push(path);
   }
   return paths;

@@ -4,6 +4,7 @@ import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/phys
 import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-elements.js';
 import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propulsion.js';
 import { hohmannTransfer } from '../src/physics/maneuvers.js';
+import { orbitalElementsToState } from '../src/physics/orbital-state.js';
 
 const $ = id => document.getElementById(id);
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
@@ -11,6 +12,10 @@ const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;
 let world, vessel, paused = false, lastFrame = 0, trail = [];
+let renderedBodyStates = null, renderedVesselState = null;
+let focusBodyId = null, pendingGlobalTransition = false;
+const LOCAL_VIEW_START_ZOOM = 2500;
+const orbitPathCache = new Map();
 const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };
 const cameraTargetZoom = { solar: 1, lunar: 0.34, vessel: 1 };
 const cameraPan = { x: 0, y: 0 };
@@ -24,7 +29,8 @@ const PLANET_COLORS = { mercury:'#a6a6a6',venus:'#e5bd82',earth:'#5b9dff',mars:'
 const fmt = (value,digits=2) => Number.isFinite(value) ? new Intl.NumberFormat('ru-RU',{maximumFractionDigits:digits}).format(value) : '—';
 const distanceLabel = metres => metres >= 1e9 ? fmt(metres/1e9,3)+' млн км' : metres >= 1e6 ? fmt(metres/1e6,2)+' тыс. км' : fmt(metres/1e3,1)+' км';
 const speedLabel = value => fmt(value/1000,3)+' км/с';
-const getBody = id => world.getBodyState(id);
+const getBody = id => renderedBodyStates?.get(id) ?? world.getBodyState(id);
+const getRenderedVessel = () => renderedVesselState ?? world.getVesselState('test-vessel');
 const body = id => world.bodies.get(id);
 const currentPrimary = () => body(vessel.primaryBodyId);
 const currentPrimaryState = () => getBody(vessel.primaryBodyId);
@@ -47,6 +53,7 @@ function createScenario(name) {
     vessel = world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,Math.sqrt(earthMu/radius),0)),massKg:12000});
   }
   trail = [];
+  renderedBodyStates=null;renderedVesselState=null;
   updateTelemetry();
   drawAll();
 }
@@ -69,68 +76,119 @@ function ring(ctx,x,y,r,color,dash=[5,5],alpha=.7) {
 function label(ctx,text,x,y,color='#9aabc2',font='10px Segoe UI,Arial') {
   ctx.save();ctx.fillStyle=color;ctx.font=font;ctx.fillText(text,x,y);ctx.restore();
 }
-function drawSolar() {
-  const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);
-  ctx.clearRect(0,0,w,h);
-  const sun=getBody('sun'),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-  const maxPx=Math.min(w*.43,h*.42),cx=w*.5+cameraPan.x,cy=h*.5+cameraPan.y;
-  const logDenominator=Math.log1p(maxRadius/AU);
-  const displayRadius=distance=>Math.log1p(Math.max(0,distance)/AU)/logDenominator*maxPx*cameraZoom.solar;
-  const pixelsPerMetre=distance=>maxPx*cameraZoom.solar/(logDenominator*(AU+Math.max(0,distance)));
-  const bodyScreen={};
-  ctx.save();
+function getOrbitPath(id){
+  if(orbitPathCache.has(id))return orbitPathCache.get(id);
+  const celestial=body(id);
+  if(!celestial?.parentId||!celestial.orbitalElements){orbitPathCache.set(id,[]);return [];}
+  const parent=body(celestial.parentId),elements=celestial.orbitalElements,points=[],segments=128;
+  for(let i=0;i<=segments;i++){
+    const sample=orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu);
+    points.push(sample.position);
+  }
+  orbitPathCache.set(id,points);
+  return points;
+}
+function globalSolarMapPoint(position,width,height,zoom=cameraZoom.solar,includePan=true){
+  const sun=getBody('sun'),dx=position.x-sun.position.x,dy=position.y-sun.position.y;
+  const distance=Math.hypot(dx,dy);
+  if(distance===0)return {x:width*.5+(includePan?cameraPan.x:0),y:height*.5+(includePan?cameraPan.y:0)};
+  const maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
+  const maxPx=Math.min(width*.43,height*.42),denominator=Math.log1p(maxRadius/AU);
+  const shownRadius=Math.log1p(distance/AU)/denominator*maxPx*zoom;
+  return {x:width*.5+(includePan?cameraPan.x:0)+dx/distance*shownRadius,
+    y:height*.5+(includePan?cameraPan.y:0)-dy/distance*shownRadius};
+}
+function globalPixelsPerMetre(distance,width,height,zoom=cameraZoom.solar){
+  const maxPx=Math.min(width*.43,height*.42);
+  const denominator=Math.log1p(SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM/AU);
+  return maxPx*zoom/(denominator*(AU+Math.max(0,distance)));
+}
+function drawGlobalOrbit(ctx,id,width,height){
+  const celestial=body(id),parentState=getBody(celestial.parentId),path=getOrbitPath(id);
+  if(!path.length)return;
+  ctx.beginPath();
+  for(let i=0;i<path.length;i++){
+    const p=globalSolarMapPoint({x:parentState.position.x+path[i].x,y:parentState.position.y+path[i].y,z:parentState.position.z+path[i].z},width,height);
+    if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
+  }
+  ctx.strokeStyle=id===selectedPlanetId?'#9bd5ff':'#22364e';
+  ctx.lineWidth=id===selectedPlanetId?2.2:1;
+  ctx.globalAlpha=id===selectedPlanetId?.95:.58;
+  ctx.setLineDash(id===selectedPlanetId?[]:[2,6]);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+}
+function drawGlobalSolar(ctx,width,height){
+  const sun=getBody('sun'),maxPx=Math.min(width*.43,height*.42);
+  const center={x:width*.5+cameraPan.x,y:height*.5+cameraPan.y};
+  for(const id of PLANET_IDS)drawGlobalOrbit(ctx,id,width,height);
+  const sunRadius=Math.max(5,Math.min(90,695700000*globalPixelsPerMetre(0,width,height)));
+  point(ctx,center.x,center.y,sunRadius,'#ffd27b',true);
+  label(ctx,'СОЛНЦЕ',center.x+sunRadius+5,center.y-10,'#ffdc9b','9px Segoe UI,Arial');
   for(const id of PLANET_IDS){
-    const data=SOLAR_SYSTEM_DATA[id],a=data.elements.semiMajorAxisM,e=data.elements.eccentricity,r=displayRadius(a);
-    // Не строим орбиты, заведомо находящиеся далеко за пределами экрана.
-    if(r>Math.max(w,h)*2.5)continue;
-    ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);
-    ctx.strokeStyle=id===selectedPlanetId?'#9bd5ff':'#22364e';
-    ctx.lineWidth=id===selectedPlanetId?2.2:1;
-    ctx.globalAlpha=id===selectedPlanetId ? 0.95 : 0.65;
-    ctx.setLineDash(id===selectedPlanetId?[]:[2,6]);ctx.stroke();
+    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id],screen=globalSolarMapPoint(state.position,width,height);
+    if(screen.x < -100 || screen.x > width+100 || screen.y < -100 || screen.y > height+100)continue;
+    const distance=Math.hypot(state.position.x-sun.position.x,state.position.y-sun.position.y);
+    const radius=Math.max(2.4,Math.min(90,data.meanRadiusM*globalPixelsPerMetre(distance,width,height)));
+    if(id===selectedPlanetId)ring(ctx,screen.x,screen.y,radius+7,'#b8e4ff',[],.9);
+    point(ctx,screen.x,screen.y,radius,PLANET_COLORS[id],id===selectedPlanetId||id==='earth');
+    label(ctx,data.name,screen.x+radius+5,screen.y-5,PLANET_COLORS[id],'9px Segoe UI,Arial');
   }
-  ctx.restore();
-
-  point(ctx,cx,cy,Math.max(5,Math.min(695700000*pixelsPerMetre(0),90)),'#ffd27b',true);
-  label(ctx,'СОЛНЦЕ',cx+10,cy-10,'#ffdc9b','9px Segoe UI,Arial');
-
-  for(const id of PLANET_IDS){
-    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id];
-    const dx=state.position.x-sun.position.x,dy=state.position.y-sun.position.y;
-    const actualRadius=Math.hypot(dx,dy),shownRadius=displayRadius(actualRadius);
-    const x=cx+dx/actualRadius*shownRadius,y=cy-dy/actualRadius*shownRadius;
-    // Тела за пределами экрана не требуют отрисовки и эффектов свечения.
-    if(x < -100 || x > w+100 || y < -100 || y > h+100)continue;
-    const physicalRadius=data.meanRadiusM*pixelsPerMetre(actualRadius);
-    const radius=Math.max(2.4,Math.min(90,physicalRadius));
-    bodyScreen[id]={x,y,radius};
-    if(id===selectedPlanetId){
-      ctx.save();ctx.strokeStyle='#b8e4ff';ctx.globalAlpha=.9;ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.arc(x,y,radius+7,0,Math.PI*2);ctx.stroke();ctx.restore();
-    }
-    point(ctx,x,y,radius,PLANET_COLORS[id],id===selectedPlanetId||id==='earth');
-    label(ctx,data.name,x+radius+5,y-5,PLANET_COLORS[id],'9px Segoe UI,Arial');
+  const ship=getRenderedVessel(),shipPoint=globalSolarMapPoint(ship.position,width,height);
+  if(shipPoint.x>=-20&&shipPoint.x<=width+20&&shipPoint.y>=-20&&shipPoint.y<=height+20)point(ctx,shipPoint.x,shipPoint.y,3,'#fff',true);
+  if(cameraZoom.solar<100)label(ctx,'30 AU',center.x+maxPx*.83*cameraZoom.solar,center.y+13,'#647f9d','9px Segoe UI,Arial');
+}
+function localMapPoint(id,width,height,includePan=true){
+  if(!focusBodyId)return null;
+  const focus=body(focusBodyId),focusState=getBody(focusBodyId),target=body(id);
+  if(!target)return null;
+  if(id!==focusBodyId&&target.parentId!==focusBodyId&&focus.parentId!==id)return null;
+  const targetState=getBody(id),dx=targetState.position.x-focusState.position.x,dy=targetState.position.y-focusState.position.y;
+  const sun=getBody('sun'),focusDistance=Math.hypot(focusState.position.x-sun.position.x,focusState.position.y-sun.position.y);
+  const scale=globalPixelsPerMetre(focusDistance,width,height,cameraZoom.solar);
+  return {x:width*.5+(includePan?cameraPan.x:0)+dx*scale,
+    y:height*.5+(includePan?cameraPan.y:0)-dy*scale,scale};
+}
+function drawLocalOrbit(ctx,childId,parentId,width,height,scale){
+  const parentPoint=localMapPoint(parentId,width,height),path=getOrbitPath(childId);
+  if(!parentPoint||!path.length)return;
+  const radius=body(childId).semiMajorAxisM*scale;
+  if(radius>Math.max(width,height)*3)return;
+  ctx.beginPath();
+  for(let i=0;i<path.length;i++){
+    const x=parentPoint.x+path[i].x*scale,y=parentPoint.y-path[i].y*scale;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   }
-
-  // At close zoom, reveal the Earth-Moon system as a local-scale inset on the same map.
-  if(bodyScreen.earth){
-    const earthScreen=bodyScreen.earth;
-    const moonPoint=solarMoonScreenPoint(earthScreen,w,h);
-    ring(ctx,earthScreen.x,earthScreen.y,moonPoint.orbitRadius,'#b6c9df',[3,5],.75);
-    if(selectedPlanetId==='moon'){
-      ctx.save();ctx.strokeStyle='#e4f1ff';ctx.lineWidth=1.5;ctx.beginPath();
-      ctx.arc(moonPoint.x,moonPoint.y,moonPoint.radius+6,0,Math.PI*2);ctx.stroke();ctx.restore();
-    }
-    bodyScreen.moon=moonPoint;
-    point(ctx,moonPoint.x,moonPoint.y,moonPoint.radius,'#c5cfdb',true);
-    label(ctx,'ЛУНА',moonPoint.x+moonPoint.radius+4,moonPoint.y-4,'#d9e4f0','9px Segoe UI,Arial');
+  ctx.strokeStyle='#9fb5d0';ctx.globalAlpha=.72;ctx.lineWidth=1;ctx.setLineDash([4,5]);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+}
+function drawLocalSolar(ctx,width,height){
+  const focus=body(focusBodyId),focusState=getBody(focusBodyId),sun=getBody('sun');
+  const focusDistance=Math.hypot(focusState.position.x-sun.position.x,focusState.position.y-sun.position.y);
+  const scale=globalPixelsPerMetre(focusDistance,width,height,cameraZoom.solar);
+  const center={x:width*.5+cameraPan.x,y:height*.5+cameraPan.y};
+  const visibleIds=[focusBodyId];
+  if(focus.parentId)visibleIds.push(focus.parentId);
+  for(const candidate of world.bodies.values())if(candidate.parentId===focusBodyId)visibleIds.push(candidate.id);
+  if(focus.parentId)drawLocalOrbit(ctx,focusBodyId,focus.parentId,width,height,scale);
+  for(const candidate of world.bodies.values())if(candidate.parentId===focusBodyId)drawLocalOrbit(ctx,candidate.id,focusBodyId,width,height,scale);
+  for(const id of visibleIds){
+    const data=SOLAR_SYSTEM_DATA[id]??body(id),screen=id===focusBodyId?center:localMapPoint(id,width,height);
+    if(!screen||screen.x < -width*2||screen.x > width*3||screen.y < -height*2||screen.y > height*3)continue;
+    const radius=Math.max(1.4,data.meanRadiusM*scale);
+    if(id===selectedPlanetId)ring(ctx,screen.x,screen.y,Math.min(radius+7,Math.max(width,height)),'#e1f1ff',[],.9);
+    const color=PLANET_COLORS[id]??(id==='moon'?'#c5cfdb':'#ffd27b');
+    point(ctx,screen.x,screen.y,radius,color,radius<35);
+    if(radius<55)label(ctx,data.name,screen.x+radius+5,screen.y-5,color,'10px Segoe UI,Arial');
   }
-
-  const ship=world.getVesselState('test-vessel');
-  const sx=ship.position.x-sun.position.x,sy=ship.position.y-sun.position.y,shipRadius=Math.hypot(sx,sy);
-  const shipShown=displayRadius(shipRadius),shipX=cx+sx/shipRadius*shipShown,shipY=cy-sy/shipRadius*shipShown;
-  if(shipX>=-20&&shipX<=w+20&&shipY>=-20&&shipY<=h+20)point(ctx,shipX,shipY,3,'#fff',true);
-  if(cameraZoom.solar<100)label(ctx,'30 AU',cx+maxPx*.83*cameraZoom.solar,cy+13,'#647f9d','9px Segoe UI,Arial');
+  const ship=getRenderedVessel(),shipState=ship.position;
+  const dx=shipState.x-focusState.position.x,dy=shipState.y-focusState.position.y;
+  const shipX=center.x+dx*scale,shipY=center.y-dy*scale;
+  if(shipX>=-20&&shipX<=width+20&&shipY>=-20&&shipY<=height+20)point(ctx,shipX,shipY,3,'#fff',true);
+  label(ctx,'ЛОКАЛЬНАЯ СИСТЕМА · '+focus.name.toUpperCase(),14,24,'#a9caff','10px Segoe UI,Arial');
+}
+function drawSolar(){
+  const {ctx,width,height}=resizeCanvas(canvases.solar);
+  ctx.clearRect(0,0,width,height);
+  if(focusBodyId&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM)drawLocalSolar(ctx,width,height);
+  else drawGlobalSolar(ctx,width,height);
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);
@@ -143,12 +201,12 @@ function drawLunar() {
   ring(ctx,mx,my,moonSoi*px,'#83e0b0',[3,4],.9);
   point(ctx,cx,cy,7,'#5b9dff',true);point(ctx,mx,my,4,'#c5cfdb',true);
   label(ctx,'Земля',cx+11,cy-10,'#a9caff');label(ctx,'Луна',mx+9,my-8,'#d9e4f0');
-  const ship=world.getVesselState('test-vessel'),sx=cx+(ship.position.x-earth.position.x)*px,sy=cy-(ship.position.y-earth.position.y)*px;
+  const ship=getRenderedVessel(),sx=cx+(ship.position.x-earth.position.x)*px,sy=cy-(ship.position.y-earth.position.y)*px;
   point(ctx,sx,sy,3,'#fff',true);
 }
 function drawVessel() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.vessel);ctx.clearRect(0,0,w,h);
-  const primary=currentPrimary(),primaryState=currentPrimaryState(),ship=world.getVesselState('test-vessel');
+  const primary=currentPrimary(),primaryState=currentPrimaryState(),ship=getRenderedVessel();
   const relative=subtract(ship.position,primaryState.position),radius=magnitude(relative),soi=world.getSphereOfInfluence(primary.id);
   const scaleDistance=Math.max(radius*2.4,primary.meanRadiusM*100),px=Math.min(w*.38,h*.38)/scaleDistance*cameraZoom.vessel,cx=w*.5,cy=h*.52;
   if(soi)ring(ctx,cx,cy,soi*px,'#6c9cff',[5,5],.7);
@@ -172,51 +230,57 @@ function updateZoomLabels(){
   }
 }
 function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
-  const canvas=canvases.solar,w=canvas.clientWidth,h=canvas.clientHeight;
-  const panX=includePan?cameraPan.x:0,panY=includePan?cameraPan.y:0;
-  if(id==='moon'){
-    const earthPoint=solarMapPoint('earth',includePan,zoom),sun=getBody('sun'),earth=getBody('earth');
-    const maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-    const maxPx=Math.min(w*.43,h*.42);
-    const earthDistance=Math.hypot(earth.position.x-sun.position.x,earth.position.y-sun.position.y);
-    const earthRadius=Math.max(2.4,Math.min(90,SOLAR_SYSTEM_DATA.earth.meanRadiusM*
-      maxPx*zoom/(Math.log1p(maxRadius/AU)*(AU+earthDistance))));
-    return solarMoonScreenPoint({...earthPoint,radius:earthRadius},w,h);
+  const canvas=canvases.solar,width=canvas.clientWidth,height=canvas.clientHeight;
+  if(focusBodyId&&zoom>=LOCAL_VIEW_START_ZOOM){
+    const focus=body(focusBodyId),target=body(id);
+    if(!target)return null;
+    if(id!==focusBodyId&&target.parentId!==focusBodyId&&focus.parentId!==id)return null;
+    const focusState=getBody(focusBodyId),targetState=getBody(id),sun=getBody('sun');
+    const distance=Math.hypot(focusState.position.x-sun.position.x,focusState.position.y-sun.position.y);
+    const scale=globalPixelsPerMetre(distance,width,height,zoom);
+    return {x:width*.5+(includePan?cameraPan.x:0)+(targetState.position.x-focusState.position.x)*scale,
+      y:height*.5+(includePan?cameraPan.y:0)-(targetState.position.y-focusState.position.y)*scale};
   }
-  const sun=getBody('sun'),state=getBody(id),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-  const maxPx=Math.min(w*.43,h*.42);
-  const distance=Math.hypot(state.position.x-sun.position.x,state.position.y-sun.position.y);
-  const radius=Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx*zoom;
-  return {x:w*.5+panX+(state.position.x-sun.position.x)/distance*radius,
-    y:h*.5+panY-(state.position.y-sun.position.y)/distance*radius};
-}
-function solarMoonScreenPoint(earthScreen,width,height){
-  const earth=getBody('earth'),moon=getBody('moon');
-  const dx=moon.position.x-earth.position.x,dy=moon.position.y-earth.position.y;
-  const angle=Math.atan2(dy,dx);
-  // Масштаб спутника условный: иначе реальная орбита Луны теряется на масштабе всей Солнечной системы.
-  const orbitRadius=Math.min(Math.max(earthScreen.radius*60,42)*1.25,Math.min(width,height)*.42);
-  return {x:earthScreen.x+Math.cos(angle)*orbitRadius,y:earthScreen.y-Math.sin(angle)*orbitRadius,
-    radius:Math.max(2.2,Math.min(8,orbitRadius*.035)),orbitRadius};
+  const state=getBody(id);
+  return globalSolarMapPoint(state.position,width,height,zoom,includePan);
 }
 function findMapBodyAt(x,y){
   let nearest=null,nearestDistance=Infinity;
-  const ids=[...PLANET_IDS,'moon'];
+  const ids=focusBodyId&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM
+    ? [focusBodyId,...(focusBodyId?Array.from(world.bodies.values()).filter(item=>item.parentId===focusBodyId||item.id===body(focusBodyId).parentId).map(item=>item.id):[])]
+    : PLANET_IDS;
   for(const id of ids){
-    const p=solarMapPoint(id),distance=Math.hypot(x-p.x,y-p.y);
-    const hitRadius=id==='moon'?16:Math.max(12,Math.min(28,4+SOLAR_SYSTEM_DATA[id].meanRadiusM/1e6));
+    const p=solarMapPoint(id);
+    if(!p)continue;
+    const data=SOLAR_SYSTEM_DATA[id]??body(id),hitRadius=Math.max(12,Math.min(28,4+data.meanRadiusM/1e6));
+    const distance=Math.hypot(x-p.x,y-p.y);
     if(distance<hitRadius&&distance<nearestDistance){nearest=id;nearestDistance=distance;}
   }
   return nearest;
 }
+function globalPointForBody(id,zoom=cameraZoom.solar){
+  const state=getBody(id),canvas=canvases.solar;
+  return globalSolarMapPoint(state.position,canvas.clientWidth,canvas.clientHeight,zoom,false);
+}
 function setSolarZoom(nextZoom,anchorX=canvases.solar.clientWidth*.5,anchorY=canvases.solar.clientHeight*.5){
-  const oldZoom=cameraTargetZoom.solar;
-  const ratio=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,nextZoom))/oldZoom;
+  const clamped=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,nextZoom));
   const cx=canvases.solar.clientWidth*.5,cy=canvases.solar.clientHeight*.5;
+  if(!focusBodyId&&clamped>=LOCAL_VIEW_START_ZOOM){
+    const target=findMapBodyAt(anchorX,anchorY)??selectedPlanetId;
+    if(target&&PLANET_IDS.includes(target)){
+      focusBodyId=target;
+      const point=globalPointForBody(target,cameraZoom.solar);
+      cameraTargetPan.x=cx-point.x;cameraTargetPan.y=cy-point.y;
+      pendingGlobalTransition=false;
+    }
+  }
+  if(focusBodyId&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM&&clamped<LOCAL_VIEW_START_ZOOM)pendingGlobalTransition=true;
+  if(focusBodyId&&clamped>=LOCAL_VIEW_START_ZOOM)pendingGlobalTransition=false;
+  const oldZoom=cameraTargetZoom.solar,ratio=clamped/oldZoom;
   const worldX=anchorX-cx-cameraTargetPan.x,worldY=anchorY-cy-cameraTargetPan.y;
   cameraTargetPan.x=anchorX-cx-worldX*ratio;
   cameraTargetPan.y=anchorY-cy-worldY*ratio;
-  cameraTargetZoom.solar=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,nextZoom));
+  cameraTargetZoom.solar=clamped;
 }
 function changeZoom(view,direction){
   if(!(view in cameraZoom))return;
@@ -227,7 +291,7 @@ function changeZoom(view,direction){
 function resetZoom(view){
   if(!(view in cameraZoom))return;
   cameraTargetZoom[view]=view==='lunar'?.34:1;
-  if(view==='solar')cameraTargetPan.x=cameraTargetPan.y=0;
+  if(view==='solar'){cameraTargetPan.x=cameraTargetPan.y=0;cameraPan.x=cameraPan.y=0;focusBodyId=null;pendingGlobalTransition=false;trackingTargetId=null;selectedPlanetId=null;}
   drawAll();
 }
 function bindCameraControls(view){
@@ -283,9 +347,15 @@ for(const view of Object.keys(canvases))bindCameraControls(view);
     if(!target)return;
     selectedPlanetId=target;
     trackingTargetId=target;
-    const point=solarMapPoint(target,false,cameraTargetZoom.solar);
-    cameraTargetPan.x=canvas.clientWidth*.5-point.x;
-    cameraTargetPan.y=canvas.clientHeight*.5-point.y;
+    if(PLANET_IDS.includes(target))focusBodyId=target;
+    pendingGlobalTransition=false;
+    if(cameraZoom.solar<LOCAL_VIEW_START_ZOOM){
+      const point=globalPointForBody(target,cameraZoom.solar);
+      cameraTargetPan.x=canvas.clientWidth*.5-point.x;
+      cameraTargetPan.y=canvas.clientHeight*.5-point.y;
+    }else{
+      cameraPan.x=cameraPan.y=0;cameraTargetPan.x=cameraTargetPan.y=0;
+    }
     drawAll();
   });
 }
@@ -301,6 +371,7 @@ $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
   trackingTargetId=null;
   selectedPlanetId=null;
+  focusBodyId=null;pendingGlobalTransition=false;
   drawAll();
 });
 
@@ -396,37 +467,46 @@ function animate(timestamp){
     const oldPrimary=vessel.primaryBodyId,steps=world.advance(delta);
     if(steps>0){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
-      const s=world.getVesselState('test-vessel'),p=currentPrimaryState();
+      const s=world.getVesselState('test-vessel'),p=world.getBodyState(vessel.primaryBodyId);
       trail.push({x:s.position.x-p.position.x,y:s.position.y-p.position.y,time:timestamp});
       if(timestamp-lastTelemetryUpdate>=250){updateTelemetry();lastTelemetryUpdate=timestamp;}
       advanced=true;
     }
   }
 
-  // Для визуализации используем точное дробное время между фиксированными шагами физики.
-  // Состояние физического мира после отрисовки полностью восстанавливается.
-  const committedTime=world.simulationTimeSeconds;
-  const committedBodyStates=world.bodyStates;
-  world.simulationTimeSeconds=committedTime+world.accumulator;
-  world.bodyStates=new Map(committedBodyStates);
-  world.updateEphemerides();
+  const renderTime=world.simulationTimeSeconds+(!paused?world.accumulator:0);
+  renderedBodyStates=world.getBodyStatesAt(renderTime);
+  renderedVesselState=world.getVesselStateAt('test-vessel',renderTime);
 
+  const previousZoom=cameraZoom.solar;
   const cameraEase=1-Math.exp(-12*delta);
   const zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
   cameraZoom.solar+=(cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
+  if(focusBodyId&&previousZoom<LOCAL_VIEW_START_ZOOM&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM){
+    cameraPan.x=cameraPan.y=0;cameraTargetPan.x=cameraTargetPan.y=0;
+  }
+  if(focusBodyId&&pendingGlobalTransition&&cameraZoom.solar<LOCAL_VIEW_START_ZOOM){
+    const point=globalPointForBody(focusBodyId,cameraZoom.solar);
+    cameraTargetPan.x=canvases.solar.clientWidth*.5-point.x;
+    cameraTargetPan.y=canvases.solar.clientHeight*.5-point.y;
+    cameraPan.x=cameraTargetPan.x;cameraPan.y=cameraTargetPan.y;
+    focusBodyId=null;pendingGlobalTransition=false;
+  }
   if(trackingTargetId){
     const target=solarMapPoint(trackingTargetId,false,cameraTargetZoom.solar);
-    cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;
-    cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;
+    if(target){
+      cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;
+      cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;
+    }
   }
   cameraPan.x+=(cameraTargetPan.x-cameraPan.x)*cameraEase;
   cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;
   for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
   const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
-  if(advanced||expired||cameraMoving)drawAll();
+  if(!paused||advanced||expired||cameraMoving)drawAll();
 
-  world.simulationTimeSeconds=committedTime;
-  world.bodyStates=committedBodyStates;
+  renderedBodyStates=null;
+  renderedVesselState=null;
   requestAnimationFrame(animate);
 }
 $('scenario').addEventListener('change',event=>{createScenario(event.target.value);});

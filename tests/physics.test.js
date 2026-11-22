@@ -74,3 +74,24 @@ test('idealized rocket-equation burn consumes propellant and changes velocity',(
  assert.ok(vessel.massKg<1000&&vessel.massKg>700);
  assert.ok(Math.abs(vessel.relativeVelocity.y-7600)<1e-8);
 });
+
+test('fractional ephemeris snapshots are smooth and do not mutate committed world state',()=>{
+ const w=createSolarSystemWorld({fixedStepSeconds:60});
+ const committed=w.getBodyState('earth');
+ const start=committed.position;
+ const half=w.getBodyStatesAt(30).get('earth').position;
+ const end=w.getBodyStatesAt(60).get('earth').position;
+ assert.ok(magnitude(vector3(half.x-start.x,half.y-start.y,half.z-start.z))>0);
+ assert.ok(magnitude(vector3(end.x-half.x,end.y-half.y,end.z-half.z))>0);
+ assert.deepEqual(w.getBodyState('earth').position,start);
+});
+test('fractional vessel state advances smoothly without mutating the physical vessel',()=>{
+ const w=createSolarSystemWorld({fixedStepSeconds:60});
+ const earth=w.getBodyState('earth');
+ const v=w.addVessel({id:'fractional-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(7e6,0,0)),velocity:add(earth.velocity,vector3(0,7500,0))});
+ const committed={position:v.position,velocity:v.velocity};
+ const half=w.getVesselStateAt('fractional-vessel',30);
+ assert.ok(magnitude(vector3(half.position.x-committed.position.x,half.position.y-committed.position.y,half.position.z-committed.position.z))>0);
+ assert.deepEqual(v.position,committed.position);
+ assert.deepEqual(v.velocity,committed.velocity);
+});

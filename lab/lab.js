@@ -1,4 +1,5 @@
 import { createSolarSystemWorld, SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.js';
+import { AU } from '../src/physics/constants.js';
 import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/physics/vector3.js';
 import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-elements.js';
 import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propulsion.js';
@@ -63,23 +64,25 @@ function label(ctx,text,x,y,color='#9aabc2',font='10px Segoe UI,Arial') {
 function drawSolar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.solar);ctx.clearRect(0,0,w,h);
   const sun=getBody('sun'),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
-  const px=Math.min(w*.43,h*.42)/maxRadius*cameraZoom.solar,cx=w*.5,cy=h*.52;
+  const maxPx=Math.min(w*.43,h*.42)*cameraZoom.solar,cx=w*.5,cy=h*.52;
+  const displayRadius=distance=>Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx;
   ctx.save();ctx.strokeStyle='#22364e';ctx.lineWidth=1;ctx.setLineDash([2,6]);
   for(const id of PLANET_IDS){
-    const data=SOLAR_SYSTEM_DATA[id],a=data.elements.semiMajorAxisM,e=data.elements.eccentricity;
-    ctx.beginPath();ctx.ellipse(cx-a*e*px,cy,a*px,a*Math.sqrt(1-e*e)*px,0,0,Math.PI*2);ctx.stroke();
+    const data=SOLAR_SYSTEM_DATA[id],a=data.elements.semiMajorAxisM,e=data.elements.eccentricity,r=displayRadius(a);
+    ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);ctx.stroke();
   }
   ctx.restore();
   point(ctx,cx,cy,6,'#ffd27b',true);label(ctx,'СОЛНЦЕ',cx+10,cy-10,'#ffdc9b','9px Segoe UI,Arial');
   for(const id of PLANET_IDS){
-    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id],x=cx+(state.position.x-sun.position.x)*px,y=cy-(state.position.y-sun.position.y)*px;
+    const state=getBody(id),data=SOLAR_SYSTEM_DATA[id],dx=state.position.x-sun.position.x,dy=state.position.y-sun.position.y;
+    const actualRadius=Math.hypot(dx,dy),shownRadius=displayRadius(actualRadius),x=cx+dx/actualRadius*shownRadius,y=cy-dy/actualRadius*shownRadius;
     const radius=id==='jupiter'?4.2:id==='saturn'?3.8:id==='earth'?3.2:2.6;
     point(ctx,x,y,radius,PLANET_COLORS[id],id==='earth');
-    if(['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'].includes(id))label(ctx,data.name,x+6,y-6,PLANET_COLORS[id],'9px Segoe UI,Arial');
+    label(ctx,data.name,x+6,y-6,PLANET_COLORS[id],'9px Segoe UI,Arial');
   }
-  const ship=world.getVesselState('test-vessel'),sx=cx+(ship.position.x-sun.position.x)*px,sy=cy-(ship.position.y-sun.position.y)*px;
-  point(ctx,sx,sy,2.7,'#fff',true);
-  label(ctx,'30 AU',cx+maxRadius*px*.77,cy+13,'#647f9d','9px Segoe UI,Arial');
+  const ship=world.getVesselState('test-vessel'),sx=ship.position.x-sun.position.x,sy=ship.position.y-sun.position.y,shipRadius=Math.hypot(sx,sy),shipShown=displayRadius(shipRadius);
+  point(ctx,cx+sx/shipRadius*shipShown,cy-sy/shipRadius*shipShown,2.7,'#fff',true);
+  label(ctx,'30 AU',cx+maxPx*.83,cy+13,'#647f9d','9px Segoe UI,Arial');
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);

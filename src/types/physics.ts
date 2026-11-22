@@ -44,3 +44,26 @@ export interface ClassicalOrbitalElements {
   readonly argumentOfPeriapsis?: number;
   readonly meanAnomaly?: number;
 }
+
+export interface OrbitalState {
+  readonly position: Vector3;
+  readonly velocity: Vector3;
+}
+
+export interface VesselState {
+  id: string;
+  primaryBodyId: string;
+  position: Vector3;
+  velocity: Vector3;
+  relativePosition: Vector3;
+  relativeVelocity: Vector3;
+  massKg: number;
+  lastPrimarySwitch: { from: string; to: string; timeSeconds: number } | null;
+}
+
+export interface PhysicsWorldOptions {
+  readonly fixedStepSeconds?: number;
+  readonly maxSubSteps?: number;
+  readonly soiEnterFactor?: number;
+  readonly soiExitFactor?: number;
+}

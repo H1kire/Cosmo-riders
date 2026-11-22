@@ -1,0 +1,1 @@
+import type{RenderFrameContext,RenderPass}from'../core/render-types.ts';export type ToneMappingOperator='linear'|'reinhard'|'aces';export class ToneMappingPass implements RenderPass{readonly name='tone-mapping';readonly order=600;enabled=true;operator:ToneMappingOperator='aces';exposure=1;render(_context:RenderFrameContext){/* Final HDR-to-display transform. */}}

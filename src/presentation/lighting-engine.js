@@ -34,4 +34,11 @@ export class LightingEngine {
     const dz = light.position[2] - point[2];
     return light.intensity / Math.max(1, dx * dx + dy * dy + dz * dz);
   }
+  sampleAt(point, id) {
+    return {
+      direction: this.directionAt(point, id),
+      color: this.colorAt(id),
+      intensity: this.intensityAt(point, id)
+    };
+  }
 }

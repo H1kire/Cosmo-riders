@@ -7,10 +7,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "allowJs": true,
-    "checkJs": false,
+    "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["vite.config.ts", "lab/main.ts", "src/**/*.ts"],
+  "include": ["vite.config.ts", "lab/**/*.ts", "src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

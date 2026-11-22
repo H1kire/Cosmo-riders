@@ -150,15 +150,26 @@ $('camera-home').addEventListener('click',()=>{cameraPan.x=0;cameraPan.y=0;camer
 
 // Independent utility windows can be opened, closed and dragged by their title bars.
 function openWindow(id){
-  const win=$(id);if(!win)return;
-  win.style.display='block';
   const sidebarWidth=document.querySelector('.sidebar').getBoundingClientRect().width;
+  document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
+
+  // The solar system is the permanent main view, not a floating window.
+  if(id==='window-system'){
+    document.querySelectorAll('.floating-window').forEach(win=>{win.style.display='none';});
+    requestAnimationFrame(()=>drawAll());
+    return;
+  }
+
+  const win=$(id);
+  if(!win)return;
+  win.style.display='block';
   const rect=win.getBoundingClientRect();
-  win.style.left=Math.max(sidebarWidth+8,Math.min(window.innerWidth-rect.width-8,parseFloat(win.style.left)||sidebarWidth+24))+'px';
+  const minX=sidebarWidth+8;
+  const maxX=Math.max(minX,window.innerWidth-rect.width-8);
+  win.style.left=Math.max(minX,Math.min(maxX,parseFloat(win.style.left)||minX+16))+'px';
   win.style.top=Math.max(66,Math.min(window.innerHeight-rect.height-8,parseFloat(win.style.top)||90))+'px';
   win.style.zIndex=String(++highestWindowZ);
-  document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.dataset.openWindow===id));
-  requestAnimationFrame(()=>{drawAll();});
+  requestAnimationFrame(()=>drawAll());
 }
 document.querySelectorAll('[data-open-window]').forEach(button=>button.addEventListener('click',()=>openWindow(button.dataset.openWindow)));
 document.querySelectorAll('.floating-window').forEach(win=>{
@@ -177,8 +188,9 @@ document.querySelectorAll('.floating-window').forEach(win=>{
   });
   bar.addEventListener('pointermove',event=>{
     if(!drag||drag.pointerId!==event.pointerId)return;
-    const maxX=window.innerWidth-win.offsetWidth,maxY=window.innerHeight-52;
-    win.style.left=Math.max(204,Math.min(maxX,event.clientX-drag.x))+'px';
+    const minX=document.querySelector('.sidebar').getBoundingClientRect().width+4;
+    const maxX=Math.max(minX,window.innerWidth-win.offsetWidth-8),maxY=Math.max(62,window.innerHeight-52);
+    win.style.left=Math.max(minX,Math.min(maxX,event.clientX-drag.x))+'px';
     win.style.top=Math.max(62,Math.min(maxY,event.clientY-drag.y))+'px';
   });
   const end=()=>{drag=null;};

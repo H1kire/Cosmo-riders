@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url);
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const checks = [
+const checks: Array<[string, () => Promise<void>]> = [
   ['SI unit constants', async () => {
     const source = await readFile(new URL('../src/physics/constants.ts', import.meta.url), 'utf8');
     if (!source.includes('G = 6.67430e-11') || !source.includes('AU = 149_597_870_700')) throw new Error('Expected SI constants are missing.');

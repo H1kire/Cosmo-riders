@@ -3,5 +3,7 @@ export * from './vector3.js';
 export * from './stumpff.js';
 export * from './kepler.js';
 export * from './orbital-elements.js';
+export * from './orbital-state.js';
 export * from './celestial-body.js';
 export * from './physics-world.js';
+export * from './solar-system.js';

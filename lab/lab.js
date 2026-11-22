@@ -138,7 +138,7 @@ function drawVessel() {
   const relativePosition=subtract(ship.position,primaryState.position);
   const radius=magnitude(relativePosition);
   const soi=world.getSphereOfInfluence(primary.id);
-  const scaleDistance=Math.max(radius*2.4,soi ? soi*1.18 : radius*2.4,primary.meanRadiusM*100);
+  const scaleDistance=Math.max(radius*2.4,primary.meanRadiusM*100);
   const px=Math.min(w*.38,h*.38)/scaleDistance;
   const cx=w*.5,cy=h*.52;
   if(soi)ring(ctx,cx,cy,soi*px,'#6c9cff',[5,5],.75);
@@ -188,8 +188,10 @@ function animate(timestamp) {
   const delta=Math.min((timestamp-lastFrame)/1000,.1);
   lastFrame=timestamp;
   if(!paused){
+    const previousPrimary=vessel.primaryBodyId;
     const steps=world.advance(delta);
     if(steps>0){
+      if(vessel.primaryBodyId!==previousPrimary)trail=[];
       const s=world.getVesselState('test-vessel');
       trail.push({x:s.position.x-currentPrimaryState().position.x,y:s.position.y-currentPrimaryState().position.y});
       if(trail.length>1200)trail.shift();

@@ -275,7 +275,7 @@ function drawVessel() {
 function updateZoomLabels(){
   for(const view of Object.keys(cameraZoom)){
     const output=$('zoom-value-'+view);
-    if(output)output.textContent=view==='solar'?fmt((solar3D?.distance ?? 86),1)+' u':Math.round(cameraZoom[view]*100)+'%';
+    if(output)output.textContent=view==='solar'?fmt((solar3D?.distance ?? 38),4)+' AU':Math.round(cameraZoom[view]*100)+'%';
   }
 }
 function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
@@ -369,7 +369,7 @@ function drawAll(){
   updateZoomLabels();
 }
 
-document.querySelectorAll<HTMLElement>('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D && (solar3D.distance=Math.max(.018,solar3D.distance/1.22));else if(action==='out'){const nextDistance=(solar3D?.distance ?? 86)*1.22;if(solar3D&&Number.isFinite(nextDistance))solar3D.distance=nextDistance;}updateZoomLabels();}));
+document.querySelectorAll<HTMLElement>('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D && (solar3D.distance=Math.max(1e-10,solar3D.distance/1.22));else if(action==='out'){const nextDistance=(solar3D?.distance ?? 86)*1.22;if(solar3D&&Number.isFinite(nextDistance))solar3D.distance=nextDistance;}updateZoomLabels();}));
 $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
   solar3D?.home();

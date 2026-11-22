@@ -8,7 +8,7 @@ const STORAGE_KEY='cosmo-riders.graphics.v1';
 function load():GraphicsSettings{try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const saved=JSON.parse(raw) as Partial<GraphicsSettings>;const base=createGraphicsSettings(saved.preset??'high');return{...base,...saved};}}catch{}return createGraphicsSettings('high');}
 let settings=load();
 function sync(){if(preset)preset.value=settings.preset;for(const [key,input]of Object.entries(controls))if(input)input.checked=Boolean(settings[key as keyof GraphicsSettings]);}
-function publish(){localStorage.setItem(STORAGE_KEY,JSON.stringify(settings));window.dispatchEvent(new CustomEvent<GraphicsSettings>('graphics-settings-change',{detail:{...settings}}));if(status)status.textContent='Профиль сохранён. Архитектура графики подключена; визуальные эффекты будут включаться по мере реализации этапов 0.2.';}
+function publish(){localStorage.setItem(STORAGE_KEY,JSON.stringify(settings));window.dispatchEvent(new CustomEvent<GraphicsSettings>('graphics-settings-change',{detail:{...settings}}));if(status)status.textContent='Профиль сохранён. Сейчас реально применяются Bloom, сила свечения и Tone Mapping. Тени, атмосфера, облака, Glare и Lens Flare появятся после подключения соответствующих проходов.';}
 preset?.addEventListener('change',()=>{settings=createGraphicsSettings(preset.value as QualityLevel);sync();publish();});
 for(const [key,input]of Object.entries(controls))input?.addEventListener('change',()=>{(settings as unknown as Record<string,unknown>)[key]=input.checked;publish();});
 sync();publish();

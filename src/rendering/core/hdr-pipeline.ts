@@ -18,15 +18,15 @@ in vec2 vUv;uniform sampler2D uScene;uniform sampler2D uBloom;uniform float uBlo
 vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.0,1.0);}
 void main(){vec3 hdr=texture(uScene,vUv).rgb+texture(uBloom,vUv).rgb*uBloomStrength;hdr*=uExposure;vec3 mapped=uToneMap==0?hdr/(vec3(1.0)+hdr):aces(hdr);mapped=pow(max(mapped,vec3(0.0)),vec3(1.0/2.2));outColor=vec4(mapped,1.0);}`;
 
-interface Target { framebuffer: WebGLFramebuffer; texture: WebGLTexture; width:number; height:number; }
+interface Target { framebuffer: WebGLFramebuffer; texture: WebGLTexture; depthBuffer:WebGLRenderbuffer|null; width:number; height:number; }
 function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=false):Target{
  const framebuffer=gl.createFramebuffer(),texture=gl.createTexture();if(!framebuffer||!texture)throw Error('HDR render target allocation failed');
  gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
  gl.texImage2D(gl.TEXTURE_2D,0,hdr?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,hdr?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);
  gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
- if(depth){const d=gl.createRenderbuffer();if(!d)throw Error('Depth buffer allocation failed');gl.bindRenderbuffer(gl.RENDERBUFFER,d);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,w,h);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,d);}
+ let depthBuffer:WebGLRenderbuffer|null=null;if(depth){depthBuffer=gl.createRenderbuffer();if(!depthBuffer)throw Error('Depth buffer allocation failed');gl.bindRenderbuffer(gl.RENDERBUFFER,depthBuffer);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,w,h);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depthBuffer);}
  if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){gl.deleteFramebuffer(framebuffer);gl.deleteTexture(texture);throw Error('HDR framebuffer incomplete');}
- gl.bindFramebuffer(gl.FRAMEBUFFER,null);return{framebuffer,texture,width:w,height:h};
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);return{framebuffer,texture,depthBuffer,width:w,height:h};
 }
 function program(gl:WebGL2RenderingContext,fs:string){const v=gl.createShader(gl.VERTEX_SHADER)!,f=gl.createShader(gl.FRAGMENT_SHADER)!,p=gl.createProgram()!;gl.shaderSource(v,VERTEX);gl.compileShader(v);gl.shaderSource(f,fs);gl.compileShader(f);if(!gl.getShaderParameter(v,gl.COMPILE_STATUS)||!gl.getShaderParameter(f,gl.COMPILE_STATUS))throw Error('Post-processing shader compile failed: '+gl.getShaderInfoLog(v)+' '+gl.getShaderInfoLog(f));gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);gl.deleteShader(v);gl.deleteShader(f);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error('Post-processing shader link failed: '+gl.getProgramInfoLog(p));return p;}
 
@@ -45,7 +45,7 @@ export class HDRPipeline implements Disposable{
  }
  begin(width:number,height:number){this.resize(width,height);const g=this.gl;g.bindFramebuffer(g.FRAMEBUFFER,this.scene.framebuffer);g.viewport(0,0,this.scene.width,this.scene.height);g.clearColor(.008,.016,.033,1);g.clear(g.COLOR_BUFFER_BIT|g.DEPTH_BUFFER_BIT);}
  resize(width:number,height:number){if(width===this.scene.width&&height===this.scene.height)return;this.destroyTargets();const a=target(this.gl,width,height,this.hdrSupported,true),s=Math.max(1,Math.floor(width*.5)),t=Math.max(1,Math.floor(height*.5));this.scene.framebuffer=a.framebuffer;this.scene.texture=a.texture;this.scene.width=width;this.scene.height=height;this.bright=target(this.gl,s,t,this.hdrSupported);this.ping=target(this.gl,s,t,this.hdrSupported);this.pong=target(this.gl,s,t,this.hdrSupported);}
- private destroyTargets(){const g=this.gl;for(const t of [this.scene,this.bright,this.ping,this.pong]){g.deleteFramebuffer(t.framebuffer);g.deleteTexture(t.texture);}}
+ private destroyTargets(){const g=this.gl;for(const t of [this.scene,this.bright,this.ping,this.pong]){g.deleteFramebuffer(t.framebuffer);g.deleteTexture(t.texture);if(t.depthBuffer)g.deleteRenderbuffer(t.depthBuffer);}}
  private draw(program:WebGLProgram){const g=this.gl;g.useProgram(program);g.drawArrays(g.TRIANGLES,0,3);}
  present(width:number,height:number){const g=this.gl;g.disable(g.DEPTH_TEST);g.disable(g.BLEND);
   if(this.settings.bloom){g.bindFramebuffer(g.FRAMEBUFFER,this.bright.framebuffer);g.viewport(0,0,this.bright.width,this.bright.height);g.useProgram(this.brightProgram);g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,this.scene.texture);g.uniform1i(g.getUniformLocation(this.brightProgram,'uScene'),0);g.uniform1f(g.getUniformLocation(this.brightProgram,'uThreshold'),this.settings.bloomThreshold);g.drawArrays(g.TRIANGLES,0,3);

@@ -108,7 +108,7 @@ test('JPL satellite systems use physical semi-major axes and mean radii',()=>{
   ['titan','saturn',1221860000,2574760],
   ['miranda','uranus',129900000,235800],
   ['triton','neptune',354760000,1352600]
- ];
+ ] as const;
  for(const [id,parent,a,r] of expected){
   const body=w.bodies.get(id);
   assert.ok(body, 'missing '+id);

@@ -1,0 +1,1 @@
+import type{Color3}from'../core/render-types.ts';export interface RingMaterialOptions{innerRadiusM:number;outerRadiusM:number;color:Color3;opacity:number;opticalDepth:number;}export class RingMaterial{constructor(public options:RingMaterialOptions){if(options.innerRadiusM<0||options.outerRadiusM<=options.innerRadiusM)throw RangeError('Ring radii are invalid');}}

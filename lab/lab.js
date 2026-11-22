@@ -225,7 +225,7 @@ function drawVessel() {
 function updateZoomLabels(){
   for(const view of Object.keys(cameraZoom)){
     const output=$('zoom-value-'+view);
-    if(output)output.textContent=view==='solar'?fmt(cameraTargetZoom[view],2)+'×':Math.round(cameraZoom[view]*100)+'%';
+    if(output)output.textContent=view==='solar'?fmt(solar3D.distance,1)+' u':Math.round(cameraZoom[view]*100)+'%';
   }
 }
 function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
@@ -318,6 +318,7 @@ for(const view of ['lunar','vessel'])bindCameraControls(view);
   updateZoomLabels();
 }
 
+document.querySelectorAll('[data-zoom-view="solar"]').forEach(button=>button.addEventListener('click',()=>{const action=button.dataset.zoomAction;if(action==='in')solar3D.distance=Math.max(.018,solar3D.distance/1.22);else if(action==='out')solar3D.distance=Math.min(2000,solar3D.distance*1.22);updateZoomLabels();}));
 $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
   trackingTargetId=null;

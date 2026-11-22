@@ -43,7 +43,7 @@ test('specific angular momentum is conserved during Kepler propagation',()=>{
 });
 test('Solar System includes all eight planets and the Earth-Moon hierarchy',()=>{
  const w=createSolarSystemWorld();
- assert.equal(w.bodies.size,48);
+ assert.equal(w.bodies.size,50);
  for(const id of ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune']) {
   assert.equal(w.bodies.get(id).parentId,'sun');
   assert.ok(magnitude(w.getBodyState(id).position)>0);
@@ -116,6 +116,6 @@ test('JPL satellite systems use physical semi-major axes and mean radii',()=>{
   assert.equal(body.semiMajorAxisM,a);
   assert.equal(body.meanRadiusM,r);
  }
- assert.equal(w.bodies.size,48);
- assert.equal([...w.bodies.values()].filter(body=>body.parentId!=='sun'&&body.parentId!==null).length,39);
+ assert.equal(w.bodies.size,50);
+ assert.equal([...w.bodies.values()].filter(body=>body.parentId!=='sun'&&body.parentId!==null).length,41);
 });

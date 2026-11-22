@@ -1,10 +1,47 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const root = new URL('..', import.meta.url);
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const checks: Array<[string, () => Promise<void>]> = [
+  ['Browser entry points, DOM hooks and local imports are compatible', async () => {
+    const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+    const labHtml = await readFile(new URL('../lab/index.html', import.meta.url), 'utf8');
+    const app = await readFile(new URL('../lab/lab.ts', import.meta.url), 'utf8');
+    const css = await readFile(new URL('../lab/style.css', import.meta.url), 'utf8');
+    if (!html.includes('id="solar-view"') || !html.includes('src="./lab/main.ts"')) throw new Error('Root page is missing the solar canvas or TypeScript entry point.');
+    if (!labHtml.includes('id="solar-view"') || !labHtml.includes('src="./main.ts"')) throw new Error('Lab page is missing the solar canvas or TypeScript entry point.');
+    if (!html.includes('href="./lab/style.css"') || !labHtml.includes('href="./style.css"')) throw new Error('A page stylesheet path is broken.');
+    for (const match of app.matchAll(/\\$\\('([^']+)'\\)/g)) {
+      const id = match[1];
+      if (id !== 'window-system' && !new RegExp('id=["\\\\\\']' + id + '["\\\\\\']').test(html)) throw new Error('Missing DOM element id: ' + id);
+    }
+    if (css.includes('\\\\n.body-label-layer')) throw new Error('A literal escaped newline breaks the map overlay stylesheet.');
+    if (!app.includes('drawFallbackSolar()') || !app.includes('activateSolarFallback(error)')) throw new Error('A non-WebGL map fallback is missing.');
+  }],
+  ['Every local TypeScript import resolves to a tracked source file', async () => {
+    async function collectTypeScript(directory: string): Promise<string[]> {
+      const entries = await readdir(directory, { withFileTypes: true });
+      const paths: string[] = [];
+      for (const entry of entries) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory() && !['node_modules', 'dist', '.git'].includes(entry.name)) paths.push(...await collectTypeScript(path));
+        else if (entry.isFile() && path.endsWith('.ts')) paths.push(path);
+      }
+      return paths;
+    }
+    const files = await collectTypeScript(root.pathname);
+    const known = new Set(files.map(file => resolve(file)));
+    for (const file of files) {
+      const source = await readFile(file, 'utf8');
+      for (const match of source.matchAll(/(?:from\\s*|import\\s*)["'](\\.{1,2}\\/[^"']+)["']/g)) {
+        const target = resolve(dirname(file), match[1]);
+        const candidates = /\\.[cm]?tsx?$/.test(target) ? [target] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
+        if (!candidates.some(candidate => known.has(resolve(candidate)))) throw new Error('Unresolved import in ' + file.replace(root.pathname, '') + ': ' + match[1]);
+      }
+    }
+  }],
   ['SI unit constants', async () => {
     const source = await readFile(new URL('../src/physics/constants.ts', import.meta.url), 'utf8');
     if (!source.includes('G = 6.67430e-11') || !source.includes('AU = 149_597_870_700')) throw new Error('Expected SI constants are missing.');

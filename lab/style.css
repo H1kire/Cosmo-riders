@@ -46,3 +46,12 @@ canvas{display:block;width:100%;height:280px;background:radial-gradient(ellipse 
 footer{padding:22px 0 30px;color:#65768d;font-size:10px;letter-spacing:.08em}
 @media(max-width:850px){.visual-grid,.data-grid{grid-template-columns:1fr}.detail-panel{grid-column:auto}.notes-panel{grid-template-columns:1fr;gap:8px}.toolbar-actions{margin-left:0}.topbar{align-items:flex-start;flex-direction:column}}
 @media(max-width:520px){.topbar,main,footer{width:calc(100% - 22px)}.toolbar{align-items:stretch}.control-group{min-width:100%}.toolbar-actions .button{flex:1}.telemetry{grid-template-columns:1fr 1fr}canvas{height:230px}.panel-heading{align-items:flex-start}.scale-note{white-space:normal;text-align:right;max-width:110px}}
+
+.panel-tools{display:grid;justify-items:end;gap:7px}
+.camera-controls{display:flex;align-items:center;gap:5px}
+.zoom-button{min-width:29px;height:27px;padding:0 8px;background:#142238;border:1px solid #30445f;border-radius:6px;color:var(--text);font:600 13px inherit;cursor:pointer}
+.zoom-button:hover{background:#203650;border-color:#55769f}
+.zoom-reset{font-size:10px;padding-inline:8px}
+.zoom-value{min-width:42px;text-align:center;color:#b9cce2;font:10px ui-monospace,SFMono-Regular,Consolas,monospace}
+canvas{cursor:crosshair;touch-action:pan-y}
+@media(max-width:520px){.panel-tools{justify-items:end}.camera-controls{gap:3px}.zoom-button{min-width:27px}}

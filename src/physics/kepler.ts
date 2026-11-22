@@ -1,8 +1,9 @@
 import { assertPositiveFinite } from './constants.ts';
+import type { KeplerPropagationInput, PropagatedState, Vector3 } from '../types/physics.ts';
 import { add,dot,magnitude,scale,vector3 } from './vector3.ts';
 import { stumpffC,stumpffS } from './stumpff.ts';
 /** Universal-variable two-body propagation. SI inputs: m, m/s, s, m^3/s^2. */
-export function propagateKepler({position,velocity,mu,deltaTimeSeconds,tolerance=1e-10,maxIterations=100}) {
+export function propagateKepler({position,velocity,mu,deltaTimeSeconds,tolerance=1e-10,maxIterations=100}: KeplerPropagationInput): PropagatedState {
  assertPositiveFinite(mu,'mu');
  if(!Number.isFinite(deltaTimeSeconds))throw new TypeError('deltaTimeSeconds must be finite.');
  if(!Number.isFinite(tolerance)||tolerance<=0)throw new RangeError('tolerance must be positive.');
@@ -28,5 +29,5 @@ export function propagateKepler({position,velocity,mu,deltaTimeSeconds,tolerance
  const fdot=(sqrtMu/(rn*r0))*(alpha*chi*chi*chi*S-chi),gdot=1-chi*chi*C/rn;
  return {position:nextPosition,velocity:add(scale(position,fdot),scale(velocity,gdot)),iterations};
 }
-export function gravitationalAcceleration(position,mu){assertPositiveFinite(mu,'mu');const r=magnitude(position);if(r===0)throw new RangeError('Acceleration undefined at point-mass centre.');return scale(position,-mu/(r*r*r));}
-export function specificOrbitalEnergy(position,velocity,mu){assertPositiveFinite(mu,'mu');const r=magnitude(position);if(r===0)throw new RangeError('Energy undefined at point-mass centre.');return 0.5*dot(velocity,velocity)-mu/r;}
+export function gravitationalAcceleration(position: Vector3, mu: number): Vector3 {assertPositiveFinite(mu,'mu');const r=magnitude(position);if(r===0)throw new RangeError('Acceleration undefined at point-mass centre.');return scale(position,-mu/(r*r*r));}
+export function specificOrbitalEnergy(position: Vector3, velocity: Vector3, mu: number): number {assertPositiveFinite(mu,'mu');const r=magnitude(position);if(r===0)throw new RangeError('Energy undefined at point-mass centre.');return 0.5*dot(velocity,velocity)-mu/r;}

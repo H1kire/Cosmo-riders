@@ -256,7 +256,7 @@ function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
 function findMapBodyAt(x,y){
   let nearest=null,nearestDistance=Infinity;
   const ids=focusBodyId&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM
-    ? [focusBodyId,...(focusBodyId?Array.from(world.bodies.values()).filter(item=>item.parentId===focusBodyId||item.id===body(focusBodyId).parentId).map(item=>item.id):[])]
+    ? [focusBodyId,...(focusBodyId?Array.from((world.bodies as Map<string, { id: string; parentId: string | null }>).values()).filter(item=>item.parentId===focusBodyId||item.id===body(focusBodyId).parentId).map(item=>item.id):[])]
     : PLANET_IDS;
   for(const id of ids){
     const p=solarMapPoint(id);
@@ -473,7 +473,7 @@ function animate(timestamp){
   requestAnimationFrame(animate);
 }
 $('scenario').addEventListener('change',event=>{createScenario((event.target as HTMLInputElement).value);});
-$('time-scale').addEventListener('change',event=>world.setTimeScale(Number(event.target.value)));
+$('time-scale').addEventListener('change',event=>world.setTimeScale(Number((event.target as HTMLInputElement).value)));
 $('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
 $('step-button').addEventListener('click',()=>{if(!paused){paused=true;world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}world.step();updateTelemetry();drawAll();});
 $('reset-button').addEventListener('click',()=>{paused=false;world.setPaused(false);$('pause-button').textContent='Ⅱ Пауза';createScenario($('scenario').value);});

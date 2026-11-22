@@ -29,7 +29,9 @@ const currentPrimary = () => body(vessel.primaryBodyId);
 const currentPrimaryState = () => getBody(vessel.primaryBodyId);
 
 function createScenario(name) {
-  world = createSolarSystemWorld({fixedStepSeconds:1,maxSubSteps:10000});
+  // Кеплеровская пропагация аналитическая, поэтому для лабораторной сцены
+  // используем шаг 60 с: это резко сокращает число одинаковых пересчётов эфемерид.
+  world = createSolarSystemWorld({fixedStepSeconds:60,maxSubSteps:2000});
   const earth = getBody('earth'), moon = getBody('moon');
   const earthMu = body('earth').mu, moonMu = body('moon').mu;
   if (name === 'moon-approach') {
@@ -78,6 +80,8 @@ function drawSolar() {
   ctx.save();
   for(const id of PLANET_IDS){
     const data=SOLAR_SYSTEM_DATA[id],a=data.elements.semiMajorAxisM,e=data.elements.eccentricity,r=displayRadius(a);
+    // Не строим орбиты, заведомо находящиеся далеко за пределами экрана.
+    if(r>Math.max(w,h)*2.5)continue;
     ctx.beginPath();ctx.ellipse(cx-r*e,cy,r,r*Math.sqrt(1-e*e),0,0,Math.PI*2);
     ctx.strokeStyle=id===selectedPlanetId?'#9bd5ff':'#22364e';
     ctx.lineWidth=id===selectedPlanetId?2.2:1;
@@ -94,6 +98,8 @@ function drawSolar() {
     const dx=state.position.x-sun.position.x,dy=state.position.y-sun.position.y;
     const actualRadius=Math.hypot(dx,dy),shownRadius=displayRadius(actualRadius);
     const x=cx+dx/actualRadius*shownRadius,y=cy-dy/actualRadius*shownRadius;
+    // Тела за пределами экрана не требуют отрисовки и эффектов свечения.
+    if(x < -100 || x > w+100 || y < -100 || y > h+100)continue;
     const physicalRadius=data.meanRadiusM*pixelsPerMetre(actualRadius);
     const radius=Math.max(2.4,Math.min(90,physicalRadius));
     bodyScreen[id]={x,y,radius};
@@ -106,7 +112,7 @@ function drawSolar() {
   }
 
   // At close zoom, reveal the Earth-Moon system as a local-scale inset on the same map.
-  if(cameraZoom.solar>=1e6){
+  if(cameraZoom.solar>=1e6 && bodyScreen.earth){
     const earth=getBody('earth'),moon=getBody('moon'),earthScreen=bodyScreen.earth;
     const earthDistance=Math.hypot(earth.position.x-sun.position.x,earth.position.y-sun.position.y);
     const localScale=pixelsPerMetre(earthDistance);
@@ -124,9 +130,9 @@ function drawSolar() {
 
   const ship=world.getVesselState('test-vessel');
   const sx=ship.position.x-sun.position.x,sy=ship.position.y-sun.position.y,shipRadius=Math.hypot(sx,sy);
-  const shipShown=displayRadius(shipRadius);
-  point(ctx,cx+sx/shipRadius*shipShown,cy-sy/shipRadius*shipShown,3,'#fff',true);
-  label(ctx,'30 AU',cx+maxPx*.83*cameraZoom.solar,cy+13,'#647f9d','9px Segoe UI,Arial');
+  const shipShown=displayRadius(shipRadius),shipX=cx+sx/shipRadius*shipShown,shipY=cy-sy/shipRadius*shipShown;
+  if(shipX>=-20&&shipX<=w+20&&shipY>=-20&&shipY<=h+20)point(ctx,shipX,shipY,3,'#fff',true);
+  if(cameraZoom.solar<100)label(ctx,'30 AU',cx+maxPx*.83*cameraZoom.solar,cy+13,'#647f9d','9px Segoe UI,Arial');
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);
@@ -246,7 +252,13 @@ for(const view of Object.keys(canvases))bindCameraControls(view);
   };
   canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
 }
-function drawAll(){drawSolar();drawLunar();drawVessel();updateZoomLabels();}
+function drawAll(){
+  drawSolar();
+  // Дополнительные сцены не перерисовываются, пока их окна закрыты.
+  if($('window-local').style.display==='block')drawLunar();
+  if($('window-ship').style.display==='block')drawVessel();
+  updateZoomLabels();
+}
 
 $('camera-home').addEventListener('click',()=>{
   resetZoom('solar');
@@ -333,6 +345,7 @@ function updateManeuverPlanner(){
   $('hohmann-total').textContent=fmt(transfer.totalDeltaVMS/1000,3)+' км/с';
   $('hohmann-time').textContent=fmt(transfer.transferTimeSeconds/DAY,1)+' суток';
 }
+let lastTelemetryUpdate=0;
 function animate(timestamp){
   if(!lastFrame)lastFrame=timestamp;const delta=Math.min((timestamp-lastFrame)/1000,.1);lastFrame=timestamp;
   const oldLength=trail.length;trail=trail.filter(point=>timestamp-point.time<=1000);const expired=oldLength!==trail.length;
@@ -343,7 +356,8 @@ function animate(timestamp){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
       const s=world.getVesselState('test-vessel'),p=currentPrimaryState();
       trail.push({x:s.position.x-p.position.x,y:s.position.y-p.position.y,time:timestamp});
-      updateTelemetry();advanced=true;
+      if(timestamp-lastTelemetryUpdate>=250){updateTelemetry();lastTelemetryUpdate=timestamp;}
+      advanced=true;
     }
   }
   const cameraEase=1-Math.exp(-12*delta);

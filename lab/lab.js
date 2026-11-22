@@ -171,23 +171,24 @@ function updateZoomLabels(){
     if(output)output.textContent=view==='solar'?fmt(cameraTargetZoom[view],2)+'×':Math.round(cameraZoom[view]*100)+'%';
   }
 }
-function solarMapPoint(id){
+function solarMapPoint(id,includePan=true,zoom=cameraZoom.solar){
   const canvas=canvases.solar,w=canvas.clientWidth,h=canvas.clientHeight;
-  if(id==='moon'&&cameraZoom.solar>=1e6){
-    const earthPoint=solarMapPoint('earth'),sun=getBody('sun'),earth=getBody('earth');
+  const panX=includePan?cameraPan.x:0,panY=includePan?cameraPan.y:0;
+  if(id==='moon'&&zoom>=1e6){
+    const earthPoint=solarMapPoint('earth',includePan,zoom),sun=getBody('sun'),earth=getBody('earth');
     const maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
     const maxPx=Math.min(w*.43,h*.42);
     const earthDistance=Math.hypot(earth.position.x-sun.position.x,earth.position.y-sun.position.y);
     const earthRadius=Math.max(2.4,Math.min(90,SOLAR_SYSTEM_DATA.earth.meanRadiusM*
-      maxPx*cameraZoom.solar/(Math.log1p(maxRadius/AU)*(AU+earthDistance))));
+      maxPx*zoom/(Math.log1p(maxRadius/AU)*(AU+earthDistance))));
     return solarMoonScreenPoint({...earthPoint,radius:earthRadius},w,h);
   }
   const sun=getBody('sun'),state=getBody(id),maxRadius=SOLAR_SYSTEM_DATA.neptune.elements.semiMajorAxisM;
   const maxPx=Math.min(w*.43,h*.42);
   const distance=Math.hypot(state.position.x-sun.position.x,state.position.y-sun.position.y);
-  const radius=Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx*cameraZoom.solar;
-  return {x:w*.5+cameraPan.x+(state.position.x-sun.position.x)/distance*radius,
-    y:h*.5+cameraPan.y-(state.position.y-sun.position.y)/distance*radius};
+  const radius=Math.log1p(distance/AU)/Math.log1p(maxRadius/AU)*maxPx*zoom;
+  return {x:w*.5+panX+(state.position.x-sun.position.x)/distance*radius,
+    y:h*.5+panY-(state.position.y-sun.position.y)/distance*radius};
 }
 function solarMoonScreenPoint(earthScreen,width,height){
   const earth=getBody('earth'),moon=getBody('moon');
@@ -282,9 +283,9 @@ for(const view of Object.keys(canvases))bindCameraControls(view);
     if(!target)return;
     selectedPlanetId=target;
     trackingTargetId=target;
-    const point=solarMapPoint(target);
-    cameraTargetPan.x+=canvas.clientWidth*.5-point.x;
-    cameraTargetPan.y+=canvas.clientHeight*.5-point.y;
+    const point=solarMapPoint(target,false,cameraTargetZoom.solar);
+    cameraTargetPan.x=canvas.clientWidth*.5-point.x;
+    cameraTargetPan.y=canvas.clientHeight*.5-point.y;
     drawAll();
   });
 }
@@ -401,9 +402,11 @@ function animate(timestamp){
   const zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
   cameraZoom.solar+= (cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
   if(trackingTargetId){
-    const target=solarMapPoint(trackingTargetId);
-    cameraTargetPan.x+=canvases.solar.clientWidth*.5-target.x;
-    cameraTargetPan.y+=canvases.solar.clientHeight*.5-target.y;
+    // Целевая позиция вычисляется без текущего pan и на конечном масштабе:
+    // так камера не накапливает поправки и не дёргается при прокрутке.
+    const target=solarMapPoint(trackingTargetId,false,cameraTargetZoom.solar);
+    cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;
+    cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;
   }
   cameraPan.x+=(cameraTargetPan.x-cameraPan.x)*cameraEase;
   cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;

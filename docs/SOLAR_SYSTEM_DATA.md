@@ -11,7 +11,7 @@ The built-in Earth-Moon-Sun example is initialized at the J2000.0 epoch (2000-01
 - Moon geocentric rounded elements: a=384400000 m, e=0.0549, i=5.145 deg, Ω=125.08 deg, ω=318.15 deg, M=115.365 deg. These rounded values are for simulation and test fixtures; lunar perturbations and rapid element variation are not modeled.
 
 ## Sources
-- NASA/JPL Solar System Dynamics, *Approximate Positions of the Planets*: https://ssd.jpl.nasa.gov/planets/approx_pos.html. The JPL page describes its fitted Keplerian elements, validity interval, element definitions and limitations.
+- NASA NSSDC, *Earth Fact Sheet*: https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html. Source for the Earth J2000 mean orbital elements and physical parameters.\n- NASA/JPL Solar System Dynamics, *Approximate Positions of the Planets*: https://ssd.jpl.nasa.gov/planets/approx_pos.html. Reference for Keplerian element conventions, coordinate transformations, validity intervals and approximation limitations.
 - NASA NSSDC, *Earth Fact Sheet*: https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html. Earth mass/radius/orbital characteristics and J2000 mean elements.
 - JPL Solar System Dynamics, *SB Satellites API*: https://ssd-api.jpl.nasa.gov/doc/sb_sat.html. Defines satellite orbital element fields and their frames/epochs.
 - Earth-Moon orbital parameter values are rounded educational mean values; the model must not claim precision ephemeris agreement.

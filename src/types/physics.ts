@@ -45,11 +45,6 @@ export interface ClassicalOrbitalElements {
   readonly meanAnomaly?: number;
 }
 
-export interface OrbitalState {
-  readonly position: Vector3;
-  readonly velocity: Vector3;
-}
-
 export interface VesselState {
   id: string;
   primaryBodyId: string;

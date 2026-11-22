@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d18">
+  <title>Cosmo-riders — Physics Lab</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">COSMO-RIDERS / ENGINEERING</div>
+      <h1>Физическая лаборатория</h1>
+      <p>Иерархия Солнце → Земля → Луна · J2000.0 · SI</p>
+    </div>
+    <div class="status"><span class="status-dot"></span> PHYSICS CORE ONLINE</div>
+  </header>
+
+  <main>
+    <section class="toolbar panel">
+      <div class="control-group">
+        <label for="scenario">Начальное положение корабля</label>
+        <select id="scenario">
+          <option value="earth-orbit">Низкая орбита Земли</option>
+          <option value="moon-approach">Внутри сферы влияния Луны</option>
+          <option value="moon-orbit">Орбита вокруг Луны</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="time-scale">Ускорение времени</label>
+        <select id="time-scale">
+          <option value="1">1×</option>
+          <option value="60">60×</option>
+          <option value="600">600×</option>
+          <option value="3600" selected>3 600×</option>
+          <option value="21600">21 600×</option>
+          <option value="86400">86 400×</option>
+        </select>
+      </div>
+      <div class="toolbar-actions">
+        <button id="pause-button" class="button primary">Пауза</button>
+        <button id="step-button" class="button">Шаг +60 с</button>
+        <button id="reset-button" class="button">Сбросить</button>
+      </div>
+    </section>
+
+    <section class="visual-grid">
+      <article class="panel visual-panel">
+        <div class="panel-heading">
+          <div><span class="panel-kicker">01 / HELIOCENTRIC</span><h2>Солнце — Земля</h2></div>
+          <span class="scale-note">Схематичная проекция XY</span>
+        </div>
+        <canvas id="solar-view" aria-label="Орбита Земли вокруг Солнца"></canvas>
+        <div class="legend">
+          <span><i class="dot sun"></i>Солнце</span><span><i class="dot earth"></i>Земля</span>
+          <span><i class="ring soi"></i>SOI Земли</span>
+        </div>
+      </article>
+
+      <article class="panel visual-panel">
+        <div class="panel-heading">
+          <div><span class="panel-kicker">02 / LUNAR SYSTEM</span><h2>Земля — Луна</h2></div>
+          <span class="scale-note">Локальная система</span>
+        </div>
+        <canvas id="lunar-view" aria-label="Орбита Луны вокруг Земли"></canvas>
+        <div class="legend">
+          <span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span>
+          <span><i class="ring soi"></i>SOI Земли</span><span><i class="ring moon-soi"></i>SOI Луны</span>
+        </div>
+      </article>
+
+      <article class="panel visual-panel detail-panel">
+        <div class="panel-heading">
+          <div><span class="panel-kicker">03 / VESSEL TRACK</span><h2>Корабль и активный центр</h2></div>
+          <span class="scale-note" id="detail-scale">Масштаб: локальный</span>
+        </div>
+        <canvas id="vessel-view" aria-label="Орбита пробного корабля относительно активного гравитационного центра"></canvas>
+        <div class="legend">
+          <span><i class="dot primary-body"></i>Активный центр</span>
+          <span><i class="dot vessel"></i>Корабль</span>
+          <span><i class="ring soi"></i>Сфера влияния</span>
+        </div>
+      </article>
+    </section>
+
+    <section class="data-grid">
+      <article class="panel data-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">LIVE TELEMETRY</span><h2>Пробный корабль</h2></div><span id="primary-badge" class="badge">Земля</span></div>
+        <div class="telemetry">
+          <div><span>Положение относительно центра</span><strong id="distance-value">—</strong></div>
+          <div><span>Скорость относительно центра</span><strong id="speed-value">—</strong></div>
+          <div><span>Орбитальный период*</span><strong id="period-value">—</strong></div>
+          <div><span>Эксцентриситет*</span><strong id="eccentricity-value">—</strong></div>
+          <div><span>Активная сфера влияния</span><strong id="soi-value">—</strong></div>
+          <div><span>Последнее переключение</span><strong id="switch-value">—</strong></div>
+        </div>
+        <p class="footnote">* Мгновенные осцулирующие элементы двухтельной модели. Для незамкнутой траектории период не определён.</p>
+      </article>
+      <article class="panel data-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">SIMULATION CLOCK</span><h2>Время и управление</h2></div></div>
+        <div class="clock" id="clock-value">J2000.0 + 0 с</div>
+        <div class="telemetry compact">
+          <div><span>Физический шаг</span><strong>60 с</strong></div>
+          <div><span>Модель</span><strong>Patched conics</strong></div>
+          <div><span>SOI вход / выход</span><strong>90% / 110%</strong></div>
+        </div>
+        <div class="impulse-actions">
+          <button id="retro-button" class="button">−10 м/с · против движения</button>
+          <button id="pro-button" class="button">+10 м/с · по движению</button>
+        </div>
+        <p class="footnote">Импульс мгновенно меняет скорость корабля относительно текущего центра. Ручное управление двигателем здесь не моделируется.</p>
+      </article>
+    </section>
+
+    <section class="panel notes-panel">
+      <div><span class="panel-kicker">MODEL NOTES</span><h2>Что именно мы проверяем</h2></div>
+      <ul>
+        <li>Орбитальное движение тел рассчитывается физическим ядром, а не анимацией интерфейса.</li>
+        <li>Сферы влияния вычисляются по формуле Лапласа; визуальные окружности показаны в своих локальных масштабах.</li>
+        <li>При смене активного центра абсолютные положение и скорость корабля должны сохраняться.</li>
+        <li>Это двухтельная аппроксимация с patched-conics, а не N-body и не высокоточные эфемериды JPL.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>Cosmo-riders · Physics Lab · экспериментальная сборка ветки test</footer>
+  <script type="module" src="./lab.js"></script>
+</body>
+</html>

@@ -49,9 +49,14 @@
       <article class="panel visual-panel">
         <div class="panel-heading">
           <div><span class="panel-kicker">01 / HELIOCENTRIC</span><h2>Солнце — Земля</h2></div>
-          <span class="scale-note">Схематичная проекция XY</span>
+          <div class="panel-tools"><span class="scale-note">Схематичная проекция XY</span><div class="camera-controls" aria-label="Управление масштабом проекции">
+            <button class="zoom-button" type="button" data-zoom-view="solar" data-zoom-action="out" aria-label="Отдалить">−</button>
+            <output id="zoom-value-solar" class="zoom-value">100%</output>
+            <button class="zoom-button" type="button" data-zoom-view="solar" data-zoom-action="in" aria-label="Приблизить">+</button>
+            <button class="zoom-button zoom-reset" type="button" data-zoom-view="solar" data-zoom-action="reset">Сброс</button>
+          </div></div>
         </div>
-        <canvas id="solar-view" aria-label="Орбита Земли вокруг Солнца"></canvas>
+        <canvas id="solar-view" aria-label="Орбита Земли вокруг Солнца" title="Колесо мыши: приблизить или отдалить"></canvas>
         <div class="legend">
           <span><i class="dot sun"></i>Солнце</span><span><i class="dot earth"></i>Земля</span>
           <span><i class="ring soi"></i>SOI Земли</span>
@@ -61,9 +66,14 @@
       <article class="panel visual-panel">
         <div class="panel-heading">
           <div><span class="panel-kicker">02 / LUNAR SYSTEM</span><h2>Земля — Луна</h2></div>
-          <span class="scale-note">Локальная система</span>
+          <div class="panel-tools"><span class="scale-note">Локальная система</span><div class="camera-controls" aria-label="Управление масштабом проекции">
+            <button class="zoom-button" type="button" data-zoom-view="lunar" data-zoom-action="out" aria-label="Отдалить">−</button>
+            <output id="zoom-value-lunar" class="zoom-value">100%</output>
+            <button class="zoom-button" type="button" data-zoom-view="lunar" data-zoom-action="in" aria-label="Приблизить">+</button>
+            <button class="zoom-button zoom-reset" type="button" data-zoom-view="lunar" data-zoom-action="reset">Сброс</button>
+          </div></div>
         </div>
-        <canvas id="lunar-view" aria-label="Орбита Луны вокруг Земли"></canvas>
+        <canvas id="lunar-view" aria-label="Орбита Луны вокруг Земли" title="Колесо мыши: приблизить или отдалить"></canvas>
         <div class="legend">
           <span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span>
           <span><i class="ring soi"></i>SOI Земли</span><span><i class="ring moon-soi"></i>SOI Луны</span>
@@ -73,9 +83,14 @@
       <article class="panel visual-panel detail-panel">
         <div class="panel-heading">
           <div><span class="panel-kicker">03 / VESSEL TRACK</span><h2>Корабль и активный центр</h2></div>
-          <span class="scale-note" id="detail-scale">Масштаб: локальный</span>
+          <div class="panel-tools"><span class="scale-note" id="detail-scale">Масштаб: локальный</span><div class="camera-controls" aria-label="Управление масштабом проекции">
+            <button class="zoom-button" type="button" data-zoom-view="vessel" data-zoom-action="out" aria-label="Отдалить">−</button>
+            <output id="zoom-value-vessel" class="zoom-value">100%</output>
+            <button class="zoom-button" type="button" data-zoom-view="vessel" data-zoom-action="in" aria-label="Приблизить">+</button>
+            <button class="zoom-button zoom-reset" type="button" data-zoom-view="vessel" data-zoom-action="reset">Сброс</button>
+          </div></div>
         </div>
-        <canvas id="vessel-view" aria-label="Орбита пробного корабля относительно активного гравитационного центра"></canvas>
+        <canvas id="vessel-view" aria-label="Орбита пробного корабля относительно активного гравитационного центра" title="Колесо мыши: приблизить или отдалить"></canvas>
         <div class="legend">
           <span><i class="dot primary-body"></i>Активный центр</span>
           <span><i class="dot vessel"></i>Корабль</span>

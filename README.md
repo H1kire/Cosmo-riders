@@ -3,7 +3,7 @@
 Browser-first spaceflight simulation foundation. The root page is the flight-operations interface; all physical calculations use SI units internally.
 
 ## Run locally
-Use Node.js 20+ for the test suite. From the repository root:
+The game source is TypeScript (`src/`, `lab/`, `tests/`, and `scripts/`). Vite compiles the browser app to JavaScript in `dist/`; the browser never executes TypeScript directly. Use Node.js 20+ for the test suite. From the repository root:
 - `npm test` — deterministic physics regression tests.
 - `npm run audit` — syntax and static checks.
 - `npm run check` — both test and audit.

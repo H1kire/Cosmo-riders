@@ -41,7 +41,7 @@ export class PhysicsWorld {
   }
   this.initialized=true;
  }
- addVessel({id,primaryBodyId,position,velocity}){
+ addVessel({id,primaryBodyId,position,velocity,massKg=1000}){
   this.initializeEphemerides();
   if(typeof id!=='string'||!id.trim())throw new TypeError('Vessel id must be non-empty.');
   if(this.vessels.has(id))throw new Error('Duplicate vessel id: '+id);

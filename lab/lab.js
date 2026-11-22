@@ -1,5 +1,4 @@
 import { createSolarSystemWorld, SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.js';
-import { gravitationalParameter } from '../src/physics/constants.js';
 import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/physics/vector3.js';
 import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-elements.js';
 
@@ -10,7 +9,6 @@ const canvases = {
   vessel: $('vessel-view')
 };
 const DAY = 86400;
-const YEAR = 365.256363004 * DAY;
 let world;
 let vessel;
 let paused = false;

@@ -3,20 +3,35 @@ import { add,subtract,magnitude } from './vector3.ts';
 import { propagateKepler } from './kepler.ts';
 import { orbitalElementsToState } from './orbital-state.ts';
 import { sphereOfInfluence } from './orbital-elements.ts';
+import type { CelestialBody } from './celestial-body.ts';
+import type { OrbitalState, PhysicsWorldOptions, VesselState } from '../types/physics.ts';
 
 /** Fixed-step hierarchical ephemeris + patched-conic vessel propagation.
  * Simulation epoch is J2000.0; each orbit is a two-body Kepler segment.
  */
 export class PhysicsWorld {
-  [key: string]: any;
- constructor({fixedStepSeconds=60,maxSubSteps=10000,soiEnterFactor=0.9,soiExitFactor=1.1}={}){
+  fixedStepSeconds: number;
+  maxSubSteps: number;
+  soiEnterFactor: number;
+  soiExitFactor: number;
+  timeScale: number;
+  paused: boolean;
+  simulationTimeSeconds: number;
+  accumulator: number;
+  bodies: Map<string, CelestialBody>;
+  bodyStates: Map<string, OrbitalState>;
+  bodyInitialRelativeStates: Map<string, OrbitalState>;
+  vessels: Map<string, VesselState>;
+  initialized: boolean;
+
+ constructor({fixedStepSeconds=60,maxSubSteps=10000,soiEnterFactor=0.9,soiExitFactor=1.1}: PhysicsWorldOptions = {}){
   assertPositiveFinite(fixedStepSeconds,'fixedStepSeconds');
   if(!Number.isInteger(maxSubSteps)||maxSubSteps<1)throw new RangeError('maxSubSteps must be positive.');
   if(!(soiEnterFactor>0&&soiEnterFactor<1))throw new RangeError('soiEnterFactor must be between 0 and 1.');
   if(!(soiExitFactor>1))throw new RangeError('soiExitFactor must be greater than 1.');
   Object.assign(this,{fixedStepSeconds,maxSubSteps,soiEnterFactor,soiExitFactor,timeScale:1,paused:false,simulationTimeSeconds:0,accumulator:0,bodies:new Map(),bodyStates:new Map(),bodyInitialRelativeStates:new Map(),vessels:new Map(),initialized:false});
  }
- addBody(body){
+ addBody(body: CelestialBody): CelestialBody {
   if(!body?.id||!Number.isFinite(body.mu))throw new TypeError('Expected a valid CelestialBody.');
   if(this.bodies.has(body.id))throw new Error('Duplicate body id: '+body.id);
   if(body.parentId&&!this.bodies.has(body.parentId))throw new Error('Parent body not found: '+body.parentId);
@@ -42,7 +57,7 @@ export class PhysicsWorld {
   }
   this.initialized=true;
  }
- addVessel({id,primaryBodyId,position,velocity,massKg=1000}){
+ addVessel({id,primaryBodyId,position,velocity,massKg=1000}: {id:string;primaryBodyId:string;position: {x:number;y:number;z:number};velocity: {x:number;y:number;z:number};massKg?:number}): VesselState {
   this.initializeEphemerides();
   if(typeof id!=='string'||!id.trim())throw new TypeError('Vessel id must be non-empty.');
   if(this.vessels.has(id))throw new Error('Duplicate vessel id: '+id);
@@ -55,9 +70,9 @@ export class PhysicsWorld {
  }
  setTimeScale(value){if(!Number.isFinite(value)||value<0)throw new RangeError('timeScale must be finite and non-negative.');this.timeScale=value;}
  setPaused(value){this.paused=Boolean(value);}
- getBodyState(id){this.initializeEphemerides();const state=this.bodyStates.get(id);if(!state)throw new Error('Unknown body: '+id);return state;}
+ getBodyState(id: string): OrbitalState {this.initializeEphemerides();const state=this.bodyStates.get(id);if(!state)throw new Error('Unknown body: '+id);return state;}
  /** Return an independent ephemeris snapshot at an arbitrary simulation time. */
- getBodyStatesAt(timeSeconds){
+ getBodyStatesAt(timeSeconds: number): Map<string, OrbitalState> {
   this.initializeEphemerides();
   if(!Number.isFinite(timeSeconds))throw new TypeError('timeSeconds must be finite.');
   const states=new Map();
@@ -71,7 +86,7 @@ export class PhysicsWorld {
   return states;
  }
  /** Interpolate a vessel from the last committed physics step without mutating simulation state. */
- getVesselStateAt(id,timeSeconds,bodyStates=this.getBodyStatesAt(timeSeconds)){
+ getVesselStateAt(id: string,timeSeconds: number,bodyStates: Map<string, OrbitalState> = this.getBodyStatesAt(timeSeconds)){
   const vessel=this.vessels.get(id);
   if(!vessel)throw new Error('Unknown vessel: '+id);
   if(!Number.isFinite(timeSeconds))throw new TypeError('timeSeconds must be finite.');
@@ -81,7 +96,7 @@ export class PhysicsWorld {
   const relative=propagateKepler({position:vessel.relativePosition,velocity:vessel.relativeVelocity,mu:primary.mu,deltaTimeSeconds:elapsed});
   return {position:add(primaryState.position,relative.position),velocity:add(primaryState.velocity,relative.velocity),primaryBodyId:vessel.primaryBodyId,massKg:vessel.massKg};
  }
- getVesselState(id){const v=this.vessels.get(id);if(!v)throw new Error('Unknown vessel: '+id);return {position:v.position,velocity:v.velocity,primaryBodyId:v.primaryBodyId};}
+ getVesselState(id: string): Pick<VesselState, 'position' | 'velocity' | 'primaryBodyId'> {const v=this.vessels.get(id);if(!v)throw new Error('Unknown vessel: '+id);return {position:v.position,velocity:v.velocity,primaryBodyId:v.primaryBodyId};}
  getSphereOfInfluence(bodyId){
   const body=this.bodies.get(bodyId);if(!body||!body.parentId||body.semiMajorAxisM===null)return null;
   const parent=this.bodies.get(body.parentId);
@@ -96,7 +111,7 @@ export class PhysicsWorld {
    this.bodyStates.set(body.id,{position:add(parentState.position,relative.position),velocity:add(parentState.velocity,relative.velocity)});
   }
  }
- choosePatchedConicPrimary(vessel){
+ choosePatchedConicPrimary(vessel: VesselState): CelestialBody {
   const current=this.bodies.get(vessel.primaryBodyId),currentState=this.getBodyState(current.id);
   if(current.parentId){
    const soi=this.getSphereOfInfluence(current.id);
@@ -111,7 +126,7 @@ export class PhysicsWorld {
   }
   return selected??current;
  }
- switchPrimary(vessel,nextPrimary){
+ switchPrimary(vessel: VesselState,nextPrimary: CelestialBody): boolean {
   if(nextPrimary.id===vessel.primaryBodyId)return false;
   const state=this.getBodyState(nextPrimary.id);
   vessel.relativePosition=subtract(vessel.position,state.position);

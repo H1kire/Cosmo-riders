@@ -7,3 +7,5 @@ export * from './orbital-state.js';
 export * from './celestial-body.js';
 export * from './physics-world.js';
 export * from './solar-system.js';
+export * from './propulsion.js';
+export * from './maneuvers.js';

@@ -1,0 +1,9 @@
+{
+  "name": "cosmo-riders-physics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic SI-unit physics foundation for Cosmo-riders.",
+  "scripts": {"test":"node --test","audit":"node scripts/audit.js","check":"npm run test && npm run audit"},
+  "engines": {"node": ">=20"}
+}

@@ -72,8 +72,8 @@ export class PhysicsWorld {
  choosePatchedConicPrimary(vessel){
   const current=this.bodies.get(vessel.primaryBodyId),currentState=this.getBodyState(current.id);
   if(current.parentId){
-   const parent=this.bodies.get(current.parentId),parentState=this.getBodyState(parent.id),soi=this.getSphereOfInfluence(current.id);
-   if(soi!==null&&magnitude(subtract(vessel.position,parentState.position))>soi*this.soiExitFactor)return parent;
+   const soi=this.getSphereOfInfluence(current.id);
+   if(soi!==null&&magnitude(subtract(vessel.position,currentState.position))>soi*this.soiExitFactor)return this.bodies.get(current.parentId);
   }
   let selected=null,selectedSoi=Infinity;
   for(const child of this.bodies.values()){

@@ -119,3 +119,14 @@ test('JPL satellite systems use physical semi-major axes and mean radii',()=>{
  assert.equal(w.bodies.size,50);
  assert.equal([...w.bodies.values()].filter(body=>body.parentId!=='sun'&&body.parentId!==null).length,41);
 });
+
+test('Moon rendering inputs preserve the Earth-relative physical orbit and radius ratio',()=>{
+ const w=createSolarSystemWorld();
+ const earth=w.getBodyState('earth'),moon=w.getBodyState('moon');
+ const relative=vector3(moon.position.x-earth.position.x,moon.position.y-earth.position.y,moon.position.z-earth.position.z);
+ assert.ok(Math.abs(magnitude(relative)-384400000)<5e7);
+ const moonBody=w.bodies.get('moon'),earthBody=w.bodies.get('earth');
+ assert.equal(moonBody.parentId,'earth');
+ assert.ok(Math.abs(moonBody.meanRadiusM/earthBody.meanRadiusM-0.2727)<0.001);
+ assert.ok(moonBody.meanRadiusM/AU<0.000012);
+});

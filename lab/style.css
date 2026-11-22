@@ -28,4 +28,4 @@
 .time-scale-control>span{font-size:8px;letter-spacing:.1em;color:var(--muted)}
 .time-scale-control select{width:auto;min-width:112px;padding:7px 9px;font-size:10px}
 @media(max-width:700px){.time-scale-control{gap:5px;margin-left:6px}.time-scale-control>span{font-size:7px}.time-scale-control select{min-width:82px;padding:6px 5px;font-size:9px}.top-clock strong{font-size:9px}}
-\n.body-label-layer{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}.body-label{position:absolute;left:0;top:0;color:#c3d6ec;font-size:10px;line-height:1.2;letter-spacing:.02em;text-shadow:0 1px 4px #000,0 0 8px #000;white-space:nowrap}.body-label[hidden]{display:none}\n
+\n.body-label-layer{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}.body-label{position:absolute;left:0;top:0;color:#c3d6ec;font-size:10px;line-height:1.2;letter-spacing:.02em;text-shadow:0 1px 4px #000,0 0 8px #000;white-space:nowrap}.body-label[hidden]{display:none}

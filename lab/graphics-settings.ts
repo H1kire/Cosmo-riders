@@ -1,4 +1,5 @@
-import { createGraphicsSettings, type GraphicsSettings, type QualityLevel } from '../src/rendering/quality/quality-settings.ts';
+import { createGraphicsSettings, type GraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
+import type { QualityLevel } from '../src/rendering/core/render-types.ts';
 const $=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T|null;
 const preset=$<HTMLSelectElement>('graphics-preset');
 const status=$<HTMLElement>('graphics-status');

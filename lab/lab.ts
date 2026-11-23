@@ -111,7 +111,7 @@ function updatePlanetInformation(){
     ['Продолжительность суток','Нет данных в модели'],
     ['Средняя температура','Нет данных в модели'],
     ['Атмосфера','Параметры не заданы в физической модели'],
-    ['Естественные спутники',parent===null?String(children.length):'—']
+    ['Естественные спутники',String(children.length)]
   ];
   host.replaceChildren();
   const heading=document.createElement('div');heading.className='planet-info-heading';heading.textContent=item.name;host.append(heading);
@@ -497,7 +497,6 @@ function updateTelemetry(){
   $('soi-value').textContent=soi?distanceLabel(soi):'—';
   $('switch-value').textContent=vessel.lastPrimarySwitch?body(vessel.lastPrimarySwitch.from).name+' → '+body(vessel.lastPrimarySwitch.to).name:'Не было';
   $('clock-value').textContent='J2000.0 + '+fmt(world.simulationTimeSeconds/DAY,5)+' суток';
-  $('model-primary') && ($('model-primary').textContent=primary.name);
   updatePlanetInformation();
   $('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
   $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';

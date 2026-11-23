@@ -1,7 +1,7 @@
 import { generateSurfaceCubeMaps, surfaceProfileKey, type SurfaceCubeMaps, type SurfaceGenerationProfile } from './surface-generator.ts';
 interface Entry { maps:SurfaceCubeMaps; bytes:number; used:number; }
 interface Pending { resolve:(maps:SurfaceCubeMaps)=>void; reject:(error:Error)=>void; }
-type WorkerResult={id:number;maps?:SurfaceCubeMaps;error?:string};
+type WorkerResult={id:number;maps?:SurfaceCubeMaps;generationMs?:number;error?:string};
 /** Bounded LRU cache backed by one dedicated Worker. Only one CPU generation job runs at a time. */
 export class SurfaceMapCache {
  private entries=new Map<string,Entry>(); private pending=new Map<string,Promise<SurfaceCubeMaps>>();

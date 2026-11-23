@@ -7,6 +7,7 @@ import { ATMOSPHERE_VERTEX, ATMOSPHERE_FRAGMENT, CLOUD_VERTEX, CLOUD_FRAGMENT } 
 import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
 import { CloudSystem } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
+import { selectMeshLod, planetaryOrbitOpacity } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
 
@@ -43,7 +44,7 @@ export class Solar3DView{
   this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));
   this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
-  this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60)];
+  this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
@@ -206,9 +207,9 @@ export class Solar3DView{
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,(item?.[1]?.radius??1e-5)*20);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
- drawOrbit(world,body,states,sunPosition,vp,mapper){if(!body.parentId||!body.orbitalElements)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;let path=this.orbitCache.get(body.id);if(!path){path=[];for(let i=0;i<=128;i++){const e=body.orbitalElements,s=orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/128},parent.mu);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62);g.drawArrays(g.LINE_STRIP,0,data.length/3);}
+ drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1){if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;let path=this.orbitCache.get(body.id);if(!path){path=[];const eccentricity=Math.max(0,Math.min(0.95,body.orbitalElements.eccentricity??0)),segments=Math.max(512,Math.min(1024,Math.ceil(512*(1+eccentricity))));for(let i=0;i<=segments;i++){const e=body.orbitalElements,s=orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/segments},parent.mu);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.34:.2,body.id==='earth'?.62:.32,body.id==='earth'?.94:.48,.68*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);}
  render(world,states,timeSeconds,vesselState=null){
-  const g=this.gl,c=this.canvas,r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,1.75);
+  const g=this.gl,c=this.canvas,r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
   const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
@@ -237,7 +238,13 @@ export class Solar3DView{
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
   lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
-  for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper);
+  let planetOrbitFade=1;
+  if(focus){
+   let anchor=focus;
+   while(anchor.parentId&&anchor.parentId!=='sun')anchor=world.bodies.get(anchor.parentId)??anchor;
+   if(anchor.parentId==='sun')planetOrbitFade=planetaryOrbitOpacity(this.distance,anchor.meanRadiusM/AU);
+  }
+  for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   
@@ -247,7 +254,7 @@ export class Solar3DView{
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
    const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
-   const requestedLevel=px>70?2:px>18?1:0,level=Math.min(this.graphics.maxMeshLod,requestedLevel),mesh=this.meshes[level];
+   const level=selectMeshLod(px,this.graphics.maxMeshLod),mesh=this.meshes[level];
    
    const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
@@ -256,7 +263,7 @@ export class Solar3DView{
    g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    g.uniform3f(l.uColor,...(COLORS[body.id]??[.5,.6,.8]));g.uniform1f(l.uKind,KINDS[body.id]??2);
-   g.uniform1f(l.uDetail,Math.max(0,Math.min(1,px/90)));g.uniform1f(l.uSeed,bodies.indexOf(body)*13.17);
+   g.uniform1f(l.uDetail,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4)));g.uniform1f(l.uSeed,bodies.indexOf(body)*13.17);
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);

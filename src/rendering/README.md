@@ -15,7 +15,7 @@ The rendering layer is independent from the physics core. It consumes camera-rel
 
 `src/rendering/core/shader-library.ts` resolves reusable GLSL chunks and compile-time defines. `src/rendering/shaders/chunks.ts` contains shared math, procedural noise, lighting, scattering phase functions, cloud density, eclipse geometry, and tone-mapping functions. `src/rendering/shaders/planet-effects.ts` contains the active atmosphere and cloud GPU materials.
 
-Atmospheric scattering integrates optical depth along the view ray with a quality-dependent sample count. Cloud shells use animated procedural FBM and per-layer wind. Planetary shadowing tests the surface-to-star ray against nearby celestial occluders, including moons; the soft edge approximates the penumbra from the apparent stellar angular radius. This is an analytic planetary shadow method rather than a single shadow map spanning the entire astronomical scene.
+Atmospheric scattering integrates optical depth along the view ray with a quality-dependent sample count. Cloud shells use animated procedural FBM and per-layer wind. Planetary shadowing tests the surface-to-star ray against nearby celestial occluders, including moons; the soft edge approximates the penumbra from the apparent stellar angular radius. The shadows toggle also disables eclipse darkening in atmosphere and cloud materials. This is an analytic planetary shadow method rather than a single shadow map spanning the entire astronomical scene.
 
 The HDR compositor extracts bright pixels, performs configurable blur iterations, and then adds glare and lens-flare elements at the projected solar position. Solar visibility for optical effects is reduced by analytic occultation.
 

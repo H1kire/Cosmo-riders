@@ -61,6 +61,9 @@ test('graphics presets control real render scale and post-process quality',()=>{
  assert.ok(medium.renderScale<high.renderScale);
  assert.ok(high.bloomIterations<ultra.bloomIterations);
  assert.ok(high.shadowOccluders<ultra.shadowOccluders);
+ assert.ok(low.atmosphereSamples<medium.atmosphereSamples);
+ assert.ok(medium.atmosphereSamples<high.atmosphereSamples);
+ assert.ok(high.atmosphereSamples<ultra.atmosphereSamples);
  assert.equal(low.clouds,false);
  assert.equal(ultra.clouds,true);
 });

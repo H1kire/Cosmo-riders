@@ -286,7 +286,7 @@ export class Solar3DView{
    this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
-   const centerVisibility=(profile||cloudLayers.length)?this.getCenterShadowVisibility(body,state,sunState,bodies,states):1;
+   const centerVisibility=this.graphics.shadows&&(profile||cloudLayers.length)?this.getCenterShadowVisibility(body,state,sunState,bodies,states):1;
    if(this.graphics.atmosphere&&profile){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
     this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,centerVisibility);
@@ -307,7 +307,7 @@ export class Solar3DView{
     const mesh=this.meshes[0],shipDistance=Math.max(1e-12,Math.hypot(ship[0]-eye[0],ship[1]-eye[1],ship[2]-eye[2]));
     const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
     g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
-    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uLight,0,0,1);g.uniform1f(l.uLightIntensity,1);
+    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uLight,0,0,1);g.uniform3f(l.uLightColor,1,1,1);g.uniform1f(l.uLightIntensity,1);
     g.uniform1f(l.uKind,5);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);
     g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
     this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);

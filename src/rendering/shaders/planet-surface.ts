@@ -43,7 +43,8 @@ vec3 domainWarp3(vec3 p){
 }
 void main(){
   vec3 n=normalize(aNormal);
-  vec3 warped=domainWarp3(n*(18.0+uDetail*54.0)+uSeed);\n  float terrain=fbm3(warped)+ridged3(warped*1.7)*uTectonicActivity*0.24+fbm3(n*31.0+uSeed*2.0)*uVolcanicActivity*0.08;
+  vec3 warped=domainWarp3(n*(18.0+uDetail*54.0)+uSeed);
+  float terrain=fbm3(warped)+ridged3(warped*1.7)*uTectonicActivity*0.24+fbm3(n*31.0+uSeed*2.0)*uVolcanicActivity*0.08;
   float relief=0.0;
   if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
   else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009*uDetail;
@@ -146,7 +147,14 @@ float shadowVisibility(vec3 point){
   return clamp(visibility,0.0,1.0);
 }
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
-  vec3 warped=domainWarp3(n*3.1+uSeed);\n  float broad=fbm3(warped);\n  float medium=fbm3(domainWarp3(n*(7.0+uDetail*6.0)+uSeed*2.7));\n  float fine=fbm3Filtered(n*(8.0+uDetail*42.0)+uSeed*5.1);\n  float ridges=ridged3(warped*9.0);\n  float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity;\n  float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;\n  float cells=fbm3(n*47.0+uSeed*11.7);
+  vec3 warped=domainWarp3(n*3.1+uSeed);
+  float broad=fbm3(warped);
+  float medium=fbm3(domainWarp3(n*(7.0+uDetail*6.0)+uSeed*2.7));
+  float fine=fbm3Filtered(n*(8.0+uDetail*42.0)+uSeed*5.1);
+  float ridges=ridged3(warped*9.0);
+  float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity;
+  float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;
+  float cells=fbm3(n*47.0+uSeed*11.7);
   float latitude=abs(n.y);
   vec3 albedo=pow(uColor,vec3(2.2));
   roughness=0.82;
@@ -160,7 +168,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.0;
   }else if(uKind<1.5){
     float continentField=broad+(medium-0.5)*0.12+tectonics*0.09;
-    float land=smoothstep(0.468,0.548,continentField);\n    land=mix(land, smoothstep(0.46,0.56,continentField+ridged3(n*23.0+uSeed)*0.045),0.38);
+    float land=smoothstep(0.468,0.548,continentField);
+    land=mix(land, smoothstep(0.46,0.56,continentField+ridged3(n*23.0+uSeed)*0.045),0.38);
     float coast=1.0-smoothstep(0.0,0.035,abs(continentField-0.505));
     float desert=smoothstep(0.42,0.67,medium+latitude*0.12+uIronFraction*0.08);
     vec3 ocean=mix(vec3(0.006,0.022,0.075),vec3(0.014,0.105,0.245),medium);
@@ -168,7 +177,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     vec3 dryLand=mix(vec3(0.24,0.16,0.075),vec3(0.52,0.34,0.16),fine);
     vec3 landColor=mix(vegetation,dryLand,desert*0.72);
     landColor=mix(landColor,vec3(0.72,0.67,0.52),smoothstep(0.77,0.93,latitude));
-    float oceanCoverage=clamp(uWaterFraction*1.35,0.0,1.0);\n    albedo=mix(landColor,ocean,oceanCoverage*(1.0-land));
+    float oceanCoverage=clamp(uWaterFraction*1.35,0.0,1.0);
+    albedo=mix(landColor,ocean,oceanCoverage*(1.0-land));
     albedo=mix(albedo,vec3(0.62,0.68,0.67),coast*0.28);
     float ice=smoothstep(0.86-uIceFraction*0.16,0.96-uIceFraction*0.12,latitude)*clamp(uIceFraction*2.5,0.0,1.0);
     albedo=mix(albedo,vec3(0.82,0.88,0.91),ice);
@@ -191,7 +201,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
       vec3 rock=mercury?vec3(0.20,0.19,0.18):vec3(0.30,0.31,0.32);
       albedo=rock*(0.62+0.75*broad+0.18*fine)+vec3(0.12,0.085,0.055)*uIronFraction*medium;
       albedo+=vec3(0.13,0.12,0.105)*craterRim;
-      albedo*=1.0-0.28*craterBasin;\n    albedo+=vec3(0.08,0.035,0.012)*volcanic*0.35;
+      albedo*=1.0-0.28*craterBasin;
+    albedo+=vec3(0.08,0.035,0.012)*volcanic*0.35;
     }
     roughness=0.94;
     specular=0.018;
@@ -203,7 +214,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     vec3 base=saturn>0.5?vec3(0.48,0.34,0.19):vec3(0.40,0.20,0.105);
     vec3 lightBand=saturn>0.5?vec3(0.78,0.64,0.43):vec3(0.72,0.47,0.29);
     albedo=mix(base,lightBand,smoothstep(-0.18,0.55,band)*0.72);
-    albedo=mix(albedo,albedo*vec3(0.66,0.78,0.92),smoothstep(0.68,0.88,storms)*0.24);\n    albedo=mix(albedo,vec3(0.55,0.19,0.08),smoothstep(0.82,0.96,volcanic)*0.12);
+    albedo=mix(albedo,albedo*vec3(0.66,0.78,0.92),smoothstep(0.68,0.88,storms)*0.24);
+    albedo=mix(albedo,vec3(0.55,0.19,0.08),smoothstep(0.82,0.96,volcanic)*0.12);
     roughness=0.58;
     specular=0.045;
   }else if(uKind<4.5){

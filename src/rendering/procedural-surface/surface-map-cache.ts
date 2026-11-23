@@ -15,7 +15,7 @@ export class SurfaceMapCache {
    worker.onmessage=(event:MessageEvent<WorkerResult>)=>{
     const request=this.requests.get(event.data.id);if(!request)return;
     this.requests.delete(event.data.id);
-    if(event.data.maps){this.store(request,event.data.maps);request.resolve(event.data.maps);}
+    if(event.data.maps){request.resolve(event.data.maps);}
     else request.reject(new Error(event.data.error??'Surface worker failed.'));
    };
    worker.onerror=()=>{

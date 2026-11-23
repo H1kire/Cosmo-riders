@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { planetaryOrbitOpacity, projectedOrbitRadius, selectMeshLod } from '../src/rendering/quality/render-lod.ts';
 import { dirname, join, resolve } from 'node:path';
 
 const root = new URL('..', import.meta.url);
@@ -107,8 +108,14 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!surface.includes('vec3(1.0,0.53,0.16)') || !surface.includes('vec3(0.006,0.022,0.075)') || !surface.includes('vec3(0.014,0.105,0.245)') || !surface.includes('vec3(0.035,0.095,0.028)') || !surface.includes('vec3(0.17,0.27,0.082)')) throw new Error('Star emissive color or the current Earth ocean and land palette is incomplete.');
     if (!source.includes("for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h)") || source.includes('localMode')) throw new Error('All solar-system orbits must remain in one shared scene without local-scene filtering.');
     const orbitLod = await readFile(new URL('../src/rendering/quality/render-lod.ts', import.meta.url), 'utf8');
-    if (!source.includes('makeSphere(g,128,192)') || !source.includes('selectMeshLod(px,this.graphics.maxMeshLod)') || !source.includes('Math.log2(Math.max(1,px)/18)') || !source.includes('segments=Math.max(512') || !source.includes('planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU)') || !orbitLod.includes('ratio-120') || !orbitLod.includes('ratio-2400') || !orbitLod.includes('projectedOrbitRadius') || !source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8')) throw new Error('High-detail sphere LOD or smooth heliocentric orbit fade is missing.');
+    if (!source.includes('makeSphere(g,128,192)') || !source.includes('selectMeshLod(px,this.graphics.maxMeshLod)') || !source.includes('Math.log2(Math.max(1,px)/18)') || !source.includes('segments=Math.max(512') || !source.includes('planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU)') || !orbitLod.includes('(ratio-120)/(2400-120)') || !orbitLod.includes('projectedOrbitRadius') || !source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8')) throw new Error('High-detail sphere LOD or smooth heliocentric orbit fade is missing.');
     if (!source.includes('body.parentId===\'sun\'?planetOrbitFade:1') || !source.includes('g.enable(g.BLEND)') || !source.includes('g.depthMask(false)')) throw new Error('Planetary orbit fading must preserve satellite orbit visibility and alpha blending.');
+  }],
+  ['Runtime LOD helpers match the current orbit and mesh policies', async () => {
+    if (selectMeshLod(8,3)!==0 || selectMeshLod(40,3)!==1 || selectMeshLod(180,3)!==2 || selectMeshLod(900,3)!==3) throw new Error('Projected mesh LOD thresholds are incorrect.');
+    const radius=6371000/149597870700;
+    if (planetaryOrbitOpacity(radius*20,radius)!==0 || planetaryOrbitOpacity(radius*120,radius)!==0 || planetaryOrbitOpacity(radius*2400,radius)!==1) throw new Error('Heliocentric orbit fade thresholds are incorrect.');
+    if (!(projectedOrbitRadius(0.0026,1080,38)<0.8) || !(projectedOrbitRadius(0.0026,1080,0.00001)>100)) throw new Error('Sub-pixel orbit culling does not respond to camera distance.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

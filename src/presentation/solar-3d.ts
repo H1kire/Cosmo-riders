@@ -332,7 +332,7 @@ export class Solar3DView{
     const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
     g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
     g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uCameraPosition,...eye);g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
-    g.uniform1f(l.uKind,7);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);
+    g.uniform1f(l.uKind,7);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);g.uniform1f(l.uUseGeneratedMaps,0);
     g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
     this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    }

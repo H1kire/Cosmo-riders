@@ -53,9 +53,11 @@ void main(){
   if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
   else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009*uDetail;
   float generatedHeight=textureLod(uGeneratedHeight,n,0.0).r-0.5;
+  float mapBlend=uUseGeneratedMaps;
+  if(uPreviousMapsEnabled>0.5){float previousHeight=textureLod(uPreviousHeight,n,0.0).r-0.5;generatedHeight=mix(previousHeight,generatedHeight,uUseGeneratedMaps);mapBlend=1.0;}
   float heightScale=uKind<1.5?0.009:(uKind<2.5?0.045:(uKind>5.2&&uKind<5.5?0.02:0.0));
   float generatedRelief=generatedHeight*heightScale*uDetail;
-  relief=mix(relief,generatedRelief,uUseGeneratedMaps);
+  relief=mix(relief,generatedRelief,mapBlend);
   vec4 world=uModel*vec4(aPosition*(1.0+relief),1.0);
   vPosition=world.xyz;
   vNormal=normalize(mat3(uModel)*n);

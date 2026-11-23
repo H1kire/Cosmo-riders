@@ -109,7 +109,7 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
 export function sampleSurfaceHeight(direction:[number,number,number],profile:SurfaceGenerationProfile):number {
  const [x,y,z]=normalize(direction);
  if(profile.class==='gas-giant'||profile.class==='ice-giant')return 0;
- const seed=profile.seed;
+ const seed=profile.seed,cold=smooth(300,145,profile.temperatureK);
  const broad=fbm3(x*3.2,y*3.2,z*3.2,seed,5),regional=fbm3(x*13,y*13,z*13,seed+17,4);
  const ridges=ridged3(x*21,y*21,z*21,seed+31,4);
  const tectonic=ridged3(x*5+regional,y*5,z*5,seed+89,4)*profile.tectonicActivity;
@@ -120,7 +120,7 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
  const weathering=clamp(profile.erosion+Math.log10(1+profile.pressurePa)/8*.12);
  const gravityScale=clamp(1.25/Math.sqrt(Math.max(.1,profile.gravityMS2)),.55,1.8);
  let height=(broad*.2+regional*.1+ridges*.1+tectonic*.14+volcanic*.1-crater)*(1-weathering*.42)*gravityScale;
- if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&profile.iceFraction>.62))height+=smooth(.72,.91,worley3(x*68,y*68,z*68,seed+47))*(1-profile.erosion*.55)*.018;
+ if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&Math.max(profile.iceFraction,cold*profile.volatileFraction)>.62))height+=smooth(.72,.91,worley3(x*68,y*68,z*68,seed+47))*(1-profile.erosion*.55)*.018;
  if(profile.class==='volcanic'||profile.class==='volcanic-moon')height+=volcanic*.04;
  if(profile.class==='desert')height+=ridged3(x*17,y*17,z*17,seed+281,4)*.025;
  if(profile.class==='dense-atmosphere'&&profile.hydrocarbonFraction>.08&&profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5)height+=ridged3(x*18,y*18,z*18,seed+341,4)*.018;

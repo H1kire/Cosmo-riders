@@ -1,6 +1,6 @@
 import { orbitalElementsToState } from '../physics/orbital-state.ts';
 import { AU } from '../physics/constants.ts';
-import { LightingEngine } from './lighting-engine.ts';
+import { LightingSystem } from '../rendering/lighting/lighting-system.ts';
 import { HDRPipeline } from '../rendering/core/hdr-pipeline.ts';
 import { createDefaultShaderLibrary } from '../rendering/shaders/index.ts';
 import { ATMOSPHERE_VERTEX, ATMOSPHERE_FRAGMENT, CLOUD_VERTEX, CLOUD_FRAGMENT } from '../rendering/shaders/planet-effects.ts';
@@ -52,7 +52,7 @@ export class Solar3DView{
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
-  this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingEngine();
+  this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingSystem();
   this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;
   this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);
   this.labelNodes=new Map();this.bind();
@@ -220,7 +220,8 @@ export class Solar3DView{
   const renderOrigin=focusState?focusState.position:sun;
   const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
   const sunRenderPosition=mapper(null,sun);this.currentSunPosition=sunRenderPosition;
-  this.lighting.setPointLight('sun',sunRenderPosition,{intensity:22,color:[1,.96,.86]});
+  if(this.lighting.getSources().some(source=>source.id==='sun'))this.lighting.updateSource('sun',{position:sunRenderPosition});
+  else this.lighting.addSource({id:'sun',kind:'point',position:sunRenderPosition,intensity:22,color:[1,.96,.86]});
   // Keep externally registered stellar sources while refreshing the primary star position.
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);

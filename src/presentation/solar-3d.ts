@@ -418,6 +418,8 @@ export class Solar3DView{
   this.labels?.remove();
   this.labelNodes?.clear();
   this.orbitCache?.clear();
+  for(const entry of this.surfaceGpuTextures?.values()??[])for(const texture of entry.textures)this.gl.deleteTexture(texture);
+  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceMapCache?.clear();this.surfaceGpuBytes=0;
   this.stellarSourceDefinitions?.clear();
  }
 }

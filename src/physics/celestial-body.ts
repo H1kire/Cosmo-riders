@@ -1,6 +1,6 @@
 import { gravitationalParameter, assertPositiveFinite } from './constants.ts';
 import { isFiniteVector, vector3 } from './vector3.ts';
-import type { Vector3, ClassicalOrbitalElements } from '../types/physics.ts';
+import type { Vector3, ClassicalOrbitalElements, PlanetarySurfaceParameters } from '../types/physics.ts';
 
 export interface CelestialBodyOptions {
   readonly id: string;
@@ -13,6 +13,7 @@ export interface CelestialBodyOptions {
   readonly semiMajorAxisM?: number | null;
   readonly orbitalElements?: ClassicalOrbitalElements | null;
   readonly surfaceSeed?: number;
+  readonly surface?: Readonly<PlanetarySurfaceParameters>;
 }
 
 export class CelestialBody {
@@ -27,6 +28,7 @@ export class CelestialBody {
   readonly semiMajorAxisM: number | null;
   readonly orbitalElements: ClassicalOrbitalElements | null;
   readonly surfaceSeed: number | null;
+  readonly surface: Readonly<PlanetarySurfaceParameters> | null;
 
   constructor({
     id,
@@ -39,6 +41,7 @@ export class CelestialBody {
     semiMajorAxisM = null,
     orbitalElements = null,
     surfaceSeed = null,
+    surface = null,
   }: CelestialBodyOptions) {
     if (typeof id !== 'string' || !id.trim()) throw new TypeError('Body id must be non-empty.');
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Body name must be non-empty.');

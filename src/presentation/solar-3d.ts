@@ -235,7 +235,8 @@ export class Solar3DView{
   const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
-  this.hdr.begin(renderWidth,renderHeight);\n  this.processSurfaceUploads();
+  this.hdr.begin(renderWidth,renderHeight);
+  this.processSurfaceUploads();
   const sunState=states.get('sun')??{position:{x:0,y:0,z:0}};
   const sun=sunState.position,bodies=[...world.bodies.values()];
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));

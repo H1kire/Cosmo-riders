@@ -30,3 +30,9 @@ Physics remains SI. Rendering consumes camera-relative coordinates in the existi
 ## Compatibility
 
 The new rendering systems preserve the legacy `LightingEngine` point-light sampling API. The physics core remains independent of rendering code.
+
+## Planet surface materials
+
+`src/rendering/shaders/planet-surface.ts` provides a dedicated surface material pass. It generates deterministic, sphere-space procedural maps for Earth (continents, oceans, deserts and polar ice), rocky bodies (crater fields and terrain variation), Mars (rust-colored geology), and the gas/ice giants (warped atmospheric bands and storm structure). The vertex stage adds restrained terrain relief, while the fragment stage uses distance-attenuated sunlight, analytic eclipse visibility, roughness-dependent GGX highlights, and a low night-side ambient term. The surface pass is independent of atmosphere and cloud shells, whose opacity is deliberately limited so they cannot wash out the underlying body.
+
+These are procedural GPU materials, not downloaded photographic satellite maps. They are deterministic and do not require network access or external texture files at runtime.

@@ -14,12 +14,7 @@
  <div class="side-label">КОСМИЧЕСКИЙ ЦЕНТР</div>
  <button class="nav-item active" data-open-window="window-system"><span>◎</span> Солнечная система</button>
  <div class="side-divider"></div>
- <div class="side-label">КОРАБЛЬ И ПОЛЁТ</div>
- <button class="nav-item" data-open-window="window-ship"><span>⌁</span> Корабль</button>
- <button class="nav-item" data-open-window="window-flight"><span>◉</span> Управление полётом</button>
- <button class="nav-item" data-open-window="window-maneuvers"><span>△</span> Манёвры</button>
- <button class="nav-item" data-open-window="window-local"><span>☾</span> Земля — Луна</button>
- <button class="nav-item" data-open-window="window-model"><span>▤</span> Параметры модели</button>
+ <button class="nav-item" data-open-window="window-model"><span>▤</span> Информация о планете</button>
  <button class="nav-item" data-open-window="window-settings"><span>⚙</span> Настройки</button>
  <div class="side-divider"></div>
  <div class="side-label">ИНСТРУМЕНТЫ КАМЕРЫ</div>
@@ -29,8 +24,9 @@
 <main class="universe">
  <div class="universe-title"><span>STARMAP / SOLAR SYSTEM</span><b>СОЛНЕЧНАЯ СИСТЕМА</b><small>Перемещайте камеру и исследуйте орбиты планет</small></div>
  <canvas id="solar-view" aria-label="Интерактивная карта Солнечной системы"></canvas>
+ <nav id="system-navigation" class="system-navigation" aria-label="Навигация по звёздной системе"></nav>
  <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ЛКМ — ВРАЩЕНИЕ 3D-КАМЕРЫ</span><span>КЛИК — ФОКУС НА ТЕЛЕ</span><span>ПКМ — ПАНОРАМИРОВАНИЕ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
- <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span><span><i class="dot moon"></i>Луна · спутник</span></div>
+ <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span></div>
  <div class="zoom-dock"><button class="zoom-button" data-zoom-view="solar" data-zoom-action="out">−</button><output id="zoom-value-solar">100%</output><button class="zoom-button" data-zoom-view="solar" data-zoom-action="in">+</button></div>
 </main>
 <section class="floating-window" id="window-ship" data-window="ship" style="left:250px;top:100px;width:390px;display:none">
@@ -56,13 +52,18 @@
  <header class="window-titlebar"><div><span>LOCAL SYSTEM</span><strong>Земля — Луна</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
  <div class="window-content"><canvas id="lunar-view" class="local-canvas"></canvas><div class="local-footer"><span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span><div class="camera-controls"><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="out">−</button><output id="zoom-value-lunar">34%</output><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="in">+</button><button class="zoom-button reset-zoom" data-zoom-view="lunar" data-zoom-action="reset">СБРОС</button></div></div></div>
 </section>
-<section class="floating-window" id="window-model" data-window="model" style="left:370px;top:185px;width:350px;display:none">
- <header class="window-titlebar"><div><span>SIMULATION MODEL</span><strong>Параметры модели</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
- <div class="window-content"><div class="data-list"><div><span>Модель движения</span><b>Patched conics</b></div><div><span>Эфемериды</span><b>Kepler · J2000.0</b></div><div><span>Сфера влияния</span><b>Лаплас · 90 / 110%</b></div><div><span>Единицы расчёта</span><b>SI · m / kg / s</b></div><div><span>Гравитационные тела</span><b>Солнце + 8 планет + Луна</b></div><div><span>Текущий центр</span><b id="model-primary">Земля</b></div></div></div>
+<section class="floating-window" id="window-model" data-window="model" style="left:370px;top:185px;width:390px;display:none">
+ <header class="window-titlebar"><div><span>CELESTIAL BODY DATA</span><strong>Информация о планете</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><div id="planet-info" class="planet-info"><p class="footnote">Данные будут определены по текущему центру орбиты корабля.</p></div></div>
 </section>
 <section class="floating-window" id="window-settings" data-window="settings" style="left:400px;top:120px;width:390px;display:none">
- <header class="window-titlebar"><div><span>APPLICATION SETTINGS</span><strong>Настройки графики</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <header class="window-titlebar"><div><span>APPLICATION SETTINGS</span><strong>Настройки</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
  <div class="window-content graphics-settings">
+  <div class="settings-section"><h3>Основные</h3>
+   <label class="select-wrap"><span>ЯЗЫК ИНТЕРФЕЙСА</span><select id="app-language"><option value="ru">Русский</option><option value="en">English</option><option value="uk">Українська</option></select></label>
+   <label class="select-wrap"><span>ФОРМАТ ЧИСЕЛ</span><select id="number-format"><option value="scientific">Научная нотация</option><option value="engineering">Инженерная нотация</option><option value="suffix" selected>Буквенная (K, M, B, T, Qa, Qi)</option><option value="full">Полная запись</option></select></label>
+  </div>
+  <div class="settings-section"><h3>Графика</h3>
   <label class="select-wrap"><span>ПРЕСЕТ КАЧЕСТВА</span><select id="graphics-preset"><option value="low">Low · Максимальная производительность</option><option value="medium">Medium · Сбалансированный</option><option value="high" selected>High · Высокое качество</option><option value="ultra">Ultra · Максимальное качество</option></select></label>
   <div class="graphics-options">
    <label><input id="gfx-shadows" type="checkbox" checked> Тени и затмения</label>
@@ -74,6 +75,7 @@
    <label><input id="gfx-hdr" type="checkbox" checked> HDR и Tone Mapping</label>
   </div>
   <p id="graphics-status" class="footnote">Настройки сохраняются локально. Эффекты будут подключаться поэтапно в рамках Visual Engine 0.2.</p>
+  </div>
  </div>
 </section>
 <script type="module" src="./main.ts"></script>

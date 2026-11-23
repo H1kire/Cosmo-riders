@@ -34,8 +34,6 @@ test('render pipeline orders passes and rejects duplicate names',()=>{
  assert.deepEqual(order,['scene','post']);assert.throws(()=>pipeline.add(pass('scene',2)),/Duplicate/);
 });
 
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import { ShaderLibrary } from '../src/rendering/core/shader-library.ts';
 import { createDefaultShaderLibrary } from '../src/rendering/shaders/index.ts';
 

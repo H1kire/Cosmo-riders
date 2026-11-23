@@ -70,31 +70,10 @@ float sphereFar(vec3 origin,vec3 direction,float radius){
   float discriminant=b*b-c;
   return discriminant>=0.0?-b+sqrt(discriminant):-1.0;
 }
-float localShadowVisibility(vec3 point){
-  if(uShadows==0)return 1.0;
-  vec3 toSun=uSunPosition-point;
-  float sunDistance=length(toSun);
-  vec3 ray=toSun/max(sunDistance,1e-12);
-  float visibility=1.0;
-  for(int i=0;i<8;i++){
-    if(i<uOccluderCount){
-      vec3 toBlocker=uOccluders[i]-point;
-      float along=dot(toBlocker,ray);
-      if(along>0.0&&along<sunDistance){
-        float perpendicular=length(toBlocker-ray*along);
-        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
-        float penumbra=uOccluderRadii[i]+angularSun;
-        float umbra=max(0.0,uOccluderRadii[i]-angularSun);
-        visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);
-      }
-    }
-  }
-  return clamp(visibility,0.0,1.0);
-}
 void main(){
   vec3 n=safeNormalize(vNormal);
   vec3 viewRay=safeNormalize(vPosition-uCameraPosition);
-  vec3 lightDir=safeNormalize(uLight);
+  vec3 lightDir=safeNormalize(uSunPosition-vPosition);
   float outerNear=sphereNear(uCameraPosition,viewRay,uAtmosphereRadius);
   float outerFar=sphereFar(uCameraPosition,viewRay,uAtmosphereRadius);
   if(outerFar<=0.0)discard;
@@ -167,6 +146,27 @@ uniform int uShadows;
 uniform float uLightIntensity;
 varying vec3 vNormal;
 varying vec3 vPosition;
+float localShadowVisibility(vec3 point){
+  if(uShadows==0)return 1.0;
+  vec3 toSun=uSunPosition-point;
+  float sunDistance=length(toSun);
+  vec3 ray=toSun/max(sunDistance,1e-12);
+  float visibility=1.0;
+  for(int i=0;i<8;i++){
+    if(i<uOccluderCount){
+      vec3 toBlocker=uOccluders[i]-point;
+      float along=dot(toBlocker,ray);
+      if(along>0.0&&along<sunDistance){
+        float perpendicular=length(toBlocker-ray*along);
+        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
+        float penumbra=uOccluderRadii[i]+angularSun;
+        float umbra=max(0.0,uOccluderRadii[i]-angularSun);
+        visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);
+      }
+    }
+  }
+  return clamp(visibility,0.0,1.0);
+}
 void main(){
   vec3 n=safeNormalize(vNormal);
   vec3 drift=vec3(uTime*uWind.x,0.0,uTime*uWind.y);
@@ -178,7 +178,7 @@ void main(){
   float holes=smoothstep(0.12,0.78,fine);
   float alpha=edge*holes*uOpacity;
   if(alpha<0.012)discard;
-  float diffuse=max(dot(n,safeNormalize(uLight)),0.0);
+  float diffuse=max(dot(n,safeNormalize(uSunPosition-vPosition)),0.0);
   float lighting=diffuse*localShadowVisibility(vPosition);
   vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity/22.0);
   gl_FragColor=vec4(cloudColor,alpha*0.62);

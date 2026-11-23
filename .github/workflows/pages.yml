@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 24
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --strict-allow-scripts --no-audit --no-fund
       - name: Run complete quality audit
         run: npm run audit
       - name: Upload Pages artifact

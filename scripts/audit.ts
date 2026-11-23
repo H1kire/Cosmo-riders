@@ -54,21 +54,12 @@ const checks: Array<[string, () => Promise<void>]> = [
     const compatibility = await readFile(new URL('../src/rendering/lighting/lighting-system.ts', import.meta.url), 'utf8');
     if (!compatibility.includes('extends LightingEngine')) throw new Error('New lighting system must preserve the legacy LightingEngine API.');
   }],
-  ['Deterministic procedural planetary geology and cube-map LOD', async () => {
-    const noise = await readFile(new URL('../src/rendering/procedural-surface/noise.ts', import.meta.url), 'utf8');
-    const generator = await readFile(new URL('../src/rendering/procedural-surface/surface-generator.ts', import.meta.url), 'utf8');
-    const cache = await readFile(new URL('../src/rendering/procedural-surface/surface-map-cache.ts', import.meta.url), 'utf8');
+  ['Continuous shader-generated planetary surfaces', async () => {
     const renderer = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
     const shader = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
-    for (const feature of ['stableSeed','fbm3','fbmPerlin3','perlin3','ridged3','worley3','domainWarp3']) if (!noise.includes('function '+feature)) throw new Error('Procedural noise primitive is missing: '+feature);
-    for (const feature of ['createSurfaceProfile','sampleSurface','generateSurfaceCubeMaps','FACE_DIRECTIONS','cubeFaceDirection','surfaceResolutionForProjectedRadius','surfaceProfileKey']) if (!generator.includes(feature)) throw new Error('Planetary surface generator feature is missing: '+feature);
-    for (const surfaceClass of ['desert','dense-atmosphere','airless-moon','icy-moon','volcanic-moon','gas-giant','ice-giant']) if (!generator.includes("'"+surfaceClass+"'")) throw new Error('Planetary surface class is missing: '+surfaceClass);
-    for (const channel of ['albedo:Uint8Array','height:Uint8Array','roughness:Uint8Array','normal:Uint8Array']) if (!generator.includes(channel)) throw new Error('Independent cube-map channel is missing: '+channel);
-    for (const feature of ['SurfaceMapCache','maxBytes','clear():void','new Worker(new URL']) if (!cache.includes(feature)) throw new Error('Surface map cache feature is missing: '+feature);
-    if (!renderer.includes('createSurfaceProfile(body)') || !renderer.includes('requestSurfaceMaps(surfaceProfile!,surfaceResolution,priority)') || !renderer.includes('bindSurfaceMaps(surfaceProfile!,surfaceResolution,l)') || !renderer.includes('g.deleteTexture(texture)') || !renderer.includes('processSurfaceUploads()') || !renderer.includes('surfaceUploadQueue') || !renderer.includes('surfaceLodTransitions') || !renderer.includes('surfaceResolutionForProjectedRadius(px,surfaceProfile!.class)') || !renderer.includes('getSurfaceDiagnostics()') || !renderer.includes('uPreviousMapsEnabled')) throw new Error('Solar renderer must request, bind and dispose generated maps.');
-    if (!shader.includes('domainWarp3') || !shader.includes('ridged3') || !shader.includes('uGeneratedAlbedo') || !shader.includes('uGeneratedNormal') || !shader.includes('uGeneratedHeight') || !shader.includes('uGeneratedRoughness') || !shader.includes('uPreviousMapsEnabled') || !shader.includes('uPreviousAlbedo') || !shader.includes('textureLod(uPreviousHeight')) throw new Error('Planet shader must combine multifractal geology and generated material maps.');
-    const worker = await readFile(new URL('../src/rendering/procedural-surface/surface-worker.ts', import.meta.url), 'utf8');
-    if (!worker.includes('generateSurfaceCubeMaps') || !worker.includes('postMessage') || !worker.includes('maps.normal.buffer') || !worker.includes('generationMs')) throw new Error('Planetary map generation must run in a transferable worker.');
+    if (renderer.includes('createSurfaceProfile') || renderer.includes('SurfaceMapCache') || renderer.includes('requestSurfaceMaps') || renderer.includes('processSurfaceUploads')) throw new Error('Legacy CPU cubemap generation must not be active in the solar renderer.');
+    for (const feature of ['domainWarp3','ridged3','float land=smoothstep(0.505,0.535,continentField)','float softBelts=smoothstep(-0.48,0.58,belts)']) if (!shader.includes(feature)) throw new Error('Shader terrain feature is missing: '+feature);
+    if (shader.includes('samplerCube') || shader.includes('uGeneratedAlbedo') || shader.includes('uPreviousAlbedo')) throw new Error('Planet surfaces must not depend on generated cube-map textures.');
     const body = await readFile(new URL('../src/physics/celestial-body.ts', import.meta.url), 'utf8');
     if (!body.includes('surfaceSeed') || !body.includes('Number.isSafeInteger(surfaceSeed)')) throw new Error('Celestial bodies must support persisted deterministic surface seeds.');
   }],
@@ -104,7 +95,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('TEXTURE_DETAIL_CAPS={low:.65,medium:.95,high:1.25,ultra:1.5}') || !source.includes('this.graphics.textureQuality')) throw new Error('Texture quality preset must control procedural surface detail.');
     if (!source.includes('const far=100,near=Math.max(1e-10,Math.min(this.distance*.01,focusRadius>0?focusRadius*.02:this.distance*.01))')) throw new Error('Focused planetary views must retain the 100 AU scene range and adapt the near plane to camera and body scale.');
-    if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');
+    if (source.includes('if(vesselState?.position)') || source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Spacecraft rendering must remain disabled while the project is focused on the solar system.');
     const surface = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
     if (!surface.includes('uLightPositions[4]') || !surface.includes('uLightIntensities[i]/(22.0*distanceSquared)') || !surface.includes('distributionGGX') || !surface.includes('geometrySchlick') || !surface.includes('surfaceAlbedo')) throw new Error('Planetary materials must use inverse-square multi-light shading, microfacet specular and distinct surface maps.');
     if (!surface.includes('vec3 indirect=albedo*0.0001') || !surface.includes('uSunRadius*along/max(sunDistance-along,1e-12)')) throw new Error('Planetary night-side floor or stellar angular penumbra is not physically bounded.');

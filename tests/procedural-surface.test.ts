@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { stableSeed,fbm3,ridged3,worley3,domainWarp3 } from '../src/rendering/procedural-surface/noise.ts';
-import { createSurfaceProfile,sampleSurface,generateSurfaceCubeMaps,surfaceResolutionForProjectedRadius } from '../src/rendering/procedural-surface/surface-generator.ts';
+import { createSurfaceProfile,sampleSurface,generateSurfaceCubeMaps,surfaceResolutionForProjectedRadius,cubeFaceDirection } from '../src/rendering/procedural-surface/surface-generator.ts';
 import { SurfaceMapCache } from '../src/rendering/procedural-surface/surface-map-cache.ts';
 import { CelestialBody } from '../src/physics/celestial-body.ts';
 
@@ -42,7 +42,9 @@ test('surface LOD and cache memory remain bounded',async()=>{
  assert.equal(surfaceResolutionForProjectedRadius(600),512);
  const cache=new SurfaceMapCache(1000000),profile=createSurfaceProfile(earth);
  const a=await cache.get(profile,8),b=await cache.get(profile,8);
- assert.equal(a,b);assert.equal(cache.size,1);assert.ok(cache.memoryBytes<=1000000);
+ assert.equal(a,b);assert.equal(cache.size,1);
+ const changed={...profile,waterFraction:.01};await cache.get(changed,8);assert.equal(cache.size,2);
+ assert.ok(cache.memoryBytes<=1000000);
  cache.clear();assert.equal(cache.size,0);
 });
 
@@ -51,4 +53,9 @@ test('celestial bodies persist validated procedural surface seeds and compositio
  const profile=createSurfaceProfile(body);
  assert.equal(profile.seed,987654);assert.equal(profile.class,'volcanic');assert.equal(profile.volcanicActivity,.9);
  assert.throws(()=>new CelestialBody({id:'bad-world',name:'Bad',massKg:1e20,meanRadiusM:1e6,surface:{waterFraction:1.5}}),/fraction/);
+});
+
+test('adjacent cube faces share identical spherical edge directions',()=>{
+ const plusX=cubeFaceDirection(0,-1,.37),plusZ=cubeFaceDirection(4,1,.37);
+ assert.ok(Math.hypot(plusX[0]-plusZ[0],plusX[1]-plusZ[1],plusX[2]-plusZ[2])<1e-12);
 });

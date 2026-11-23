@@ -308,16 +308,16 @@ export class Solar3DView{
      g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
-     const surfaceResolution=surfaceResolutionForProjectedRadius(px,surfaceProfile.class);
-     if(px>=8&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20)this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
-     this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
-     g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
-     g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
-     g.uniform1f(l.uIceFraction,surfaceProfile.iceFraction);
-     g.uniform1f(l.uIronFraction,surfaceProfile.ironFraction);
-     g.uniform1f(l.uTectonicActivity,surfaceProfile.tectonicActivity);
-     g.uniform1f(l.uVolcanicActivity,surfaceProfile.volcanicActivity);
-     g.uniform1f(l.uErosion,surfaceProfile.erosion);
+     const surfaceResolution=surfaceResolutionForProjectedRadius(px,surfaceProfile!.class);
+     if(px>=8&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20)this.requestSurfaceMaps(surfaceProfile!,surfaceResolution);
+     this.bindSurfaceMaps(surfaceProfile!,surfaceResolution,l);
+     g.uniform1f(l.uSeed,surfaceProfile!.seed%16777216);
+     g.uniform1f(l.uWaterFraction,surfaceProfile!.waterFraction);
+     g.uniform1f(l.uIceFraction,surfaceProfile!.iceFraction);
+     g.uniform1f(l.uIronFraction,surfaceProfile!.ironFraction);
+     g.uniform1f(l.uTectonicActivity,surfaceProfile!.tectonicActivity);
+     g.uniform1f(l.uVolcanicActivity,surfaceProfile!.volcanicActivity);
+     g.uniform1f(l.uErosion,surfaceProfile!.erosion);
     }
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);

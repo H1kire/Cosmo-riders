@@ -51,7 +51,7 @@ export class Solar3DView{
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeight','uGeneratedRoughness','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeight','uGeneratedRoughness','uPreviousAlbedo','uPreviousNormal','uPreviousHeight','uPreviousRoughness','uPreviousMapsEnabled','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
@@ -304,7 +304,7 @@ export class Solar3DView{
     g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??profileKind));
    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
     if(isStar){
-     g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uSeed,0);
+     g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uPreviousMapsEnabled,0);g.uniform1f(l.uSeed,0);
      g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
@@ -347,7 +347,7 @@ export class Solar3DView{
     const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
     g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
     g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uCameraPosition,...eye);g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
-    g.uniform1f(l.uKind,7);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);g.uniform1f(l.uUseGeneratedMaps,0);
+    g.uniform1f(l.uKind,7);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uPreviousMapsEnabled,0);
     g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
     this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    }
@@ -442,13 +442,26 @@ export class Solar3DView{
   }
  }
  bindSurfaceMaps(profile,resolution,loc){
-  const g=this.gl,profileKey=surfaceProfileKey(profile);let entry=this.surfaceGpuTextures.get(profileKey+':'+resolution);
-  if(!entry){let best=0;for(const [key,value] of this.surfaceGpuTextures){if(key.startsWith(profileKey+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}}}
-  if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);return;}
+  const g=this.gl,profileKey=surfaceProfileKey(profile),exact=this.surfaceGpuTextures.get(profileKey+':'+resolution);
+  let entry=exact,previous=null;
+  if(!entry){
+   let best=0;
+   for(const [key,value] of this.surfaceGpuTextures)if(key.startsWith(profileKey+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}
+  }else{
+   let best=0;
+   for(const [key,value] of this.surfaceGpuTextures)if(key.startsWith(profileKey+':')&&value.resolution<resolution&&value.resolution>best){best=value.resolution;previous=value;}
+  }
+  if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);g.uniform1f(loc.uPreviousMapsEnabled,0);return;}
   entry.used=++this.surfaceTextureClock;
   const blend=Math.max(0,Math.min(1,(performance.now()-entry.created)/450));
   const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
+  if(previous){
+   previous.used=++this.surfaceTextureClock;
+   const previousUniforms=[loc.uPreviousAlbedo,loc.uPreviousHeight,loc.uPreviousRoughness,loc.uPreviousNormal];
+   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE8+i);g.bindTexture(g.TEXTURE_CUBE_MAP,previous.textures[i]);g.uniform1i(previousUniforms[i],8+i);}
+  }
+  g.uniform1f(loc.uPreviousMapsEnabled,previous?1:0);
   g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
  }
  getSurfaceDiagnostics(){

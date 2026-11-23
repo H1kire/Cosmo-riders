@@ -251,6 +251,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   vec4 bakedMaterial=texture(uGeneratedHeightRoughness,n);
   albedo=mix(albedo,bakedAlbedo,uUseGeneratedMaps*0.72);
   roughness=mix(roughness,bakedMaterial.g,uUseGeneratedMaps);
+  albedo*=mix(1.0,0.92+0.16*bakedMaterial.r,uUseGeneratedMaps);
   return max(albedo,vec3(0.0));
 }
 float distributionGGX(float ndoth,float roughness){

@@ -103,7 +103,7 @@ interface Target {
 
 function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=false):Target{
   const framebuffer=gl.createFramebuffer(),texture=gl.createTexture();
-  if(!framebuffer||!texture)throw Error('HDR render target allocation failed');
+  if(!framebuffer||!texture){if(framebuffer)gl.deleteFramebuffer(framebuffer);if(texture)gl.deleteTexture(texture);throw Error('HDR render target allocation failed');}
   gl.bindTexture(gl.TEXTURE_2D,texture);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);

@@ -52,8 +52,8 @@ function pressureGuess(body:SurfaceBodyInput,gravity:number):Partial<SurfaceGene
  const surface=body.surface??{},pressure=surface.pressurePa??0,temp=surface.temperatureK??(gravity<2?160:260);
  const density=body.massKg/(4*Math.PI*Math.pow(body.meanRadiusM,3)/3),earthRadii=body.meanRadiusM/6_371_000;
  if(pressure>1e6)return {class:'dense-atmosphere'};
- if(earthRadii>=5.5&&density<2200)return {class:'gas-giant',volatileFraction:.45,hydrocarbonFraction:.08};
- if(earthRadii>=2.4&&earthRadii<5.5&&density<2600)return {class:'ice-giant',volatileFraction:.58,hydrocarbonFraction:.14};
+ if(earthRadii>=5.5&&density<2200)return {class:'gas-giant',temperatureK:temp,waterFraction:.08,iceFraction:0,ironFraction:0,silicateFraction:0,metalFraction:0,volatileFraction:.45,hydrocarbonFraction:.08,sulfurFraction:.02};
+ if(earthRadii>=2.4&&earthRadii<5.5&&density<2600)return {class:'ice-giant',temperatureK:temp,waterFraction:.35,iceFraction:.5,ironFraction:0,silicateFraction:0,metalFraction:0,volatileFraction:.58,hydrocarbonFraction:.14,sulfurFraction:.005};
  if((surface.volcanicActivity??0)>.65)return {class:'volcanic'};
  if(temp<170&&(surface.iceFraction??.2)>.15)return {class:gravity<2?'icy-moon':'icy'};
  if(temp>=250&&temp<=350&&(surface.waterFraction??0)>.4&&pressure>=611)return {class:'oceanic'};

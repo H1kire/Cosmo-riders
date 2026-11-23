@@ -444,11 +444,19 @@ export class Solar3DView{
   const g=this.gl,profileKey=surfaceProfileKey(profile),exact=this.surfaceGpuTextures.get(profileKey+':'+resolution);
   let entry=exact,previous=null;
   if(!entry){
-   let best=0;
-   for(const [key,value] of this.surfaceGpuTextures)if(key.startsWith(profileKey+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}
+   let bestDistance=Infinity;
+   for(const [key,value] of this.surfaceGpuTextures){
+    if(!key.startsWith(profileKey+':'))continue;
+    const distance=Math.abs(Math.log2(value.resolution/resolution));
+    if(distance<bestDistance){bestDistance=distance;entry=value;}
+   }
   }else{
-   let best=0;
-   for(const [key,value] of this.surfaceGpuTextures)if(key.startsWith(profileKey+':')&&value.resolution<resolution&&value.resolution>best){best=value.resolution;previous=value;}
+   let bestDistance=Infinity;
+   for(const [key,value] of this.surfaceGpuTextures){
+    if(!key.startsWith(profileKey+':')||value.resolution===resolution)continue;
+    const distance=Math.abs(Math.log2(value.resolution/resolution));
+    if(distance<bestDistance){bestDistance=distance;previous=value;}
+   }
   }
   if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);g.uniform1f(loc.uPreviousMapsEnabled,0);return;}
   entry.used=++this.surfaceTextureClock;

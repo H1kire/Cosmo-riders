@@ -112,7 +112,7 @@ float shadowVisibility(vec3 point){
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   float broad=fbm3(n*3.1+uSeed);
   float medium=fbm3(n*(7.0+uDetail*6.0)+uSeed*2.7);
-  float fine=fbm3(n*(8.0+uDetail*34.0)+uSeed*5.1);
+  float fine=fbm3(n*(8.0+uDetail*42.0)+uSeed*5.1);
   float latitude=abs(n.y);
   vec3 albedo=pow(uColor,vec3(2.2));
   roughness=0.82;
@@ -126,18 +126,18 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.0;
   }else if(uKind<1.5){
     float continentField=broad+(medium-0.5)*0.12;
-    float land=smoothstep(0.455,0.555,continentField);
+    float land=smoothstep(0.468,0.548,continentField);
     float coast=1.0-smoothstep(0.0,0.035,abs(continentField-0.505));
     float desert=smoothstep(0.42,0.67,medium+latitude*0.12);
-    vec3 ocean=mix(vec3(0.008,0.025,0.085),vec3(0.018,0.12,0.27),medium);
-    vec3 vegetation=mix(vec3(0.045,0.105,0.035),vec3(0.16,0.25,0.075),fine);
+    vec3 ocean=mix(vec3(0.006,0.022,0.075),vec3(0.014,0.105,0.245),medium);
+    vec3 vegetation=mix(vec3(0.035,0.095,0.028),vec3(0.17,0.27,0.082),fine);
     vec3 dryLand=mix(vec3(0.24,0.16,0.075),vec3(0.52,0.34,0.16),fine);
     vec3 landColor=mix(vegetation,dryLand,desert*0.72);
     landColor=mix(landColor,vec3(0.72,0.67,0.52),smoothstep(0.77,0.93,latitude));
     albedo=mix(ocean,landColor,land);
-    albedo=mix(albedo,vec3(0.55,0.62,0.66),coast*0.22);
+    albedo=mix(albedo,vec3(0.62,0.68,0.67),coast*0.28);
     float ice=smoothstep(0.86,0.96,latitude);
-    albedo=mix(albedo,vec3(0.78,0.84,0.88),ice);
+    albedo=mix(albedo,vec3(0.82,0.88,0.91),ice);
     roughness=mix(0.075,0.88,land);
     specular=mix(0.72,0.035,land);
   }else if(uKind<2.5){

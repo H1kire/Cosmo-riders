@@ -75,9 +75,9 @@ Cloud density also filters its fine procedural noise by the fragment footprint, 
 The renderer now uses the independent `procedural-surface/` subsystem for deterministic, composition-aware worlds.
 
 - `noise.ts`: stable ID hashing, 3D value noise, fBm, ridged multifractal noise, cellular/Worley fields and domain warping.
-- `surface-generator.ts`: physical surface profiles, geological sampling and six-face cube-sphere albedo, height/roughness and object-space normal maps. Sampling uses normalized 3D directions rather than equirectangular UVs, avoiding pole stretching and longitude seams.
-- `surface-map-cache.ts`: asynchronous face-by-face generation and bounded CPU LRU storage.
-- `solar-3d.ts`: screen-space map resolutions (64/128/256/512), cubemap upload, mipmap generation, gradual map blending and a separate 64 MiB GPU texture budget. GPU and CPU resources are released by `dispose()`.
+- `surface-generator.ts`: composition-aware profiles for oceanic, desert, rocky, dense-atmosphere, volcanic, airless, icy, gas-giant and ice-giant worlds. Albedo, Height, Roughness and object-space Normal are separate six-face cube-sphere maps. Gas/ice giants use an atmospheric band-and-storm generator, not geological terrain.
+- `surface-map-cache.ts` and `surface-worker.ts`: one dedicated CPU worker, transferable typed-array results, in-flight request deduplication and bounded CPU LRU storage.
+- `solar-3d.ts`: screen-space map resolutions (64/128/256/512), frame-budgeted face uploads and mipmap generation, gradual map blending and a 64 MiB GPU texture budget. GPU and CPU resources are released by `dispose()`.
 - `planet-surface.ts`: combines the generated maps with analytic multifractal shading and the existing inverse-square multi-light / eclipse pipeline.
 
 ### Determinism and world metadata
@@ -90,4 +90,4 @@ Known Solar System bodies have curated starting profiles. Unknown bodies receive
 
 Projected screen radius selects 64, 128, 256 or 512 texels per cube face. Lower-resolution maps remain usable while a higher level is generated; a newly uploaded level blends in over 450 ms. Cubemap mipmaps handle minification. CPU map memory is capped at 48 MiB and GPU cubemap memory at 64 MiB. Only bodies requested by the active renderer are generated, and GPU textures are evicted least-recently-used when the budget is exceeded.
 
-The procedural generator is tested independently for seed stability, repeatability, physical profile differences, cube-map dimensions, output bounds and cache behavior in `tests/procedural-surface.test.ts`.
+The procedural generator is tested independently for deterministic seeds, all known body classes, chemistry/material differences, separate PBR channels, atmospheric giants, cube-face continuity, cache deduplication and bounded memory in `tests/procedural-surface.test.ts`.

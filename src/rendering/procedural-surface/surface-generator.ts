@@ -96,7 +96,7 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
  const polar=smooth(.72,.98,Math.abs(lat));
  const haze=clamp(p.volatileFraction*.25+p.pressurePa/1e7*.15);
  base=base.map((v,i)=>v*(1-haze*.12)+polar*(i===0?.12:.16)) as [number,number,number];
- return {height:(storm-.5)*.035 + (turbulence-.5)*.008,albedo:base,roughness:clamp(.72-cloud*.18,.35,.9),material:'cloud'};
+ return {height:0,albedo:base,roughness:clamp(.72-cloud*.18,.35,.9),material:'cloud'};
 }
 export function sampleSurfaceHeight(direction:[number,number,number],profile:SurfaceGenerationProfile):number {
  const [x,y,z]=normalize(direction);

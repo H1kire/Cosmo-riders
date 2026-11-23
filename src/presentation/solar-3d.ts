@@ -398,8 +398,18 @@ export class Solar3DView{
   const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
   const channels=[job.maps.albedo,job.maps.height,job.maps.roughness,job.maps.normal];
   if(job.textures.length===0){
+   const reservedBytes=Math.ceil(job.resolution*job.resolution*4*6*4*4/3);
+   while(this.surfaceGpuBytes+reservedBytes>64*1024*1024&&this.surfaceGpuTextures.size){
+    let oldestKey=null,oldest=Infinity;
+    for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
+    if(oldestKey===null)break;
+    const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
+    this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
+   }
+   if(reservedBytes>64*1024*1024){this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
+   job.bytes=reservedBytes;this.surfaceGpuBytes+=reservedBytes;
    for(let i=0;i<4;i++){
-    const texture=g.createTexture();if(!texture){for(const allocated of job.textures)g.deleteTexture(allocated);this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
+    const texture=g.createTexture();if(!texture){for(const allocated of job.textures)g.deleteTexture(allocated);this.surfaceGpuBytes-=job.bytes;this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
     g.bindTexture(g.TEXTURE_CUBE_MAP,texture);
     g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);
     g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
@@ -426,18 +436,7 @@ export class Solar3DView{
   job.uploadSubmissionMs=(job.uploadSubmissionMs??0)+(performance.now()-uploadStarted);
   if(job.faceIndex===24&&job.mipIndex===4){
    this.lastSurfaceUploadSubmissionMs=job.uploadSubmissionMs;
-   const bytes=Math.ceil(job.resolution*job.resolution*4*6*4*4/3);
-   while(this.surfaceGpuBytes+bytes>64*1024*1024&&this.surfaceGpuTextures.size){
-    let oldestKey=null,oldest=Infinity;
-    for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
-    if(oldestKey===null)break;
-    const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
-    this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
-   }
-   if(bytes<=64*1024*1024){
-    this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution:job.resolution,profileKey:job.profileKey});
-    this.surfaceGpuBytes+=bytes;
-   }else for(const texture of job.textures)g.deleteTexture(texture);
+   this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes:job.bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution:job.resolution,profileKey:job.profileKey});
    this.surfaceUploadQueue.shift();
   }
  }

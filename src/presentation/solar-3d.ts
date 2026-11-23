@@ -10,7 +10,8 @@ import { createGraphicsSettings, type GraphicsSettings } from '../rendering/qual
 import { selectMeshLod, planetaryOrbitOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
-import { createSurfaceProfile } from '../rendering/procedural-surface/surface-generator.ts';
+import { createSurfaceProfile,surfaceResolutionForProjectedRadius } from '../rendering/procedural-surface/surface-generator.ts';
+import { SurfaceMapCache } from '../rendering/procedural-surface/surface-map-cache.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
@@ -33,6 +34,8 @@ export class Solar3DView{
   if(!this.gl)throw Error('WebGL2 недоступен');
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
+  this.surfaceMapCache=new SurfaceMapCache(48*1024*1024);
+  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -48,7 +51,7 @@ export class Solar3DView{
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeightRoughness','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);

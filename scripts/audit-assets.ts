@@ -31,7 +31,7 @@ for (const file of sources) {
   }
   for (const raw of references) {
     const relative = localPath(raw);
-    if (relative === null) continue;
+    if (relative === null || relative.endsWith('/')) continue;
     const candidate = resolve(dirname(file), relative);
     if (await exists(candidate)) continue;
     const publicCandidate = resolve(root, 'public', relative.replace(/^(?:\.\.\/)+/, '').replace(/^[/\\\\]+/, ''));

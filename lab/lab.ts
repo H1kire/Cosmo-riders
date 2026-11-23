@@ -5,6 +5,7 @@ import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-el
 import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propulsion.ts';
 import { hohmannTransfer } from '../src/physics/maneuvers.ts';
 import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
+import { rotateStateToParentEquator } from '../src/physics/orbital-frame.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
 import { formatDisplayNumber } from './preferences.ts';
 
@@ -179,7 +180,7 @@ function getOrbitPath(id){
   if(!celestial?.parentId||!celestial.orbitalElements){orbitPathCache.set(id,[]);return [];}
   const parent=body(celestial.parentId),elements=celestial.orbitalElements,points=[],segments=128;
   for(let i=0;i<=segments;i++){
-    const sample=orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu+child.mu);
+    const sample=rotateStateToParentEquator(orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu+child.mu),child,parent);
     points.push(sample.position);
   }
   orbitPathCache.set(id,points);

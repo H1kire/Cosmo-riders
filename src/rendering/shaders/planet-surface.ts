@@ -240,6 +240,6 @@ void main(){
     }
   }
   // Only a very small indirect floor remains; a planet in deep shadow is not self-emissive.
-  vec3 indirect=albedo*0.001;
+  vec3 indirect=albedo*0.0001;
   gl_FragColor=vec4(max(directLight+indirect,vec3(0.0)),1.0);
 }

@@ -59,11 +59,12 @@
 <section class="floating-window" id="window-settings" data-window="settings" style="left:400px;top:120px;width:390px;display:none">
  <header class="window-titlebar"><div><span>APPLICATION SETTINGS</span><strong>Настройки</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
  <div class="window-content graphics-settings">
-  <div class="settings-section"><h3>Основные</h3>
+  <div class="settings-tabs" role="tablist"><button type="button" class="settings-tab active" data-settings-tab="general" role="tab" aria-selected="true">Основные</button><button type="button" class="settings-tab" data-settings-tab="graphics" role="tab" aria-selected="false">Графика</button></div>
+  <div class="settings-section" data-settings-panel="general"><h3>Основные</h3>
    <label class="select-wrap"><span>ЯЗЫК ИНТЕРФЕЙСА</span><select id="app-language"><option value="ru">Русский</option><option value="en">English</option><option value="uk">Українська</option></select></label>
    <label class="select-wrap"><span>ФОРМАТ ЧИСЕЛ</span><select id="number-format"><option value="scientific">Научная нотация</option><option value="engineering">Инженерная нотация</option><option value="suffix" selected>Буквенная (K, M, B, T, Qa, Qi)</option><option value="full">Полная запись</option></select></label>
   </div>
-  <div class="settings-section"><h3>Графика</h3>
+  <div class="settings-section" data-settings-panel="graphics" hidden><h3>Графика</h3>
   <label class="select-wrap"><span>ПРЕСЕТ КАЧЕСТВА</span><select id="graphics-preset"><option value="low">Low · Максимальная производительность</option><option value="medium">Medium · Сбалансированный</option><option value="high" selected>High · Высокое качество</option><option value="ultra">Ultra · Максимальное качество</option></select></label>
   <div class="graphics-options">
    <label><input id="gfx-shadows" type="checkbox" checked> Тени и затмения</label>

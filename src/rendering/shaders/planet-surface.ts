@@ -74,7 +74,7 @@ uniform float uVolcanicActivity;
 uniform float uErosion;
 uniform samplerCube uGeneratedAlbedo;
 uniform samplerCube uGeneratedNormal;
-uniform samplerCube uGeneratedHeightRoughness;
+uniform samplerCube uGeneratedHeight;\nuniform samplerCube uGeneratedRoughness;
 uniform float uUseGeneratedMaps;
 uniform vec3 uSunPosition;
 uniform float uSunRadius;
@@ -248,7 +248,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.018;
   }
   vec3 bakedAlbedo=texture(uGeneratedAlbedo,n).rgb;
-  vec4 bakedMaterial=texture(uGeneratedHeightRoughness,n);
+  float bakedHeight=texture(uGeneratedHeight,n).r;\n  float bakedRoughness=texture(uGeneratedRoughness,n).r;
   albedo=mix(albedo,bakedAlbedo,uUseGeneratedMaps*0.72);
   roughness=mix(roughness,bakedMaterial.g,uUseGeneratedMaps);
   albedo*=mix(1.0,0.92+0.16*bakedMaterial.r,uUseGeneratedMaps);

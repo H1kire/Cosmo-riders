@@ -237,7 +237,6 @@ export class Solar3DView{
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
   this.hdr.begin(renderWidth,renderHeight);
   this.processSurfaceUploads();
-  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels));}}
   const sunState=states.get('sun')??{position:{x:0,y:0,z:0}};
   const sun=sunState.position,bodies=[...world.bodies.values()];
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
@@ -279,6 +278,7 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
+  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels));}}
   
   for(const body of bodies){
    g.useProgram(this.bodyProgram);

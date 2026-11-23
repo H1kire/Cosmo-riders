@@ -173,7 +173,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.0;
   }else if(uKind<1.5){
     vec3 continentWarp=domainWarp3(n*2.15+uSeed*0.013);
-    float continentField=fbm3(continentWarp)+0.22*fbm3(continentWarp*2.1+uSeed*0.07)+0.07*fbm3(n*11.0+uSeed*0.11);
+    float continentField=0.5+(fbm3(continentWarp)-0.5)+0.22*(fbm3(continentWarp*2.1+uSeed*0.07)-0.5)+0.07*(fbm3(n*11.0+uSeed*0.11)-0.5);
     float land=smoothstep(0.505,0.535,continentField);
     float coast=1.0-smoothstep(0.006,0.024,abs(continentField-0.520));
     float relief=ridged3(domainWarp3(n*18.0+uSeed*0.17));

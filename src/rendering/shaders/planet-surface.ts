@@ -191,7 +191,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=mix(0.72,0.035,land);
   }else if(uKind<2.5){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
-    bool mercury=uColor.r<0.55&&uColor.g<0.55;
+    bool mercury=uColor.r<0.55&&uColor.g<0.55;\n    bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
     float craterNoise=fbm3Filtered(n*(18.0+uDetail*40.0)+uSeed*3.0)+ridged3(n*25.0+uSeed*9.0)*0.16;
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);
@@ -202,6 +202,11 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
       albedo+=vec3(0.09,0.035,0.015)*craterRim;
       albedo*=1.0-0.22*craterBasin;
       albedo=mix(albedo,vec3(0.72,0.68,0.61),smoothstep(0.91,0.97,latitude)*clamp(uIceFraction*2.0,0.0,1.0));
+    }else if(io){
+      float sulfur=fbm3(n*vec3(17.0,23.0,17.0)+uSeed*5.0);
+      float frost=ridged3(n*31.0+uSeed*2.0);
+      albedo=mix(vec3(0.24,0.16,0.035),vec3(0.78,0.63,0.18),smoothstep(0.25,0.72,sulfur));
+      albedo=mix(albedo,vec3(0.88,0.82,0.55),smoothstep(0.72,0.92,frost)*0.45);
     }else{
       vec3 rock=mercury?vec3(0.20,0.19,0.18):vec3(0.30,0.31,0.32);
       albedo=rock*(0.62+0.75*broad+0.18*fine)+vec3(0.12,0.085,0.055)*uIronFraction*medium;

@@ -99,7 +99,10 @@ test('planet surface shader restores distinct procedural maps and physically bas
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/(22.0*distanceSquared)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uCameraPosition-vPosition'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('n*(8.0+uDetail*42.0)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('n*(18.0+uDetail*40.0)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('ridged3(n*25.0+uSeed*9.0)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('domainWarp3'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uWaterFraction'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uIronFraction'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uKind>5.5&&uKind<6.5)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('float cloudBands=fbm3(n*vec3(7.0,24.0,7.0)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('}else if(uKind<4.5)'));

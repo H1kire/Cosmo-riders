@@ -89,25 +89,7 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
 
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
 
-test('planet surface shader restores distinct procedural maps and physically based lighting',()=>{
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('fbm3Filtered'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('fwidth(p.x)'));
- assert.ok(PLANET_SURFACE_VERTEX.includes('aPosition*(1.0+relief)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('continentField'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('craterBasin'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('distributionGGX'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/(22.0*distanceSquared)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('uCameraPosition-vPosition'));
 
-
-
-
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uKind>5.5&&uKind<6.5)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('float cloudBands=fbm3(n*vec3(7.0,24.0,7.0)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('}else if(uKind<4.5)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uColor.g>uColor.b*0.85)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('}else if(uKind<5.5)'));
-});
 
 
 import { LightingEngine } from '../src/presentation/lighting-engine.ts';

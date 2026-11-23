@@ -40,7 +40,7 @@ export class SurfaceMapCache {
  }
  clear():void {this.entries.clear();this.bytes=0;}
  dispose():void {this.worker?.terminate();this.worker=null;this.workerFailed=true;for(const request of this.requests.values())request.reject(new Error('Surface cache disposed.'));this.requests.clear();this.pending.clear();this.clear();}
- get memoryBytes():number{return this.bytes;}
+ get workerEnabled():boolean{return this.worker!==null;}\n get memoryBytes():number{return this.bytes;}
  get size():number{return this.entries.size;}
  get pendingCount():number{return this.pending.size;}
 }

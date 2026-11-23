@@ -82,9 +82,10 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('far=100,near=Math.max(1e-10,this.distance*.001)')) throw new Error('Focused planetary views must retain the full 100 AU scene range while keeping the near plane proportional to camera distance.');
     if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');
-    if (!source.includes('sunStrength=clamp(uLightIntensity,0.0,1.0)') || !source.includes('l=.12+.88*sunStrength*sunFacing*visibility')) throw new Error('Planetary shading must retain ambient visibility on night sides and clamp direct illumination.');
-    if (!source.includes('if(uKind>5.5){gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);return;}') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
-    if (!source.includes('vec3 c=pow(uColor,vec3(2.2));')) throw new Error('Material colors must be linearized before HDR lighting and tone mapping.');
+    const surface = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
+    if (!surface.includes('uLightIntensity/22.0') || !surface.includes('distributionGGX') || !surface.includes('geometrySchlick') || !surface.includes('surfaceAlbedo')) throw new Error('Planetary materials must use distance-attenuated direct light, microfacet specular and distinct surface maps.');
+    if (!surface.includes('if(uKind>5.5)') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
+    if (!surface.includes('pow(uColor,vec3(2.2))')) throw new Error('Base material colors must be converted from sRGB to linear light.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
     if (!source.includes('drawAtmosphere(') || !source.includes('drawClouds(') || !source.includes('collectOccluders(') || !source.includes('calculateEclipse(') || !source.includes('this.graphics.shadows&&(profile||cloudLayers.length)?this.getCenterShadowVisibility')) throw new Error('Atmosphere, cloud and analytic shadow effects must be connected to the solar renderer and respect their toggles.');
     const atmosphereShader = await readFile(new URL('../src/rendering/shaders/planet-effects.ts', import.meta.url), 'utf8');
@@ -94,7 +95,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!quality.includes('renderScale') || !quality.includes('bloomIterations') || !quality.includes('shadowOccluders') || !source.includes('this.graphics?.renderScale') || !source.includes('this.graphics.maxMeshLod')) throw new Error('Quality presets must control actual render resolution and GPU effect quality.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');
-    if (!source.includes('uColor*(1.15+b*.12)') || source.includes('uColor*(1.15+fine*.12)')) throw new Error('Sun fragment shader contains an invalid or unresolved variable.');
+    if (!surface.includes('vec3(1.0,0.53,0.16)') || !surface.includes('vec3(0.008,0.025,0.085)')) throw new Error('Star and Earth surface material definitions are incomplete.');
     if (!source.includes('for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper)') || source.includes('localMode')) throw new Error('All solar-system orbits must remain in one shared scene without local-scene filtering.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {

@@ -163,6 +163,16 @@ test('satellite reference frames are transformed into the parent equatorial plan
  const planeError=Math.abs(r.x*pole.x+r.y*pole.y+r.z*pole.z)/Math.hypot(r.x,r.y,r.z);
  assert.ok(planeError<1e-10,'Io mean orbit should lie in the modeled Jupiter-equatorial plane');
 });
+test('satellite reference frames are transformed into the parent equatorial plane',()=>{
+ const world=createSolarSystemWorld();
+ const jupiter=world.bodies.get('jupiter')!,io=world.bodies.get('io')!;
+ const js=world.getBodyState('jupiter'),is=world.getBodyState('io');
+ const r={x:is.position.x-js.position.x,y:is.position.y-js.position.y,z:is.position.z-js.position.z};
+ const ra=jupiter.poleRightAscensionRad!,dec=jupiter.poleDeclinationRad!,eps=23.4392911*Math.PI/180;
+ const pole={x:Math.cos(dec)*Math.cos(ra),y:Math.cos(eps)*Math.cos(dec)*Math.sin(ra)+Math.sin(eps)*Math.sin(dec),z:-Math.sin(eps)*Math.cos(dec)*Math.sin(ra)+Math.cos(eps)*Math.sin(dec)};
+ const planeError=Math.abs(r.x*pole.x+r.y*pole.y+r.z*pole.z)/Math.hypot(r.x,r.y,r.z);
+ assert.ok(planeError<1e-10,'Io mean orbit should lie in the modeled Jupiter-equatorial plane');
+});
 test('regular moons use parent-facing synchronous orientation and orbital-period spin',()=>{
  const world=createSolarSystemWorld();
  for(const id of ['moon','phobos','deimos','io','europa','ganymede','callisto','titan','triton']){

@@ -41,3 +41,8 @@ The surface pipeline produces deterministic cube-map material data for rocky bod
 ## Current LOD and sampling update
 
 The focused-body texture LOD now uses earlier screen-space thresholds, while keeping 2048 texels per cube-map face as the maximum. Albedo generation skips the unused height calculation; roughness is generated from a lower-cost class-aware procedural field rather than evaluating the full surface material function again. The change reduces redundant CPU work but requires visual comparison of roughness appearance in the browser.
+
+
+## Sampling optimization
+
+The current generator can skip height evaluation during Albedo sampling and uses a cheaper class-aware roughness field. This removes a repeated full material evaluation, but roughness appearance needs browser-side visual review. Texture LOD thresholds were raised earlier in screen space; 2048 texels per cube-map face remains the maximum. See FOUNDATION_FIXES.md.

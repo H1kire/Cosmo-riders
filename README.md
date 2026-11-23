@@ -39,6 +39,10 @@ The Hohmann planner assumes coplanar circular orbits and does not solve launch w
 
 All internal physical quantities use metres, kilograms, seconds, metres per second, metres per second squared, pascals, newtons and cubic metres per second squared. Convert units only for display.
 
+## Foundation corrections
+
+See [docs/FOUNDATION_FIXES.md](docs/FOUNDATION_FIXES.md) for the active rendering pipeline, per-body display adaptation, adaptive camera clipping, ring renderer, satellite orbital reference frames, combined two-body gravity, time controls and UI behavior.
+
 ## Foundation fixes
 
 The development branch records the current implementation of adaptive camera clipping, screen-space body picking, distance-independent frame exposure, corrected atmosphere/cloud light normalization, satellite orbital reference frames, combined two-body gravity, 0×–100× time controls and restored utility-window navigation in [docs/FOUNDATION_FIXES.md](docs/FOUNDATION_FIXES.md). The satellite catalogue remains a modeled subset, not a complete list of natural satellites.

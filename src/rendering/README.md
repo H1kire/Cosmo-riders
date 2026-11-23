@@ -96,3 +96,8 @@ The procedural generator is tested independently for deterministic seeds, all kn
 ## Active path and implementation status
 
 The active browser path is Solar3DView for scene orchestration and HDRPipeline for post-processing. The older parallel RenderEngine/RenderPipeline and standalone material/effect classes are not currently connected to the scene. Atmosphere and cloud shells are rendered in separate passes; eclipse/shadow visibility is analytical. Full shadow maps and ring geometry are not yet implemented. See ../../docs/FOUNDATION_FIXES.md for the current behavior and limitations.
+
+
+## Active scene composition
+
+Solar3DView coordinates the live scene; HDRPipeline is its single post-processing compositor. RingRenderer is now connected for the four giant planets. Shared orbital-frame conversion is used by physics and both orbit visualizations. The older RenderEngine/RenderPipeline and standalone effect/material classes remain inactive scaffolding. Atmosphere/cloud passes and analytical eclipse visibility are active; full shadow maps and volumetric ring shadows are not.

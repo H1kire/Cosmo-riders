@@ -45,3 +45,8 @@ Run `npm run check` with Node.js 20+. Tests cover SI constants, vector arithmeti
 ## Development-branch correction (2026-11-23)
 
 The older status statements above describe an earlier stage and are superseded for the current development branch: planetary spin, procedural cube-map surfaces, atmosphere/cloud passes and analytic eclipse visibility are now present. Satellite propagation uses combined parent/body GM and explicit ecliptic or approximate parent-equatorial reference frames. This remains a Keplerian mean-element model, not a precision ephemeris. See FOUNDATION_FIXES.md.
+
+
+## Current implementation update
+
+The earlier statements in this audit that rotation, atmosphere, cloud layers and analytic eclipse visibility are absent describe an earlier revision and are superseded on the current development branch. Planet rotation and procedural surfaces are active; atmosphere and clouds are separate shader passes; occultation is analytical. Satellite elements use combined two-body GM and a shared approximate parent-equatorial transform where configured. The model is still Keplerian and does not claim precision Horizons ephemerides, full shadow maps or N-body dynamics. See FOUNDATION_FIXES.md.

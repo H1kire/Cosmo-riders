@@ -110,7 +110,7 @@ const satellites = [
  */
 export const SOLAR_SYSTEM_DATA = Object.freeze({
   epoch: 'J2000.0',
-  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000, equatorialRadiusM:695700000, rotationPeriodSeconds:25.38*DAY, axialTiltRad:deg(7.25), poleRightAscensionRad:deg(286.13),poleDeclinationRad:deg(63.87),primeMeridianRad:deg(84.176),rotationEpochSeconds:0,rotationDirection:1 },
+  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000, equatorialRadiusM:695700000, rotationPeriodSeconds:25.38*DAY, axialTiltRad:deg(7.25), poleRightAscensionRad:deg(286.13),poleDeclinationRad:deg(63.87),primeMeridianRad:deg(84.176),rotationEpochSeconds:0,rotationDirection:1 as const },
   mercury: planet('mercury', 'Mercury', 3.3011e23, 2439700, 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593,58.6462,.034,2440.53,4222.6,false,281.0097,61.4143,329.5469,1),
   venus: planet('venus', 'Venus', 4.8675e24, 6051800, 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255,243.018,177.36,6051.8,2802,false,272.76,67.16,160.20,-1),
   earth: {

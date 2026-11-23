@@ -88,7 +88,7 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
 });
 
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
-import { CLOUD_VERTEX, CLOUD_FRAGMENT } from '../src/rendering/shaders/planet-effects.ts';
+import { CLOUD_VERTEX } from '../src/rendering/shaders/planet-effects.ts';
 import { focusedSolarExposureMultiplier } from '../src/rendering/lighting/lighting-system.ts';
 
 

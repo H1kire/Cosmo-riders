@@ -58,6 +58,8 @@ test('shader library rejects missing and circular includes',()=>{
 test('graphics presets control real render scale and post-process quality',()=>{
  const low=createGraphicsSettings('low'),medium=createGraphicsSettings('medium'),high=createGraphicsSettings('high'),ultra=createGraphicsSettings('ultra');
  assert.ok(low.renderScale<medium.renderScale);
+ assert.equal(high.maxMeshLod,3);
+ assert.equal(ultra.maxMeshLod,3);
  assert.ok(medium.renderScale<high.renderScale);
  assert.ok(high.bloomIterations<ultra.bloomIterations);
  assert.ok(high.shadowOccluders<ultra.shadowOccluders);

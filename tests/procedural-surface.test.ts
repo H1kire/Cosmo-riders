@@ -61,6 +61,8 @@ test('surface samples use class-specific material families and composition',()=>
 test('unknown worlds infer dense atmospheres and accept explicit composition overrides',()=>{
  const dense=createSurfaceProfile({id:'exoworld-a',massKg:5e24,meanRadiusM:6e6,surface:{temperatureK:500,pressurePa:2e6,metalFraction:.3,mineralComposition:['iron','silicate']}});
  assert.equal(dense.class,'dense-atmosphere');assert.equal(dense.metalFraction,.3);assert.deepEqual(dense.mineralComposition,['iron','silicate']);
+ const titanLike=createSurfaceProfile({id:'titan-like',massKg:1.2e23,meanRadiusM:2.4e6,surface:{temperatureK:94,pressurePa:146000,iceFraction:.7,hydrocarbonFraction:.3}});
+ assert.equal(titanLike.class,'dense-atmosphere');
  const seeded=createSurfaceProfile({...bodies.earth,surfaceSeed:12345});
  assert.equal(seeded.seed,12345);
 });

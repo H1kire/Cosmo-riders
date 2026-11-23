@@ -173,7 +173,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     roughness=0.58;
     specular=0.045;
   }else if(uKind<4.5){
-    if(uColor.g>uColor.r){
+    if(uColor.g>uColor.b*0.85){
       float bands=sin((n.y+0.018*(broad-0.5))*72.0);
       albedo=mix(vec3(0.22,0.48,0.53),vec3(0.46,0.78,0.79),smoothstep(-0.2,0.55,bands)*0.38);
       albedo*=0.94+0.12*medium;

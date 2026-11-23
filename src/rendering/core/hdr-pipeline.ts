@@ -182,7 +182,7 @@ export class HDRPipeline implements Disposable {
     this.hdrSupported=Boolean(gl.getExtension('EXT_color_buffer_float'));
     this.activeHdr=this.hdrSupported;
     this.scene=target(gl,width,height,this.activeHdr,true);
-    const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
+    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(gl,bw,bh,this.activeHdr);
     this.ping=target(gl,bw,bh,this.activeHdr);
     this.pong=target(gl,bw,bh,this.activeHdr);
@@ -212,7 +212,7 @@ export class HDRPipeline implements Disposable {
     const width=this.scene.width,height=this.scene.height;
     this.destroyTargets();
     this.scene=target(this.gl,width,height,this.activeHdr,true);
-    const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
+    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
     this.ping=target(this.gl,bw,bh,this.activeHdr);
     this.pong=target(this.gl,bw,bh,this.activeHdr);
@@ -222,7 +222,7 @@ export class HDRPipeline implements Disposable {
     if(width===this.scene.width&&height===this.scene.height)return;
     this.destroyTargets();
     this.scene=target(this.gl,width,height,this.activeHdr,true);
-    const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
+    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
     this.ping=target(this.gl,bw,bh,this.activeHdr);
     this.pong=target(this.gl,bw,bh,this.activeHdr);

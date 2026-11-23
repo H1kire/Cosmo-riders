@@ -77,6 +77,8 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
  assert.ok(ATMOSPHERE_FRAGMENT.includes('rayleighDepth'));
  assert.ok(ATMOSPHERE_FRAGMENT.includes('mieDepth'));
  assert.ok(CLOUD_FRAGMENT.includes('fbm(p)'));
+ assert.ok(CLOUD_FRAGMENT.includes('fbmFiltered'));
+ assert.ok(CLOUD_FRAGMENT.includes('fwidth(p.x)'));
  assert.ok(CLOUD_FRAGMENT.includes('uWind'));
  assert.ok(CLOUD_FRAGMENT.includes('localShadowVisibility(vPosition)'));
 });

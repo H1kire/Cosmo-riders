@@ -21,6 +21,7 @@ uniform vec3 uAtmosphereColor;
 uniform float uMie;
 uniform float uMieAnisotropy;
 uniform float uIntensity;
+uniform float uLightIntensity;
 uniform float uShadowVisibility;
 uniform float uGroundRadius;
 uniform float uAtmosphereRadius;
@@ -79,8 +80,9 @@ void main(){
   vec3 mie=vec3(1.0,0.82,0.62)*mieDepth*phaseM*uMie*0.42;
   vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.14+0.86*day*uShadowVisibility);
   scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day*uShadowVisibility);
-  float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity;
-  gl_FragColor=vec4(scatter*uLightColor,alpha);
+  float solarIrradiance=uLightIntensity/22.0;
+  float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity*solarIrradiance;
+  gl_FragColor=vec4(scatter*uLightColor*solarIrradiance,alpha);
 }`;
 
 export const CLOUD_VERTEX = `attribute vec3 aPosition;
@@ -107,6 +109,7 @@ uniform float uOpacity;
 uniform float uScale;
 uniform float uSeed;
 uniform float uShadowVisibility;
+uniform float uLightIntensity;
 varying vec3 vNormal;
 varying vec3 vPosition;
 void main(){
@@ -121,7 +124,7 @@ void main(){
   float alpha=edge*holes*uOpacity;
   if(alpha<0.012)discard;
   float diffuse=max(dot(n,safeNormalize(uLight)),0.0);
-  float lighting=0.24+0.76*diffuse*uShadowVisibility;
-  vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting;
+  float lighting=0.01+0.99*diffuse*uShadowVisibility;
+  vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity/22.0);
   gl_FragColor=vec4(cloudColor,alpha*0.62);
 }`;

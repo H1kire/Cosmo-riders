@@ -137,10 +137,20 @@ function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=fa
       }
     }
   }
+  if(depth&&!msaaFramebuffer){
+    depthBuffer=gl.createRenderbuffer();
+    if(!depthBuffer)throw Error('Depth buffer allocation failed');
+    gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
+    gl.bindRenderbuffer(gl.RENDERBUFFER,depthBuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,w,h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depthBuffer);
+  }
   gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
   if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){
     gl.deleteFramebuffer(framebuffer);gl.deleteTexture(texture);
     if(depthBuffer)gl.deleteRenderbuffer(depthBuffer);
+    if(msaaColorBuffer)gl.deleteRenderbuffer(msaaColorBuffer);
+    if(msaaFramebuffer)gl.deleteFramebuffer(msaaFramebuffer);
     throw Error('HDR framebuffer incomplete');
   }
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);

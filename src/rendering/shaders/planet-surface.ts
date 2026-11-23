@@ -298,13 +298,13 @@ void main(){
     gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);
     return;
   }
-  vec3 n=normalize(vNormal);
-  vec3 bakedNormal=texture(uGeneratedNormal,n).xyz*2.0-1.0;
-  n=normalize(mix(n,bakedNormal,uUseGeneratedMaps*0.62));
+  vec3 surfaceDirection=normalize(vNormal);
+  vec3 bakedNormal=texture(uGeneratedNormal,surfaceDirection).xyz*2.0-1.0;
+  vec3 n=normalize(mix(surfaceDirection,bakedNormal,uUseGeneratedMaps*0.62));
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);
   float roughness,specularLevel;
-  vec3 albedo=surfaceAlbedo(n,roughness,specularLevel);
+  vec3 albedo=surfaceAlbedo(surfaceDirection,roughness,specularLevel);
   vec3 f0=mix(vec3(0.018),vec3(0.075),specularLevel);
   vec3 directLight=vec3(0.0);
   for(int i=0;i<4;i++){

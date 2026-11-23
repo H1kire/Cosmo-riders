@@ -227,7 +227,7 @@ void main(){
       float ndotl=max(dot(n,l),0.0);
       if(ndotl>0.0){
         float visibility=i==0?shadowVisibility(vPosition):1.0;
-        vec3 radiance=uLightColors[i]*(uLightIntensities[i]/distanceSquared)*visibility;
+        vec3 radiance=uLightColors[i]*(uLightIntensities[i]/(22.0*distanceSquared))*visibility;
         float ndoth=max(dot(n,h),0.0);
         float vdoth=max(dot(v,h),0.0);
         vec3 fresnel=f0+(1.0-f0)*pow(1.0-vdoth,5.0);

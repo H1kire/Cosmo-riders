@@ -49,6 +49,15 @@ export class CelestialBody {
     }
     if (semiMajorAxisM !== null) assertPositiveFinite(semiMajorAxisM, 'semiMajorAxisM');
     if (surfaceSeed !== null && !Number.isSafeInteger(surfaceSeed)) throw new RangeError('surfaceSeed must be a safe integer.');
+    if (surface !== null) {
+      for (const [key,value] of Object.entries(surface)) {
+        if (typeof value === 'number' && !Number.isFinite(value)) throw new RangeError('Surface parameter '+key+' must be finite.');
+        if (typeof value === 'number' && key.endsWith('Fraction') && (value<0||value>1)) throw new RangeError('Surface fraction '+key+' must be in [0, 1].');
+        if (typeof value === 'number' && ['tectonicActivity','volcanicActivity','impactAge','erosion','rotationFactor'].includes(key) && (value<0||value>1)) throw new RangeError('Surface parameter '+key+' must be in [0, 1].');
+      }
+      if (surface.temperatureK!==undefined && surface.temperatureK<=0) throw new RangeError('Surface temperature must be positive.');
+      if (surface.pressurePa!==undefined && surface.pressurePa<0) throw new RangeError('Surface pressure cannot be negative.');
+    }
     if (orbitalElements !== null) {
       if (!parentId) throw new Error('An orbiting body must have a parentId.');
       if (!Number.isFinite(orbitalElements.semiMajorAxisM) || orbitalElements.semiMajorAxisM <= 0) {
@@ -69,6 +78,7 @@ export class CelestialBody {
     this.semiMajorAxisM = semiMajorAxisM ?? orbitalElements?.semiMajorAxisM ?? null;
     this.orbitalElements = orbitalElements ? Object.freeze({ ...orbitalElements }) : null;
     this.surfaceSeed = surfaceSeed;
+    this.surface = surface ? Object.freeze({ ...surface }) : null;
     Object.freeze(this);
   }
 }

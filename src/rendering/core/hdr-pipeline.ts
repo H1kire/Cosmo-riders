@@ -68,10 +68,10 @@ void main(){
   float r=length(d);
   if(uGlareEnabled==1&&uSunVisible>0.0){
     float angle=atan(d.y,d.x);
-    float rays=pow(abs(cos(angle*4.0)),28.0)*exp(-r*17.0);
-    float crossStreak=(exp(-abs(d.x)*420.0)+exp(-abs(d.y)*420.0))*exp(-r*12.0);
-    float core=halo(vUv,uSunUv,2600.0);
-    float glare=(rays*0.32+crossStreak*0.12+core*0.75)*uGlareStrength*uSunVisible;
+    float rays=pow(abs(cos(angle*4.0)),32.0)*exp(-r*48.0);
+    float crossStreak=(exp(-abs(d.x)*900.0)+exp(-abs(d.y)*900.0))*exp(-r*34.0);
+    float core=halo(vUv,uSunUv,10500.0);
+    float glare=(rays*0.16+crossStreak*0.035+core*0.18)*uGlareStrength*uSunVisible;
     hdr+=vec3(1.0,0.79,0.53)*glare;
   }
   if(uLensFlareEnabled==1&&uSunVisible>0.0){
@@ -79,9 +79,9 @@ void main(){
     vec2 p1=uSunUv+axis*0.48;
     vec2 p2=uSunUv+axis*0.92;
     vec2 p3=uSunUv-axis*0.32;
-    float ghosts=halo(vUv,p1,620.0)*0.48+halo(vUv,p2,1050.0)*0.34+halo(vUv,p3,1500.0)*0.22;
-    float anamorphic=exp(-abs(vUv.y-uSunUv.y)*760.0)*exp(-abs(vUv.x-uSunUv.x)*8.0);
-    hdr+=vec3(0.48,0.68,1.0)*(ghosts+anamorphic*0.12)*uLensFlareStrength*uSunVisible;
+    float ghosts=halo(vUv,p1,2600.0)*0.18+halo(vUv,p2,4200.0)*0.12+halo(vUv,p3,6500.0)*0.08;
+    float anamorphic=exp(-abs(vUv.y-uSunUv.y)*1800.0)*exp(-abs(vUv.x-uSunUv.x)*28.0);
+    hdr+=vec3(0.48,0.68,1.0)*(ghosts+anamorphic*0.035)*uLensFlareStrength*uSunVisible;
   }
   hdr*=uExposure;
   vec3 mapped;
@@ -204,8 +204,8 @@ export class HDRPipeline implements Disposable {
   private sunUv:[number,number]=[0.5,0.5];
   private sunVisible=0;
   settings:HDRPipelineSettings={
-    bloom:true,bloomThreshold:1.45,bloomStrength:0.42,bloomIterations:4,
-    glare:true,glareStrength:0.28,lensFlare:true,lensFlareStrength:0.32,
+    bloom:true,bloomThreshold:1.55,bloomStrength:0.28,bloomIterations:3,
+    glare:true,glareStrength:0.09,lensFlare:true,lensFlareStrength:0.055,
     exposure:1,toneMapping:'aces',hdr:true
   };
 

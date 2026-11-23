@@ -5,10 +5,6 @@ uniform mat4 uModel;
 uniform float uKind;
 uniform float uDetail;
 uniform float uSeed;
-uniform float uUseGeneratedMaps;
-uniform samplerCube uGeneratedHeight;
-uniform samplerCube uPreviousHeight;
-uniform float uPreviousMapsEnabled;
 uniform float uTectonicActivity;
 uniform float uVolcanicActivity;
 varying vec3 vNormal;
@@ -53,12 +49,8 @@ void main(){
   float relief=0.0;
   if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
   else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009*uDetail;
-  float generatedHeight=textureLod(uGeneratedHeight,n,0.0).r-0.5;
-  float mapBlend=uUseGeneratedMaps;
-  if(uPreviousMapsEnabled>0.5){float previousHeight=textureLod(uPreviousHeight,n,0.0).r-0.5;generatedHeight=mix(previousHeight,generatedHeight,uUseGeneratedMaps);mapBlend=1.0;}
-  float heightScale=uKind<1.5?0.009:(uKind<2.5?0.045:(uKind>4.9&&uKind<5.5?0.02:0.0));
-  float generatedRelief=generatedHeight*heightScale*uDetail;
-  relief=mix(relief,generatedRelief,mapBlend);
+  float heightScale=uKind<1.5?0.0035:(uKind<2.5?0.012:(uKind>4.9&&uKind<5.5?0.003:0.0));
+  relief*=heightScale;
   vec4 world=uModel*vec4(aPosition*(1.0+relief),1.0);
   vPosition=world.xyz;
   vNormal=normalize(mat3(uModel)*n);
@@ -83,16 +75,6 @@ uniform float uIronFraction;
 uniform float uTectonicActivity;
 uniform float uVolcanicActivity;
 uniform float uErosion;
-uniform samplerCube uGeneratedAlbedo;
-uniform samplerCube uGeneratedNormal;
-uniform samplerCube uGeneratedHeight;
-uniform samplerCube uGeneratedRoughness;
-uniform samplerCube uPreviousAlbedo;
-uniform samplerCube uPreviousNormal;
-uniform samplerCube uPreviousHeight;
-uniform samplerCube uPreviousRoughness;
-uniform float uPreviousMapsEnabled;
-uniform float uUseGeneratedMaps;
 uniform vec3 uSunPosition;
 uniform float uSunRadius;
 uniform vec3 uOccluders[8];
@@ -190,22 +172,24 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     roughness=0.42;
     specular=0.0;
   }else if(uKind<1.5){
-    float continentField=broad+(medium-0.5)*0.12+tectonics*0.09;
-    float land=smoothstep(0.468,0.548,continentField);
-    land=mix(land, smoothstep(0.46,0.56,continentField+ridged3(n*23.0+uSeed)*0.045),0.38);
-    float coast=1.0-smoothstep(0.0,0.035,abs(continentField-0.505));
-    float desert=smoothstep(0.42,0.67,medium+latitude*0.12+uIronFraction*0.08);
-    vec3 ocean=mix(vec3(0.006,0.022,0.075),vec3(0.014,0.105,0.245),medium);
-    vec3 vegetation=mix(vec3(0.035,0.095,0.028),vec3(0.17,0.27,0.082),fine);
-    vec3 dryLand=mix(vec3(0.24,0.16,0.075),vec3(0.52,0.34,0.16),fine);
-    vec3 landColor=mix(vegetation,dryLand,desert*0.72);
-    landColor=mix(landColor,vec3(0.72,0.67,0.52),smoothstep(0.77,0.93,latitude));
-    float oceanCoverage=clamp(uWaterFraction*1.35,0.0,1.0);
-    albedo=mix(landColor,ocean,oceanCoverage*(1.0-land));
-    albedo=mix(albedo,vec3(0.62,0.68,0.67),coast*0.28);
-    float ice=smoothstep(0.86-uIceFraction*0.16,0.96-uIceFraction*0.12,latitude)*clamp(uIceFraction*2.5,0.0,1.0);
-    albedo=mix(albedo,vec3(0.82,0.88,0.91),ice);
-    roughness=mix(0.075,0.88,land);
+    vec3 continentWarp=domainWarp3(n*2.15+uSeed*0.013);
+    float continentField=fbm3(continentWarp)+0.22*fbm3(continentWarp*2.1+uSeed*0.07)+0.07*fbm3(n*11.0+uSeed*0.11);
+    float land=smoothstep(0.505,0.535,continentField);
+    float coast=1.0-smoothstep(0.006,0.024,abs(continentField-0.520));
+    float relief=ridged3(domainWarp3(n*18.0+uSeed*0.17));
+    float climate=medium+latitude*0.16+uIronFraction*0.08;
+    float desert=smoothstep(0.47,0.69,climate);
+    vec3 ocean=mix(vec3(0.004,0.018,0.064),vec3(0.012,0.105,0.24),medium);
+    vec3 vegetation=mix(vec3(0.025,0.095,0.035),vec3(0.13,0.29,0.095),fine);
+    vec3 dryLand=mix(vec3(0.28,0.18,0.09),vec3(0.58,0.39,0.20),fine);
+    vec3 landColor=mix(vegetation,dryLand,desert*0.78);
+    landColor=mix(landColor,vec3(0.56,0.53,0.44),smoothstep(0.77,0.94,latitude)*0.48);
+    landColor*=0.91+0.18*relief;
+    albedo=mix(ocean,landColor,land);
+    albedo=mix(albedo,vec3(0.58,0.62,0.57),coast*0.2);
+    float ice=smoothstep(0.87-uIceFraction*0.12,0.97-uIceFraction*0.08,latitude)*clamp(uIceFraction*2.7,0.0,1.0);
+    albedo=mix(albedo,vec3(0.84,0.89,0.92),ice);
+    roughness=mix(0.075,0.88,land);    roughness=mix(0.075,0.88,land);
     specular=mix(0.72,0.035,land);
   }else if(uKind<2.5){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
@@ -242,16 +226,18 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.018;
   }else if(uKind<3.5){
     float saturn=uColor.g>0.60?1.0:0.0;
-    float warp=(fbm3(domainWarp3(n*vec3(5.0,18.0,5.0)+uSeed))-0.5)*0.095;
-    float band=sin((n.y+warp)*(saturn>0.5?82.0:96.0)+medium*2.4);
-    float storms=fbm3(n*vec3(18.0,7.0,18.0)+uSeed*4.0);
-    vec3 base=saturn>0.5?vec3(0.48,0.34,0.19):vec3(0.40,0.20,0.105);
-    vec3 lightBand=saturn>0.5?vec3(0.78,0.64,0.43):vec3(0.72,0.47,0.29);
-    albedo=mix(base,lightBand,smoothstep(-0.18,0.55,band)*0.72);
-    albedo=mix(albedo,albedo*vec3(0.66,0.78,0.92),smoothstep(0.68,0.88,storms)*0.24);
-    albedo=mix(albedo,vec3(0.55,0.19,0.08),smoothstep(0.82,0.96,volcanic)*0.12);
-    roughness=0.58;
-    specular=0.045;
+    vec3 flow=domainWarp3(n*vec3(3.5,8.0,3.5)+uSeed*0.07);
+    float turbulence=fbm3(flow*vec3(2.0,1.0,2.0));
+    float beltCoordinate=n.y+(turbulence-0.5)*0.045+(fbm3(n*vec3(8.0,3.0,8.0)+uSeed)*0.5-0.25)*0.025;
+    float belts=sin(beltCoordinate*(saturn>0.5?31.0:42.0)+0.22*fbm3(flow*2.0));
+    float stormField=fbm3(domainWarp3(n*vec3(12.0,5.0,12.0)+uSeed*0.19));
+    float softBelts=smoothstep(-0.48,0.58,belts);
+    vec3 base=saturn>0.5?vec3(0.43,0.31,0.19):vec3(0.34,0.17,0.095);
+    vec3 lightBand=saturn>0.5?vec3(0.69,0.57,0.40):vec3(0.65,0.42,0.27);
+    albedo=mix(base,lightBand,softBelts*0.52+0.08*turbulence);
+    albedo=mix(albedo,albedo*vec3(0.76,0.82,0.91),smoothstep(0.70,0.91,stormField)*0.18);
+    roughness=0.72;
+    specular=0.022;    specular=0.045;
   }else if(uKind<4.5){
     if(uColor.g>uColor.b*0.85){
       float bands=sin((n.y+0.018*(broad-0.5))*72.0);
@@ -288,15 +274,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
       roughness=0.64;specular=0.025;
     }
   }
-  vec3 bakedAlbedo=texture(uGeneratedAlbedo,n).rgb;
-  float bakedHeight=texture(uGeneratedHeight,n).r;
-  float bakedRoughness=texture(uGeneratedRoughness,n).r;
-  float mapBlend=uUseGeneratedMaps;
-  if(uPreviousMapsEnabled>0.5){bakedAlbedo=mix(texture(uPreviousAlbedo,n).rgb,bakedAlbedo,uUseGeneratedMaps);bakedHeight=mix(texture(uPreviousHeight,n).r,bakedHeight,uUseGeneratedMaps);bakedRoughness=mix(texture(uPreviousRoughness,n).r,bakedRoughness,uUseGeneratedMaps);mapBlend=1.0;}
-  albedo=mix(albedo,bakedAlbedo,mapBlend);
-  roughness=mix(roughness,bakedRoughness,mapBlend);
-  albedo*=mix(1.0,0.9+0.2*bakedHeight,mapBlend);
-  return max(albedo,vec3(0.0));
+  return max(albedo,vec3(0.0));  return max(albedo,vec3(0.0));
 }
 float distributionGGX(float ndoth,float roughness){
   float a=roughness*roughness;
@@ -315,11 +293,7 @@ void main(){
     return;
   }
   vec3 surfaceDirection=normalize(vSurfaceDirection);
-  vec3 bakedNormal=texture(uGeneratedNormal,surfaceDirection).xyz*2.0-1.0;
-  float normalBlend=uUseGeneratedMaps;
-  if(uPreviousMapsEnabled>0.5){vec3 previousNormal=texture(uPreviousNormal,surfaceDirection).xyz*2.0-1.0;bakedNormal=normalize(mix(previousNormal,bakedNormal,uUseGeneratedMaps));normalBlend=1.0;}
-  vec3 worldBakedNormal=normalize(mat3(uModel)*bakedNormal);
-  vec3 n=normalize(mix(normalize(vNormal),worldBakedNormal,normalBlend*0.62));
+  vec3 n=normalize(vNormal);
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);
   float roughness,specularLevel;

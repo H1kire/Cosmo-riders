@@ -75,7 +75,8 @@ export class Solar3DView{
  }
  configurePlanetEffects(){
   const profiles:[string,number,[number,number,number],number,number][]=[
-   ['earth',110000,[.22,.48,1.0],.62,1.0],\n   ['titan',400000,[.72,.43,.18],.96,1.25],
+   ['earth',110000,[.22,.48,1.0],.62,1.0],
+   ['titan',400000,[.72,.43,.18],.96,1.25],\n   ['titan',400000,[.72,.43,.18],.96,1.25],
    ['venus',250000,[1.0,.58,.28],.92,1.1],
    ['mars',100000,[1.0,.34,.19],.34,.72],
    ['jupiter',1200000,[.82,.62,.43],.48,.58],
@@ -88,7 +89,8 @@ export class Solar3DView{
    if(body)this.atmosphereSystem.setProfile({bodyId:id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:height,rayleigh:color, mie,rayleighScaleHeightM:height*.12,mieScaleHeightM:height*.08,mieAnisotropy:.76,intensity});
   }
   const cloudProfiles:[string,number,number,number,number][]=[
-   ['earth',18000,.48,.82,5.8],\n   ['titan',18000,.72,.62,3.8],
+   ['earth',18000,.48,.82,5.8],
+   ['titan',18000,.72,.62,3.8],
    ['venus',55000,.59,.78,4.4],
    ['jupiter',70000,.55,.54,7.2],
    ['saturn',65000,.58,.48,6.0],
@@ -306,7 +308,7 @@ export class Solar3DView{
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
      const surfaceResolution=surfaceResolutionForProjectedRadius(px);
-     this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
+     if(px>=8&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20)this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
      this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
      g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
      g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
@@ -456,6 +458,7 @@ export class Solar3DView{
   this.labelNodes?.clear();
   this.orbitCache?.clear();
   for(const entry of this.surfaceGpuTextures?.values()??[])for(const texture of entry.textures)this.gl.deleteTexture(texture);
+  for(const job of this.surfaceUploadQueue??[])for(const texture of job.textures??[])this.gl.deleteTexture(texture);
   this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceUploadQueue?.splice(0);this.surfaceMapCache?.dispose();this.surfaceGpuBytes=0;
   this.stellarSourceDefinitions?.clear();
  }

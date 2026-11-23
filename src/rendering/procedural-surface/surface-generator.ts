@@ -86,9 +86,14 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
    const sample=sampleSurface(dir,profile),i=index(face,x,y);
    albedo[i]=Math.round(clamp(sample.albedo[0])*255);albedo[i+1]=Math.round(clamp(sample.albedo[1])*255);albedo[i+2]=Math.round(clamp(sample.albedo[2])*255);albedo[i+3]=255;
    heightRoughness[i]=Math.round(clamp(sample.height*.5+.5)*255);heightRoughness[i+1]=Math.round(sample.roughness*255);heightRoughness[i+2]=0;heightRoughness[i+3]=255;
-   const du=sampleSurface(FACE_DIRECTIONS[face](u+eps,v),profile).height-sampleSurface(FACE_DIRECTIONS[face](u-eps,v),profile).height;
-   const dv=sampleSurface(FACE_DIRECTIONS[face](u,v+eps),profile).height-sampleSurface(FACE_DIRECTIONS[face](u,v-eps),profile).height;
-   const nn=[-du*12,-dv*12,1],length=Math.hypot(...nn);const nx=nn[0]/length,ny=nn[1]/length,nz=nn[2]/length;
+   const length=Math.hypot(...dir),unit=dir.map(value=>value/length) as [number,number,number];
+   const reference: [number,number,number]=Math.abs(unit[1])<.9?[0,1,0]:[1,0,0];
+   const tangent=[unit[1]*reference[2]-unit[2]*reference[1],unit[2]*reference[0]-unit[0]*reference[2],unit[0]*reference[1]-unit[1]*reference[0]];
+   const tangentLength=Math.hypot(...tangent),t1=tangent.map(value=>value/tangentLength),t2=[unit[1]*t1[2]-unit[2]*t1[1],unit[2]*t1[0]-unit[0]*t1[2],unit[0]*t1[1]-unit[1]*t1[0]];
+   const offset=(axis:number[],sign:number)=>{const d=unit.map((value,k)=>value+axis[k]*eps*sign),m=Math.hypot(...d);return d.map(value=>value/m) as [number,number,number];};
+   const du=(sampleSurface(offset(t1,1),profile).height-sampleSurface(offset(t1,-1),profile).height)/(2*eps);
+   const dv=(sampleSurface(offset(t2,1),profile).height-sampleSurface(offset(t2,-1),profile).height)/(2*eps);
+   const nn=unit.map((value,k)=>value-t1[k]*du*.08-t2[k]*dv*.08),normalLength=Math.hypot(...nn),nx=nn[0]/normalLength,ny=nn[1]/normalLength,nz=nn[2]/normalLength;
    normal[i]=Math.round((nx*.5+.5)*255);normal[i+1]=Math.round((ny*.5+.5)*255);normal[i+2]=Math.round((nz*.5+.5)*255);normal[i+3]=255;
   }
   if(yieldFace)await yieldFace();

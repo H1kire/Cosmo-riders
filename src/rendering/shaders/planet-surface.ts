@@ -88,6 +88,18 @@ float fbm3(vec3 p){
   }
   return value;
 }
+float fbm3Filtered(vec3 p){
+  float footprint=max(max(fwidth(p.x),fwidth(p.y)),fwidth(p.z));
+  float value=0.0,amplitude=0.5;
+  for(int i=0;i<6;i++){
+    float octaveWeight=1.0-smoothstep(0.32,0.92,footprint);
+    value+=noise3(p)*amplitude*octaveWeight;
+    p=p*2.03+vec3(17.1,9.2,13.7);
+    footprint*=2.03;
+    amplitude*=0.5;
+  }
+  return value;
+}
 float shadowVisibility(vec3 point){
   if(uShadows==0)return 1.0;
   vec3 toSun=uSunPosition-point;
@@ -112,14 +124,14 @@ float shadowVisibility(vec3 point){
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   float broad=fbm3(n*3.1+uSeed);
   float medium=fbm3(n*(7.0+uDetail*6.0)+uSeed*2.7);
-  float fine=fbm3(n*(8.0+uDetail*42.0)+uSeed*5.1);
+  float fine=fbm3Filtered(n*(8.0+uDetail*42.0)+uSeed*5.1);
   float latitude=abs(n.y);
   vec3 albedo=pow(uColor,vec3(2.2));
   roughness=0.82;
   specular=0.035;
 
   if(uKind<0.5){
-    float granulation=fbm3(n*95.0+uSeed*7.0);
+    float granulation=fbm3Filtered(n*95.0+uSeed*7.0);
     float cells=sin((n.y*32.0+broad*4.0)*PI)*0.5+0.5;
     albedo=mix(vec3(0.30,0.075,0.018),vec3(1.0,0.53,0.16),0.55+0.35*cells+0.1*granulation);
     roughness=0.42;
@@ -143,7 +155,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   }else if(uKind<2.5){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
     bool mercury=uColor.r<0.55&&uColor.g<0.55;
-    float craterNoise=fbm3(n*(18.0+uDetail*40.0)+uSeed*3.0);
+    float craterNoise=fbm3Filtered(n*(18.0+uDetail*40.0)+uSeed*3.0);
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);
     if(mars){

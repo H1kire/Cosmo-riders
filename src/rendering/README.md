@@ -67,3 +67,5 @@ Orbit paths use 512–1024 samples depending on orbital eccentricity. The WebGL2
 
 
 Procedural terrain uses derivative-filtered fBm octaves (`fwidth`) to suppress noise frequencies smaller than a pixel. Texture-quality presets cap the shader detail independently from geometric LOD, so distant terrain does not pay for close-range detail and close views retain additional detail without uncontrolled aliasing.
+
+Cloud density also filters its fine procedural noise by the fragment footprint, preventing high-frequency cloud detail from turning into shimmer or blocky aliasing at distance. Ultra atmosphere integration uses the shader's full 16-sample limit; High uses 10 samples.

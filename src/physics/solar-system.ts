@@ -44,6 +44,7 @@ const satellite = (
   massKg: gmKm3S2 * 1e9 / G,
   meanRadiusM: radiusKm * 1000,
   rotationPeriodSeconds:null,tidalLock,
+  orbitalReferenceFrame:parentId==='earth'?'ecliptic':'parent-equator',
   surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
     semiMajorAxisM: aKm * 1000,
@@ -135,7 +136,7 @@ export function createSolarSystemWorld(options = {}) {
   }
   for (const data of satellites) {
     const parent=world.bodies.get(data.parentId)!;
-    const rotationPeriodSeconds=data.tidalLock?orbitalPeriod(data.elements.semiMajorAxisM,parent.mu):data.rotationPeriodSeconds;
+    const rotationPeriodSeconds=data.tidalLock?orbitalPeriod(data.elements.semiMajorAxisM,parent.mu+data.massKg*G):data.rotationPeriodSeconds;
     world.addBody(new CelestialBody({ ...data, rotationPeriodSeconds, orbitalElements: data.elements }));
   }
   world.initializeEphemerides();

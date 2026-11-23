@@ -26,6 +26,7 @@ export interface CelestialBodyOptions {
   readonly solarDaySeconds?: number | null;
   readonly atmosphereComposition?: readonly string[];
   readonly hasRings?: boolean;
+  readonly orbitalReferenceFrame?: 'ecliptic' | 'parent-equator';
 }
 
 export class CelestialBody {
@@ -53,6 +54,7 @@ export class CelestialBody {
   readonly solarDaySeconds: number | null;
   readonly atmosphereComposition: readonly string[];
   readonly hasRings: boolean;
+  readonly orbitalReferenceFrame: 'ecliptic' | 'parent-equator';
 
   constructor({
     id,
@@ -78,6 +80,7 @@ export class CelestialBody {
     solarDaySeconds = null,
     atmosphereComposition = [],
     hasRings = false,
+    orbitalReferenceFrame = 'ecliptic',
   }: CelestialBodyOptions) {
     if (typeof id !== 'string' || !id.trim()) throw new TypeError('Body id must be non-empty.');
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Body name must be non-empty.');
@@ -139,6 +142,8 @@ export class CelestialBody {
     this.solarDaySeconds = solarDaySeconds;
     this.atmosphereComposition = Object.freeze([...atmosphereComposition]);
     this.hasRings = Boolean(hasRings);
+    if(orbitalReferenceFrame!=='ecliptic'&&orbitalReferenceFrame!=='parent-equator')throw new RangeError('Unsupported orbital reference frame.');
+    this.orbitalReferenceFrame=orbitalReferenceFrame;
     Object.freeze(this);
   }
   /** Сидерический угол вычисляется непосредственно из единого времени симуляции. */

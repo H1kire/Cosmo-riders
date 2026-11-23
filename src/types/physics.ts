@@ -23,6 +23,7 @@ export interface CelestialBodyDefinition {
   readonly solarDaySeconds?: number | null;
   readonly atmosphereComposition?: readonly string[];
   readonly hasRings?: boolean;
+  readonly orbitalReferenceFrame?: 'ecliptic' | 'parent-equator';
   readonly mu: number;
   readonly parentId: string | null;
 }

@@ -6,6 +6,21 @@ import { sphereOfInfluence } from './orbital-elements.ts';
 import type { CelestialBody } from './celestial-body.ts';
 import type { OrbitalState, PhysicsWorldOptions, VesselState } from '../types/physics.ts';
 
+function relativeGravitationalParameter(body:CelestialBody,parent:CelestialBody):number {
+ return body.mu+parent.mu;
+}
+function rotateStateToParentEquator(state:OrbitalState,body:CelestialBody,parent:CelestialBody):OrbitalState {
+ const ra=parent.poleRightAscensionRad,dec=parent.poleDeclinationRad;
+ if(body.orbitalReferenceFrame!=='parent-equator'||ra===null||dec===null)return state;
+ const epsilon=23.4392911*Math.PI/180;
+ const pole=[Math.cos(dec)*Math.cos(ra),Math.cos(epsilon)*Math.cos(dec)*Math.sin(ra)+Math.sin(epsilon)*Math.sin(dec),-Math.sin(epsilon)*Math.cos(dec)*Math.sin(ra)+Math.cos(epsilon)*Math.sin(dec)];
+ const normalize=(v:number[])=>{const m=Math.hypot(...v)||1;return v.map(x=>x/m);};
+ const x=normalize([1-pole[0]*pole[0],-pole[1]*pole[0],-pole[2]*pole[0]]);
+ const y=normalize([pole[1]*x[2]-pole[2]*x[1],pole[2]*x[0]-pole[0]*x[2],pole[0]*x[1]-pole[1]*x[0]]);
+ const transform=(v:{x:number;y:number;z:number})=>({x:x[0]*v.x+y[0]*v.y+pole[0]*v.z,y:x[1]*v.x+y[1]*v.y+pole[1]*v.z,z:x[2]*v.x+y[2]*v.y+pole[2]*v.z});
+ return {position:transform(state.position),velocity:transform(state.velocity)};
+}
+
 /** Fixed-step hierarchical ephemeris + patched-conic vessel propagation.
  * Simulation epoch is J2000.0; each orbit is a two-body Kepler segment.
  */
@@ -46,7 +61,7 @@ export class PhysicsWorld {
    if(!body.parentId){this.bodyStates.set(body.id,{position:body.position,velocity:body.velocity});continue;}
    const parent=this.bodies.get(body.parentId);
    if(body.orbitalElements){
-    let state;try{state=orbitalElementsToState(body.orbitalElements,parent.mu);}catch(error){throw new Error('Failed to initialize orbital elements for '+body.id+': '+error.message);}
+    let state;try{state=rotateStateToParentEquator(orbitalElementsToState(body.orbitalElements,relativeGravitationalParameter(body,parent)),body,parent);}catch(error){throw new Error('Failed to initialize orbital elements for '+body.id+': '+error.message);}
     this.bodyInitialRelativeStates.set(body.id,state);
     this.bodyStates.set(body.id,{position:add(this.bodyStates.get(parent.id).position,state.position),velocity:add(this.bodyStates.get(parent.id).velocity,state.velocity)});
    }else{
@@ -79,7 +94,7 @@ export class PhysicsWorld {
   for(const body of this.bodies.values()){
    if(!body.parentId){states.set(body.id,{position:body.position,velocity:body.velocity});continue;}
    const parent=this.bodies.get(body.parentId),initial=this.bodyInitialRelativeStates.get(body.id);
-   const relative=propagateKepler({position:initial.position,velocity:initial.velocity,mu:parent.mu,deltaTimeSeconds:timeSeconds});
+   const relative=propagateKepler({position:initial.position,velocity:initial.velocity,mu:relativeGravitationalParameter(body,parent),deltaTimeSeconds:timeSeconds});
    const parentState=states.get(parent.id);
    states.set(body.id,{position:add(parentState.position,relative.position),velocity:add(parentState.velocity,relative.velocity)});
   }
@@ -106,7 +121,7 @@ export class PhysicsWorld {
   for(const body of this.bodies.values()){
    if(!body.parentId)continue;
    const parent=this.bodies.get(body.parentId),initial=this.bodyInitialRelativeStates.get(body.id);
-   const relative=propagateKepler({position:initial.position,velocity:initial.velocity,mu:parent.mu,deltaTimeSeconds:this.simulationTimeSeconds});
+   const relative=propagateKepler({position:initial.position,velocity:initial.velocity,mu:relativeGravitationalParameter(body,parent),deltaTimeSeconds:this.simulationTimeSeconds});
    const parentState=this.bodyStates.get(parent.id);
    this.bodyStates.set(body.id,{position:add(parentState.position,relative.position),velocity:add(parentState.velocity,relative.velocity)});
   }

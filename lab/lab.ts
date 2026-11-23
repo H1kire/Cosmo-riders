@@ -62,6 +62,62 @@ const body = id => world.bodies.get(id);
 const currentPrimary = () => body(vessel.primaryBodyId);
 const currentPrimaryState = () => getBody(vessel.primaryBodyId);
 
+function renderSystemNavigation(){
+  const nav=$('system-navigation');
+  if(!nav||!world)return;
+  nav.replaceChildren();
+  const roots=[...world.bodies.values()].filter(item=>!item.parentId);
+  for(const star of roots){
+    const entries=[star,...[...world.bodies.values()].filter(item=>item.parentId===star.id)];
+    for(const item of entries){
+      const button=document.createElement('button');
+      button.type='button';button.className='system-nav-item'+(item.id===selectedPlanetId?' active':'');
+      button.dataset.bodyId=item.id;
+      button.title='Перейти к '+item.name;
+      button.textContent=item.parentId?item.name:(item.id==='sun'?'☼ '+item.name:'★ '+item.name);
+      button.addEventListener('click',()=>{
+        selectedPlanetId=item.id;
+        solar3D?.focusOn(item.id,world);
+        renderSystemNavigation();
+      });
+      nav.append(button);
+    }
+  }
+}
+function updatePlanetInformation(){
+  const host=$('planet-info');
+  if(!host||!vessel||!world)return;
+  const item=currentPrimary();
+  if(!item){host.textContent='Нет данных о текущем небесном теле.';return;}
+  const parent=item.parentId?body(item.parentId):null;
+  const children=[...world.bodies.values()].filter(candidate=>candidate.parentId===item.id);
+  const volume=4*Math.PI*Math.pow(item.meanRadiusM,3)/3;
+  const density=item.massKg/volume;
+  const gravity=item.mu/(item.meanRadiusM*item.meanRadiusM);
+  const elements=item.orbitalElements;
+  const period=elements&&parent?orbitalPeriod(elements.semiMajorAxisM,parent.mu):null;
+  const kind=!parent?'Звезда':parent.parentId===null?'Планета':'Естественный спутник';
+  const rows=[
+    ['Название',item.name],['Тип объекта',kind],['Родительское тело',parent?.name??'—'],
+    ['Масса',fmt(item.massKg,4)+' кг'],['Средний радиус',distanceLabel(item.meanRadiusM)],
+    ['Диаметр',distanceLabel(item.meanRadiusM*2)],['Средняя плотность',fmt(density,1)+' кг/м³'],
+    ['Ускорение свободного падения',fmt(gravity,4)+' м/с²'],
+    ['Орбитальный период',period?fmt(period/DAY,4)+' суток':'Нет орбиты / данные отсутствуют'],
+    ['Большая полуось',elements?distanceLabel(elements.semiMajorAxisM):'Нет данных'],
+    ['Эксцентриситет',elements?fmt(elements.eccentricity,7):'Нет данных'],
+    ['Наклонение орбиты',elements?fmt(elements.inclination*180/Math.PI,4)+'°':'Нет данных'],
+    ['Период вращения','Нет данных в модели'],
+    ['Продолжительность суток','Нет данных в модели'],
+    ['Средняя температура','Нет данных в модели'],
+    ['Атмосфера','Параметры не заданы в физической модели'],
+    ['Естественные спутники',parent===null?String(children.length):'—']
+  ];
+  host.replaceChildren();
+  const heading=document.createElement('div');heading.className='planet-info-heading';heading.textContent=item.name;host.append(heading);
+  const grid=document.createElement('div');grid.className='data-list';
+  for(const [label,value] of rows){const row=document.createElement('div');const a=document.createElement('span'),b=document.createElement('b');a.textContent=label;b.textContent=value;row.append(a,b);grid.append(row);}
+  host.append(grid);
+}
 function createScenario(name) {
   // Кеплеровская пропагация аналитическая, поэтому для лабораторной сцены
   // используем шаг 60 с: это резко сокращает число одинаковых пересчётов эфемерид.
@@ -82,6 +138,8 @@ function createScenario(name) {
   trail = [];
   renderedBodyStates=null;renderedVesselState=null;
   updateTelemetry();
+  renderSystemNavigation();
+  updatePlanetInformation();
   drawAll();
 }
 
@@ -438,7 +496,8 @@ function updateTelemetry(){
   $('soi-value').textContent=soi?distanceLabel(soi):'—';
   $('switch-value').textContent=vessel.lastPrimarySwitch?body(vessel.lastPrimarySwitch.from).name+' → '+body(vessel.lastPrimarySwitch.to).name:'Не было';
   $('clock-value').textContent='J2000.0 + '+fmt(world.simulationTimeSeconds/DAY,5)+' суток';
-  $('model-primary').textContent=primary.name;
+  $('model-primary') && ($('model-primary').textContent=primary.name);
+  updatePlanetInformation();
   $('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
   $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
 }

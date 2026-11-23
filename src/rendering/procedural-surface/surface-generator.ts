@@ -80,6 +80,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  return {height,albedo,roughness,material};
 }
 export interface SurfaceCubeMaps{resolution:number;seed:number;albedo:Uint8Array;heightRoughness:Uint8Array;normal:Uint8Array;}
+export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{return stableSeed(JSON.stringify(profile)).toString(16)+':'+profile.seed;}
 export function surfaceResolutionForProjectedRadius(projectedRadius:number):number{
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  return projectedRadius>420?512:projectedRadius>70?256:projectedRadius>18?128:64;

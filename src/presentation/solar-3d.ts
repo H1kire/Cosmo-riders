@@ -400,7 +400,7 @@ export class Solar3DView{
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   // Корабль временно исключён из сцены: активна только Солнечная система.
-  for(const [id,p] of this.projected){  const labelCandidates=this.projected.filter(([id,p])=>{const body=world.bodies.get(id);return Boolean(body&&(!body.parentId||(p.projectedRadius??0)>=9));}).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
+  const labelCandidates=this.projected.filter(([id,p])=>{const body=world.bodies.get(id);return Boolean(body&&(!body.parentId||(p.projectedRadius??0)>=9));}).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
   const occupied=[] as {left:number;top:number;right:number;bottom:number}[];
   const offsets=[[12,-13],[12,5],[-12,-13],[-12,5],[0,-23],[0,15]];
   const visibleLabels=new Set<string>();

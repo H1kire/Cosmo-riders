@@ -6,6 +6,7 @@ import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propul
 import { hohmannTransfer } from '../src/physics/maneuvers.ts';
 import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
+import { formatDisplayNumber } from './preferences.ts';
 
 const $ = (id: string): (HTMLElement & { value: string }) | null => document.getElementById(id) as (HTMLElement & { value: string }) | null;
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
@@ -53,7 +54,7 @@ let highestWindowZ = 50;
 const MIN_ZOOM = 0.08, MAX_ZOOM = 1e8, ZOOM_FACTOR = 1.22;
 const PLANET_IDS = ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
 const PLANET_COLORS = { mercury:'#a6a6a6',venus:'#e5bd82',earth:'#5b9dff',mars:'#df806b',jupiter:'#d8a77c',saturn:'#d8ca9b',uranus:'#81d9dd',neptune:'#6089ed' };
-const fmt = (value,digits=2) => Number.isFinite(value) ? new Intl.NumberFormat('ru-RU',{maximumFractionDigits:digits}).format(value) : '—';
+const fmt = (value,digits=2) => formatDisplayNumber(value,digits);
 const distanceLabel = metres => metres >= 1e9 ? fmt(metres/1e9,3)+' млн км' : metres >= 1e6 ? fmt(metres/1e6,2)+' тыс. км' : fmt(metres/1e3,1)+' км';
 const speedLabel = value => fmt(value/1000,3)+' км/с';
 const getBody = id => renderedBodyStates?.get(id) ?? world.getBodyState(id);
@@ -581,6 +582,7 @@ $('retro-button').addEventListener('click',()=>applyPoweredBurn(-10));
 $('pro-button').addEventListener('click',()=>applyPoweredBurn(10));
 window.addEventListener('resize',drawAll);
 
+window.addEventListener('number-format-change',()=>{updateTelemetry();drawAll();});
 createScenario('earth-orbit');
 world.setTimeScale(Number($('time-scale').value));
 updateManeuverPlanner();

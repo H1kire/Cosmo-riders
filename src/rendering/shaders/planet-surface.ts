@@ -247,8 +247,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     roughness=0.82;
     specular=0.018;
   }
-  vec3 bakedAlbedo=textureCube(uGeneratedAlbedo,n).rgb;
-  vec4 bakedMaterial=textureCube(uGeneratedHeightRoughness,n);
+  vec3 bakedAlbedo=texture(uGeneratedAlbedo,n).rgb;
+  vec4 bakedMaterial=texture(uGeneratedHeightRoughness,n);
   albedo=mix(albedo,bakedAlbedo,uUseGeneratedMaps*0.72);
   roughness=mix(roughness,bakedMaterial.g,uUseGeneratedMaps);
   return max(albedo,vec3(0.0));
@@ -270,7 +270,7 @@ void main(){
     return;
   }
   vec3 n=normalize(vNormal);
-  vec3 bakedNormal=textureCube(uGeneratedNormal,n).xyz*2.0-1.0;
+  vec3 bakedNormal=texture(uGeneratedNormal,n).xyz*2.0-1.0;
   n=normalize(mix(n,bakedNormal,uUseGeneratedMaps*0.62));
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);

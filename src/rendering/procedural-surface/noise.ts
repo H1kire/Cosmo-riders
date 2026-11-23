@@ -18,6 +18,32 @@ export function valueNoise3(x:number,y:number,z:number,seed=0):number{
  return mix(mix(mix(a(0,0,0),a(1,0,0),fx),mix(a(0,1,0),a(1,1,0),fx),fy),
             mix(mix(a(0,0,1),a(1,0,1),fx),mix(a(0,1,1),a(1,1,1),fx),fy),fz);
 }
+
+// Градієнтний 3D Perlin noise з детермінованими напрямками на вузлах ґратки.
+const GRADIENTS:readonly (readonly [number,number,number])[]=[
+ [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],
+ [1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
+];
+export function perlin3(x:number,y:number,z:number,seed=0):number{
+ const ix=Math.floor(x),iy=Math.floor(y),iz=Math.floor(z),fx=x-ix,fy=y-iy,fz=z-iz;
+ const u=fade(fx),v=fade(fy),w=fade(fz);
+ const dot=(dx:number,dy:number,dz:number,cx:number,cy:number,cz:number)=>{
+  const g=GRADIENTS[Math.floor(hash3(cx,cy,cz,seed)*GRADIENTS.length)%GRADIENTS.length];
+  return g[0]*(dx)+g[1]*(dy)+g[2]*(dz);
+ };
+ const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
+ const x00=mix(dot(fx,fy,fz,ix,iy,iz),dot(fx-1,fy,fz,ix+1,iy,iz),u);
+ const x10=mix(dot(fx,fy-1,fz,ix,iy+1,iz),dot(fx-1,fy-1,fz,ix+1,iy+1,iz),u);
+ const x01=mix(dot(fx,fy,fz-1,ix,iy,iz+1),dot(fx-1,fy,fz-1,ix+1,iy,iz+1),u);
+ const x11=mix(dot(fx,fy-1,fz-1,ix,iy+1,iz+1),dot(fx-1,fy-1,fz-1,ix+1,iy+1,iz+1),u);
+ return Math.max(0,Math.min(1,.5+(mix(mix(x00,x10,v),mix(x01,x11,v),w)*.5)));
+}
+export function fbmPerlin3(x:number,y:number,z:number,seed=0,octaves=5):number{
+ let sum=0,amplitude=.5,norm=0,frequency=1;
+ for(let i=0;i<octaves;i++){sum+=perlin3(x*frequency,y*frequency,z*frequency,hashUint(seed+i*3571))*amplitude;norm+=amplitude;frequency*=2.01;amplitude*=.5;}
+ return sum/norm;
+}
+
 export function fbm3(x:number,y:number,z:number,seed=0,octaves=5):number{
  let sum=0,amplitude=.5,norm=0,frequency=1;
  for(let i=0;i<octaves;i++){sum+=valueNoise3(x*frequency,y*frequency,z*frequency,hashUint(seed+i*1013))*amplitude;norm+=amplitude;frequency*=2.03;amplitude*=.5;}

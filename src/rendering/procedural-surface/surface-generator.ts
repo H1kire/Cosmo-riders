@@ -1,4 +1,4 @@
-import { stableSeed, fbm3, ridged3, worley3, domainWarp3 } from './noise.ts';
+import { stableSeed, fbm3, fbmPerlin3, ridged3, worley3, domainWarp3 } from './noise.ts';
 
 export type SurfaceClass =
  | 'rocky' | 'oceanic' | 'desert' | 'icy' | 'volcanic' | 'dense-atmosphere'
@@ -109,23 +109,80 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
 export function sampleSurfaceHeight(direction:[number,number,number],profile:SurfaceGenerationProfile):number {
  const [x,y,z]=normalize(direction);
  if(profile.class==='gas-giant'||profile.class==='ice-giant')return 0;
- const seed=profile.seed,cold=smooth(300,145,profile.temperatureK);
- const broad=fbm3(x*3.2,y*3.2,z*3.2,seed,5),regional=fbm3(x*13,y*13,z*13,seed+17,4);
- const ridges=ridged3(x*21,y*21,z*21,seed+31,4);
- const tectonic=ridged3(x*5+regional,y*5,z*5,seed+89,4)*profile.tectonicActivity;
- const volcanic=fbm3(x*11,y*11,z*11,seed+103,4)*profile.volcanicActivity;
- const craterField=worley3(x*9,y*9,z*9,seed+71);
- const crater=profile.impactAge*(1-smooth(.22,.58,craterField))*.12;
- const craterRim=smooth(.18,.28,craterField)*(1-smooth(.32,.5,craterField))*profile.impactAge;
- const weathering=clamp(profile.erosion+Math.log10(1+profile.pressurePa)/8*.12);
- const gravityScale=clamp(1.25/Math.sqrt(Math.max(.1,profile.gravityMS2)),.55,1.8);
- let height=(broad*.2+regional*.1+ridges*.1+tectonic*.14+volcanic*.1-crater)*(1-weathering*.42)*gravityScale;
- if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&Math.max(profile.iceFraction,cold*profile.volatileFraction)>.62))height+=smooth(.72,.91,worley3(x*68,y*68,z*68,seed+47))*(1-profile.erosion*.55)*.018;
- if(profile.class==='volcanic'||profile.class==='volcanic-moon')height+=volcanic*.04;
- if(profile.class==='desert')height+=ridged3(x*17,y*17,z*17,seed+281,4)*.025;
- if(profile.class==='dense-atmosphere'&&profile.hydrocarbonFraction>.08&&profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5)height+=ridged3(x*18,y*18,z*18,seed+341,4)*.018;
- else if(profile.class==='dense-atmosphere')height+=tectonic*.035;
- if(profile.class==='airless-moon')height-=craterRim*.06;
+ const seed=profile.seed;
+ const broad=fbmPerlin3(x*2.6,y*2.6,z*2.6,seed+11,5);
+ const regional=fbmPerlin3(x*8.5,y*8.5,z*8.5,seed+23,4);
+ const detail=fbm3(x*27,y*27,z*27,seed+37,4);
+ const warped=domainWarp3(x*5+regional*.8,y*5+regional*.35,z*5+regional*.8,seed+41,.42);
+ const tectonic=ridged3(warped[0],warped[1],warped[2],seed+53,5)*profile.tectonicActivity;
+ const volcanic=fbmPerlin3(x*12,y*12,z*12,seed+67,5)*profile.volcanicActivity;
+ const impact=profile.impactAge;
+ const craterCells=worley3(x*7.5,y*7.5,z*7.5,seed+79);
+ const craterBasin=(1-smooth(.16,.52,craterCells))*impact;
+ const craterRim=smooth(.16,.25,craterCells)*(1-smooth(.31,.48,craterCells))*impact;
+ const gravityScale=clamp(1.15/Math.sqrt(Math.max(.12,profile.gravityMS2)),.5,1.65);
+ const erosion=clamp(profile.erosion*(.65+Math.log10(1+profile.pressurePa)*.035));
+ const latitude=Math.abs(y);
+ let height=0;
+ switch(profile.class){
+  case 'airless-moon':
+   height=(broad-.5)*.16+(regional-.5)*.12+ridged3(x*17,y*17,z*17,seed+91,5)*.13-craterBasin*.22+craterRim*.09;
+   break;
+  case 'oceanic': {
+   const crust=fbmPerlin3(x*4,y*4,z*4,seed+101,4);
+   const trench=ridged3(x*9+regional,y*9,z*9,seed+103,5)*profile.tectonicActivity;
+   height=(crust-.5)*.075+(regional-.5)*.055+tectonic*.11-trench*.055+volcanic*.035;
+   break;
+  }
+  case 'desert': {
+   const duneWarp=domainWarp3(x*3+regional,y*11,z*3+regional,seed+113,.7);
+   const dunes=ridged3(duneWarp[0]*5,duneWarp[1]*1.4,duneWarp[2]*5,seed+127,5);
+   const yardang=ridged3(x*19+regional*2,y*5,z*19,seed+131,4);
+   const wash=fbmPerlin3(x*23,y*23,z*23,seed+137,3);
+   height=(broad-.5)*.08+(regional-.5)*.045+dunes*.105+yardang*.035-wash*erosion*.045;
+   break;
+  }
+  case 'icy':
+  case 'icy-moon': {
+   const fracture=ridged3(x*13+regional*.8,y*13,z*13,seed+149,5);
+   const plates=fbmPerlin3(x*4,y*4,z*4,seed+151,4);
+   const ridge=smooth(.58,.84,fracture)*(1-profile.erosion*.6);
+   height=(plates-.5)*.065+ridge*.095+tectonic*.055+volcanic*.025-craterBasin*impact*.045;
+   break;
+  }
+  case 'volcanic':
+  case 'volcanic-moon': {
+   const cones=worley3(x*8+regional,y*8,z*8,seed+163);
+   const coneField=1-smooth(.08,.52,cones);
+   const fissures=ridged3(x*24+regional,y*24,z*24,seed+167,4);
+   const lavaPlain=fbmPerlin3(x*5,y*5,z*5,seed+173,4);
+   height=(lavaPlain-.5)*.055+coneField*profile.volcanicActivity*.16+fissures*profile.tectonicActivity*.055+volcanic*.075;
+   break;
+  }
+  case 'dense-atmosphere':
+   if(profile.hydrocarbonFraction>.08||profile.mineralFlags.organics){
+    const basin=fbmPerlin3(x*6,y*6,z*6,seed+181,4);
+    const channels=ridged3(x*17,y*17,z*17,seed+191,4);
+    height=(basin-.5)*.07+channels*.025-profile.erosion*.035;
+   }else{
+    const venusianPlains=fbmPerlin3(x*5,y*5,z*5,seed+197,5);
+    const corona=worley3(x*6,y*6,z*6,seed+199);
+    height=(venusianPlains-.5)*.09+(1-smooth(.08,.38,corona))*profile.volcanicActivity*.12+tectonic*.08-craterBasin*.025;
+   }
+   break;
+  case 'rocky':
+  default: {
+   const mountains=ridged3(x*7+regional*.65,y*7+regional*.25,z*7+regional*.65,seed+211,6);
+   const valleys=fbmPerlin3(x*16,y*16,z*16,seed+223,4);
+   height=(broad-.5)*.13+(regional-.5)*.075+mountains*.16*profile.tectonicActivity+(tectonic*.12)+(volcanic*.045)-(valleys*erosion*.035)-craterBasin*.035+craterRim*.018;
+   break;
+  }
+ }
+ const frost=clamp(Math.max(profile.iceFraction,smooth(300,145,profile.temperatureK)*profile.volatileFraction));
+ if(frost>.62&&profile.class!=='icy'&&profile.class!=='icy-moon')height+=(ridged3(x*48,y*48,z*48,seed+227,3)-.35)*frost*.025;
+ const densityFactor=clamp(Math.sqrt(Math.max(.15,profile.gravityMS2)/9.81),.35,2.2);
+ height*=gravityScale*(1-erosion*.48)/Math.sqrt(densityFactor);
+ height+=(detail-.5)*.012;
  return clamp(height,-.45,.45);
 }
 function normalize(d:[number,number,number]):[number,number,number]{const m=Math.hypot(d[0],d[1],d[2])||1;return[d[0]/m,d[1]/m,d[2]/m];}
@@ -191,7 +248,8 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  height=clamp(height,-.45,.45);
  return {height,albedo,roughness,material};
 }
-export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const fingerprint=JSON.stringify(profile);return stableSeed(fingerprint).toString(16)+':'+fingerprint;}
+export const SURFACE_GENERATION_VERSION='3.0.0';
+export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const fingerprint=JSON.stringify(profile);return SURFACE_GENERATION_VERSION+':'+stableSeed(fingerprint).toString(16)+':'+fingerprint;}
 export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfaceClass:SurfaceClass='rocky'):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  const thresholds=surfaceClass==='gas-giant'||surfaceClass==='ice-giant'?[680,220,60]:surfaceClass==='icy'||surfaceClass==='icy-moon'?[460,125,28]:[520,150,35];

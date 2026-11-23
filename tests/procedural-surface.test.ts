@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stableSeed,fbm3,ridged3,worley3,domainWarp3 } from '../src/rendering/procedural-surface/noise.ts';
+import { stableSeed,fbm3,fbmPerlin3,ridged3,worley3,domainWarp3 } from '../src/rendering/procedural-surface/noise.ts';
 import { createSurfaceProfile,sampleSurface,generateSurfaceCubeMaps,surfaceResolutionForProjectedRadius,cubeFaceDirection,surfaceProfileKey } from '../src/rendering/procedural-surface/surface-generator.ts';
 import { SurfaceMapCache } from '../src/rendering/procedural-surface/surface-map-cache.ts';
 import { CelestialBody } from '../src/physics/celestial-body.ts';
@@ -97,4 +97,18 @@ test('celestial bodies persist and validate surface metadata',()=>{
  const profile=createSurfaceProfile(body);
  assert.equal(profile.seed,987654);assert.equal(profile.class,'volcanic-moon');assert.equal(profile.volcanicActivity,.9);
  assert.throws(()=>new CelestialBody({id:'bad-world',name:'Bad',massKg:1e20,meanRadiusM:1e6,surface:{waterFraction:1.5}}),/fraction/);
+});
+
+test('geological classes produce distinct relief fields rather than recolored shared terrain',()=>{
+ const seed=481516;
+ const make=(id:string,cls:any,extra:any={})=>createSurfaceProfile({id,massKg:5.9e24,meanRadiusM:6.4e6,surfaceSeed:seed,surface:{class:cls,temperatureK:extra.temperatureK??260,pressurePa:extra.pressurePa??0,tectonicActivity:extra.tectonicActivity??.65,volcanicActivity:extra.volcanicActivity??.55,impactAge:extra.impactAge??.7,erosion:extra.erosion??.25,waterFraction:extra.waterFraction??0,iceFraction:extra.iceFraction??0,volatileFraction:extra.volatileFraction??.05,hydrocarbonFraction:extra.hydrocarbonFraction??0,mineralComposition:extra.mineralComposition??['silicates']}});
+ const direction:[number,number,number]=[.31,.72,-.44];
+ const samples=['rocky','oceanic','desert','icy','volcanic','airless-moon'].map(cls=>sampleSurface(direction,make('world-'+cls,cls)));
+ assert.equal(new Set(samples.map(s=>s.height.toFixed(6))).size,samples.length);
+});
+test('Perlin gradient noise is deterministic and bounded',()=>{
+ const a=fbmPerlin3(.13,.27,.39,1234,5);
+ assert.equal(a,fbmPerlin3(.13,.27,.39,1234,5));
+ assert.notEqual(a,fbmPerlin3(.13,.27,.39,1235,5));
+ assert.ok(a>=0&&a<=1);
 });

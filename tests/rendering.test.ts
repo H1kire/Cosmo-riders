@@ -82,6 +82,8 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
 
 test('planet surface shader restores distinct procedural maps and physically based lighting',()=>{
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('fbm3Filtered'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('fwidth(p.x)'));
  assert.ok(PLANET_SURFACE_VERTEX.includes('aPosition*(1.0+relief)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('continentField'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('craterBasin'));

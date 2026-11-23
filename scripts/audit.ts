@@ -65,7 +65,9 @@ const checks: Array<[string, () => Promise<void>]> = [
     for (const feature of ['SurfaceMapCache','maxBytes','clear(){']) if (!cache.includes(feature)) throw new Error('Surface map cache feature is missing: '+feature);
     if (!renderer.includes('createSurfaceProfile(body)') || !renderer.includes('requestSurfaceMaps(surfaceProfile,surfaceResolution)') || !renderer.includes('bindSurfaceMaps(surfaceProfile,surfaceResolution,l)') || !renderer.includes('g.deleteTexture(texture)') || !renderer.includes('processSurfaceUploads()') || !renderer.includes('surfaceUploadQueue')) throw new Error('Solar renderer must request, bind and dispose generated maps.');
     if (!shader.includes('domainWarp3') || !shader.includes('ridged3') || !shader.includes('uGeneratedAlbedo') || !shader.includes('uGeneratedNormal') || !shader.includes('uGeneratedHeight') || !shader.includes('uGeneratedRoughness')) throw new Error('Planet shader must combine multifractal geology and generated material maps.');
-    const worker = await readFile(new URL('../src/rendering/procedural-surface/surface-worker.ts', import.meta.url), 'utf8');\n    if (!worker.includes('generateSurfaceCubeMaps') || !worker.includes('postMessage') || !worker.includes('maps.normal.buffer')) throw new Error('Planetary map generation must run in a transferable worker.');\n    const body = await readFile(new URL('../src/physics/celestial-body.ts', import.meta.url), 'utf8');
+    const worker = await readFile(new URL('../src/rendering/procedural-surface/surface-worker.ts', import.meta.url), 'utf8');
+    if (!worker.includes('generateSurfaceCubeMaps') || !worker.includes('postMessage') || !worker.includes('maps.normal.buffer')) throw new Error('Planetary map generation must run in a transferable worker.');
+    const body = await readFile(new URL('../src/physics/celestial-body.ts', import.meta.url), 'utf8');
     if (!body.includes('surfaceSeed') || !body.includes('Number.isSafeInteger(surfaceSeed)')) throw new Error('Celestial bodies must support persisted deterministic surface seeds.');
   }],
   ['SI unit constants', async () => {

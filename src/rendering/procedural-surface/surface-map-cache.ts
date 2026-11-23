@@ -34,7 +34,7 @@ export class SurfaceMapCache {
    const request:Pending={resolve:maps=>{this.pending.delete(key);const bytes=maps.albedo.byteLength+maps.height.byteLength+maps.roughness.byteLength+maps.normal.byteLength;while(this.bytes+bytes>this.maxBytes&&this.entries.size){let oldestKey:string|undefined,oldest=Infinity;for(const [candidate,entry]of this.entries)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}if(oldestKey===undefined)break;this.bytes-=this.entries.get(oldestKey)!.bytes;this.entries.delete(oldestKey);}if(bytes<=this.maxBytes){this.entries.set(key,{maps,bytes,used:++this.clock});this.bytes+=bytes;}resolve(maps);},reject:error=>{this.pending.delete(key);reject(error);}};
    const worker=this.ensureWorker();
    if(worker){const id=this.nextId++;this.requests.set(id,request);worker.postMessage({id,profile,resolution});}
-   else generateSurfaceCubeMaps(profile,resolution,()=>new Promise(done=>setTimeout(done,0))).then(request.resolve,request.reject);
+   else generateSurfaceCubeMaps(profile,resolution,()=>new Promise<void>(done=>setTimeout(done,0))).then(request.resolve,request.reject);
   });
   this.pending.set(key,promise);return promise;
  }

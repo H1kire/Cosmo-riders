@@ -108,7 +108,7 @@ void main(){
   vec3 mie=vec3(1.0,0.82,0.62)*mieDepth*phaseM*uMie*0.42;
   vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.015+0.985*day);
   scatter+=atmosphereColor*rim*0.055*(0.02+0.98*day);
-  float solarIrradiance=uLightIntensity;
+  float solarIrradiance=uLightIntensity/22.0;
   float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity*solarIrradiance;
   gl_FragColor=vec4(scatter*uLightColor,alpha);
 }`;
@@ -194,6 +194,6 @@ void main(){
   if(alpha<0.012)discard;
   float diffuse=max(dot(n,safeNormalize(uSunPosition-vPosition)),0.0);
   float lighting=diffuse*localShadowVisibility(vPosition);
-  vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity);
+  vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity/22.0);
   gl_FragColor=vec4(cloudColor,alpha*0.62);
 }`;

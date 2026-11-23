@@ -1,6 +1,6 @@
 import { orbitalElementsToState } from '../physics/orbital-state.ts';
 import { AU } from '../physics/constants.ts';
-import { LightingSystem, focusedSolarExposureMultiplier } from '../rendering/lighting/lighting-system.ts';
+import { LightingSystem, focusedSolarExposureMultiplier, planetaryDisplayGain } from '../rendering/lighting/lighting-system.ts';
 import { HDRPipeline } from '../rendering/core/hdr-pipeline.ts';
 import { createDefaultShaderLibrary } from '../rendering/shaders/index.ts';
 import { ATMOSPHERE_VERTEX, ATMOSPHERE_FRAGMENT, CLOUD_VERTEX, CLOUD_FRAGMENT } from '../rendering/shaders/planet-effects.ts';
@@ -97,7 +97,7 @@ export class Solar3DView{
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeight','uGeneratedRoughness','uPreviousAlbedo','uPreviousNormal','uPreviousHeight','uPreviousRoughness','uPreviousMapsEnabled','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeight','uGeneratedRoughness','uPreviousAlbedo','uPreviousNormal','uPreviousHeight','uPreviousRoughness','uPreviousMapsEnabled','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
@@ -358,6 +358,8 @@ export class Solar3DView{
    g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    const isStar=!body.parentId;
+    const bodySunDistanceAU=Math.hypot(state.position.x-sun.x,state.position.y-sun.y,state.position.z-sun.z)/AU;
+    g.uniform1f(l.uBodyExposure,isStar?1:planetaryDisplayGain(bodySunDistanceAU));
     const surfaceProfile=isStar?null:createSurfaceProfile(body);
     const profileKind=surfaceProfile?.class==='gas-giant'?3:surfaceProfile?.class==='ice-giant'?4:surfaceProfile?.class==='dense-atmosphere'?5:surfaceProfile?.class==='oceanic'?1:surfaceProfile?.class==='icy'||surfaceProfile?.class==='icy-moon'?5.3:surfaceProfile?.class==='volcanic'||surfaceProfile?.class==='volcanic-moon'?5.4:surfaceProfile?.class==='desert'?2.4:surfaceProfile?.class==='airless-moon'?2.2:2;
     g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??profileKind));

@@ -89,7 +89,7 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
 
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
 import { CLOUD_VERTEX } from '../src/rendering/shaders/planet-effects.ts';
-import { focusedSolarExposureMultiplier } from '../src/rendering/lighting/lighting-system.ts';
+import { focusedSolarExposureMultiplier, planetaryDisplayGain } from '../src/rendering/lighting/lighting-system.ts';
 
 
 
@@ -189,6 +189,9 @@ test('focused-body exposure compensates inverse-square solar dimming without cha
  assert.equal(focusedSolarExposureMultiplier(30),1);
  assert.equal(focusedSolarExposureMultiplier(50),1);
  assert.equal(focusedSolarExposureMultiplier(0),1);
+ assert.equal(planetaryDisplayGain(1),1);
+ assert.ok(planetaryDisplayGain(5.2)>1&&planetaryDisplayGain(5.2)<12);
+ assert.equal(planetaryDisplayGain(30),64);
 });
 test('cloud density fields are sampled in body-local coordinates while lighting uses world normals',()=>{
  assert.ok(CLOUD_VERTEX.includes('vLocalNormal=aNormal'));

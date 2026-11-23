@@ -99,6 +99,7 @@ uniform vec3 uOccluders[8];
 uniform float uOccluderRadii[8];
 uniform int uOccluderCount;
 uniform int uShadows;
+uniform float uBodyExposure;
 varying vec3 vNormal;
 varying vec3 vSurfaceDirection;
 varying vec3 vPosition;
@@ -348,6 +349,6 @@ void main(){
   }
   // Only a very small indirect floor remains; a planet in deep shadow is not self-emissive.
   vec3 indirect=albedo*0.0001;
-  gl_FragColor=vec4(max(directLight+indirect,vec3(0.0)),1.0);
+  gl_FragColor=vec4(max(directLight+indirect,vec3(0.0))*uBodyExposure,1.0);
 }
 `;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { stableSeed,fbm3,ridged3,worley3,domainWarp3 } from '../src/rendering/procedural-surface/noise.ts';
 import { createSurfaceProfile,sampleSurface,generateSurfaceCubeMaps,surfaceResolutionForProjectedRadius } from '../src/rendering/procedural-surface/surface-generator.ts';
 import { SurfaceMapCache } from '../src/rendering/procedural-surface/surface-map-cache.ts';
+import { CelestialBody } from '../src/physics/celestial-body.ts';
 
 const earth={id:'earth',massKg:5.9722e24,meanRadiusM:6371000};
 test('stable seeds and 3D noise are deterministic',()=>{
@@ -43,4 +44,11 @@ test('surface LOD and cache memory remain bounded',async()=>{
  const a=await cache.get(profile,8),b=await cache.get(profile,8);
  assert.equal(a,b);assert.equal(cache.size,1);assert.ok(cache.memoryBytes<=1000000);
  cache.clear();assert.equal(cache.size,0);
+});
+
+test('celestial bodies persist validated procedural surface seeds and composition',()=>{
+ const body=new CelestialBody({id:'random-world-17',name:'Random World',massKg:5e24,meanRadiusM:6e6,surfaceSeed:987654,surface:{class:'volcanic',ironFraction:.42,volcanicActivity:.9,temperatureK:480}});
+ const profile=createSurfaceProfile(body);
+ assert.equal(profile.seed,987654);assert.equal(profile.class,'volcanic');assert.equal(profile.volcanicActivity,.9);
+ assert.throws(()=>new CelestialBody({id:'bad-world',name:'Bad',massKg:1e20,meanRadiusM:1e6,surface:{waterFraction:1.5}}),/fraction/);
 });

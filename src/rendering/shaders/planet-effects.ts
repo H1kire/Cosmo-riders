@@ -22,7 +22,12 @@ uniform float uMie;
 uniform float uMieAnisotropy;
 uniform float uIntensity;
 uniform float uLightIntensity;
-uniform float uShadowVisibility;
+uniform vec3 uSunPosition;
+uniform float uSunRadius;
+uniform vec3 uOccluders[8];
+uniform float uOccluderRadii[8];
+uniform int uOccluderCount;
+uniform int uShadows;
 uniform float uGroundRadius;
 uniform float uAtmosphereRadius;
 uniform float uRayleighScaleHeight;
@@ -30,6 +35,27 @@ uniform float uMieScaleHeight;
 uniform int uAtmosphereSamples;
 varying vec3 vNormal;
 varying vec3 vPosition;
+float localShadowVisibility(vec3 point){
+  if(uShadows==0)return 1.0;
+  vec3 toSun=uSunPosition-point;
+  float sunDistance=length(toSun);
+  vec3 ray=toSun/max(sunDistance,1e-12);
+  float visibility=1.0;
+  for(int i=0;i<8;i++){
+    if(i<uOccluderCount){
+      vec3 toBlocker=uOccluders[i]-point;
+      float along=dot(toBlocker,ray);
+      if(along>0.0&&along<sunDistance){
+        float perpendicular=length(toBlocker-ray*along);
+        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
+        float penumbra=uOccluderRadii[i]+angularSun;
+        float umbra=max(0.0,uOccluderRadii[i]-angularSun);
+        visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);
+      }
+    }
+  }
+  return clamp(visibility,0.0,1.0);
+}
 float sphereNear(vec3 origin,vec3 direction,float radius){
   vec3 offset=origin-uPlanetCenter;
   float b=dot(offset,direction);
@@ -43,6 +69,27 @@ float sphereFar(vec3 origin,vec3 direction,float radius){
   float c=dot(offset,offset)-radius*radius;
   float discriminant=b*b-c;
   return discriminant>=0.0?-b+sqrt(discriminant):-1.0;
+}
+float localShadowVisibility(vec3 point){
+  if(uShadows==0)return 1.0;
+  vec3 toSun=uSunPosition-point;
+  float sunDistance=length(toSun);
+  vec3 ray=toSun/max(sunDistance,1e-12);
+  float visibility=1.0;
+  for(int i=0;i<8;i++){
+    if(i<uOccluderCount){
+      vec3 toBlocker=uOccluders[i]-point;
+      float along=dot(toBlocker,ray);
+      if(along>0.0&&along<sunDistance){
+        float perpendicular=length(toBlocker-ray*along);
+        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
+        float penumbra=uOccluderRadii[i]+angularSun;
+        float umbra=max(0.0,uOccluderRadii[i]-angularSun);
+        visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);
+      }
+    }
+  }
+  return clamp(visibility,0.0,1.0);
 }
 void main(){
   vec3 n=safeNormalize(vNormal);
@@ -61,6 +108,7 @@ void main(){
   float phaseM=miePhase(cosineAngle,uMieAnisotropy);
   float rayleighDepth=0.0;
   float mieDepth=0.0;
+  float visibilitySum=0.0;
   int samples=clamp(uAtmosphereSamples,2,16);
   float stepLength=pathLength/float(samples);
   for(int i=0;i<16;i++){
@@ -70,16 +118,18 @@ void main(){
       float altitude=max(0.0,length(samplePosition-uPlanetCenter)-uGroundRadius);
       rayleighDepth+=exp(-altitude/max(uRayleighScaleHeight,1e-8))*stepLength/max(uRayleighScaleHeight,1e-8);
       mieDepth+=exp(-altitude/max(uMieScaleHeight,1e-8))*stepLength/max(uMieScaleHeight,1e-8);
+      visibilitySum+=localShadowVisibility(samplePosition);
     }
   }
-  float day=smoothstep(-0.08,0.12,dot(n,lightDir))*uShadowVisibility;
+  float raymarchVisibility=visibilitySum/float(samples);
+  float day=smoothstep(-0.08,0.12,dot(n,lightDir))*raymarchVisibility;
   float rim=atmosphereRim(n,safeNormalize(uCameraPosition-vPosition),2.0);
   vec3 atmosphereColor=pow(uAtmosphereColor,vec3(2.2));
   float opticalAttenuation=exp(-rayleighDepth*0.055-mieDepth*0.11);
   vec3 rayleigh=atmosphereColor*rayleighDepth*phaseR*0.9;
   vec3 mie=vec3(1.0,0.82,0.62)*mieDepth*phaseM*uMie*0.42;
-  vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.14+0.86*day*uShadowVisibility);
-  scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day*uShadowVisibility);
+  vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.14+0.86*day);
+  scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day);
   float solarIrradiance=uLightIntensity/22.0;
   float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity*solarIrradiance;
   gl_FragColor=vec4(scatter*uLightColor,alpha);
@@ -108,7 +158,12 @@ uniform float uCoverage;
 uniform float uOpacity;
 uniform float uScale;
 uniform float uSeed;
-uniform float uShadowVisibility;
+uniform vec3 uSunPosition;
+uniform float uSunRadius;
+uniform vec3 uOccluders[8];
+uniform float uOccluderRadii[8];
+uniform int uOccluderCount;
+uniform int uShadows;
 uniform float uLightIntensity;
 varying vec3 vNormal;
 varying vec3 vPosition;
@@ -124,7 +179,7 @@ void main(){
   float alpha=edge*holes*uOpacity;
   if(alpha<0.012)discard;
   float diffuse=max(dot(n,safeNormalize(uLight)),0.0);
-  float lighting=diffuse*uShadowVisibility;
+  float lighting=diffuse*localShadowVisibility(vPosition);
   vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity/22.0);
   gl_FragColor=vec4(cloudColor,alpha*0.62);
 }`;

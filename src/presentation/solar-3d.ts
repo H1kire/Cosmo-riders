@@ -15,8 +15,8 @@ import { SurfaceMapCache } from '../rendering/procedural-surface/surface-map-cac
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
-const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
-const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4};
+const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
+const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4,titan:5};
 const TEXTURE_DETAIL_CAPS={low:.65,medium:.95,high:1.25,ultra:1.5};
 const NAMES={sun:'Солнце',mercury:'Меркурий',venus:'Венера',earth:'Земля',moon:'Луна',mars:'Марс',jupiter:'Юпитер',saturn:'Сатурн',uranus:'Уран',neptune:'Нептун'};
 const sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],norm=a=>{const m=Math.hypot(...a)||1;return a.map(v=>v/m);};
@@ -294,14 +294,15 @@ export class Solar3DView{
    g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    const isStar=!body.parentId;
-    g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??2));
+    const surfaceProfile=isStar?null:createSurfaceProfile(body);
+    const profileKind=surfaceProfile?.class==='gas-giant'?3:surfaceProfile?.class==='ice-giant'?4:surfaceProfile?.class==='dense-atmosphere'?5:surfaceProfile?.class==='oceanic'?1:2;
+    g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??profileKind));
    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
     if(isStar){
      g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uSeed,0);
      g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
-     const surfaceProfile=createSurfaceProfile(body);
      const surfaceResolution=surfaceResolutionForProjectedRadius(px);
      this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
      this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);

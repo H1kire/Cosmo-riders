@@ -48,3 +48,10 @@ The solar renderer rebinds its surface program after optional passes. Shader obj
 
 
 The current sphere mesh intentionally carries positions and normals rather than UVs: the procedural surface maps are evaluated from normalized sphere-space directions, so they have no longitude seam and do not depend on bitmap loading or sampler state. The previous rendering defect was a GPU program-state leak between consecutive body passes, not a missing texture download. Deep-shadow surface ambient is kept near black; atmospheric twilight fades smoothly through the terminator, while clouds receive only direct stellar illumination.
+
+
+## 2026 planet rendering audit
+
+The sphere mesh has no UV attribute and the renderer does not load bitmap texture files. Planet surface maps are generated in the fragment shader from the interpolated unit-sphere normal, so the mapping is continuous across the longitude seam and does not depend on texture sampler state. Terrain octave frequencies are reduced with projected-size LOD to limit distant aliasing; relief detail is likewise reduced as the planet occupies fewer pixels.
+
+The surface pass is independent of atmosphere/cloud toggles and is always drawn first with its own program and material uniforms. Atmosphere and cloud passes receive the same camera-relative occluder list but evaluate stellar-disc penumbra visibility at their own ray-march samples/fragments instead of applying one centre-of-planet eclipse value to the entire shell. The night-side atmosphere retains only a very small scattering floor; cloud illumination has no ambient emission. Surface stellar irradiance is normalized so the primary light intensity 22 corresponds to the reference flux at 1 AU, then falls with inverse-square distance.

@@ -126,7 +126,7 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
  if(profile.class==='dense-atmosphere'&&profile.hydrocarbonFraction>.08&&profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5)height+=ridged3(x*18,y*18,z*18,seed+341,4)*.018;
  else if(profile.class==='dense-atmosphere')height+=tectonic*.035;
  if(profile.class==='airless-moon')height-=craterRim*.06;
- return height;
+ return clamp(height,-.45,.45);
 }
 function normalize(d:[number,number,number]):[number,number,number]{const m=Math.hypot(d[0],d[1],d[2])||1;return[d[0]/m,d[1]/m,d[2]/m];}
 export function sampleSurface(direction:[number,number,number],profile:SurfaceGenerationProfile):SurfaceSample {

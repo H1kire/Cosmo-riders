@@ -285,7 +285,7 @@ export class Solar3DView{
   const data=[];for(const position of path){const absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}
   const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);
  }
- render(world,states,timeSeconds,vesselState=null){ render(world,states,timeSeconds,vesselState=null){
+ render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();
   if(this.focusTransition){
    const progress=Math.min(1,(performance.now()-this.focusTransition.started)/this.focusTransition.duration);
@@ -406,7 +406,7 @@ export class Solar3DView{
   const visibleLabels=new Set<string>();
   for(const [id,p] of labelCandidates){const body=world.bodies.get(id);if(!body)continue;let node=this.labelNodes.get(id);if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}node.textContent=body.name;const width=Math.max(34,body.name.length*6.4),height=14;let chosen=null;for(const [dx,dy] of offsets){const left=p.x+dx-(dx<0?width:0),top=p.y+dy,rect={left:left-4,top:top-3,right:left+width+4,bottom:top+height+3};if(rect.left<4||rect.top<4||rect.right>w/dpr-4||rect.bottom>h/dpr-4)continue;if(occupied.every(other=>rect.right<other.left||rect.left>other.right||rect.bottom<other.top||rect.top>other.bottom)){chosen=[left,top];occupied.push(rect);break;}}if(chosen){node.hidden=false;node.style.opacity='1';node.style.transform='translate3d('+Math.round(chosen[0])+'px,'+Math.round(chosen[1])+'px,0)';visibleLabels.add(id);}else node.hidden=true;}
   for(const [id,node] of this.labelNodes)if(!visibleLabels.has(id))node.hidden=true;
-  const sunScreen=  const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
+  const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
   let sunVisible=Boolean(sunScreen&&sunScreen.z>=-1&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);
   if(sunVisible){
    const observerSI={x:renderOrigin.x+eye[0]*AU,y:renderOrigin.y+eye[2]*AU,z:renderOrigin.z+eye[1]*AU};

@@ -88,6 +88,7 @@ export class Solar3DView{
   g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);
  }
  applyGraphicsSettings(settings){
+  this.hdr.setHDREnabled(settings.hdr);
   const h=this.hdr.settings;
   h.bloom=settings.bloom;h.bloomThreshold=settings.bloomThreshold;h.bloomStrength=settings.bloomStrength;
   h.bloomIterations=settings.bloomIterations;h.glare=settings.glare;h.glareStrength=settings.glareStrength;

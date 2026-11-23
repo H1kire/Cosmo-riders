@@ -162,6 +162,7 @@ export interface HDRPipelineSettings {
 
 export class HDRPipeline implements Disposable {
   readonly hdrSupported:boolean;
+  private activeHdr:boolean;
   scene:Target;
   private bright:Target;
   private ping:Target;
@@ -179,11 +180,12 @@ export class HDRPipeline implements Disposable {
 
   constructor(private gl:WebGL2RenderingContext,width:number,height:number){
     this.hdrSupported=Boolean(gl.getExtension('EXT_color_buffer_float'));
-    this.scene=target(gl,width,height,this.hdrSupported,true);
+    this.activeHdr=this.hdrSupported;
+    this.scene=target(gl,width,height,this.activeHdr,true);
     const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
-    this.bright=target(gl,bw,bh,this.hdrSupported);
-    this.ping=target(gl,bw,bh,this.hdrSupported);
-    this.pong=target(gl,bw,bh,this.hdrSupported);
+    this.bright=target(gl,bw,bh,this.activeHdr);
+    this.ping=target(gl,bw,bh,this.activeHdr);
+    this.pong=target(gl,bw,bh,this.activeHdr);
     this.brightProgram=program(gl,BRIGHT);
     this.blurProgram=program(gl,BLUR);
     this.compositeProgram=program(gl,COMPOSITE);
@@ -203,14 +205,27 @@ export class HDRPipeline implements Disposable {
     g.clear(g.COLOR_BUFFER_BIT|g.DEPTH_BUFFER_BIT);
   }
 
+  setHDREnabled(enabled:boolean):void{
+    const next=enabled&&this.hdrSupported;
+    if(next===this.activeHdr)return;
+    this.activeHdr=next;
+    const width=this.scene.width,height=this.scene.height;
+    this.destroyTargets();
+    this.scene=target(this.gl,width,height,this.activeHdr,true);
+    const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
+    this.bright=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,bw,bh,this.activeHdr);
+    this.pong=target(this.gl,bw,bh,this.activeHdr);
+  }
+
   resize(width:number,height:number):void{
     if(width===this.scene.width&&height===this.scene.height)return;
     this.destroyTargets();
-    this.scene=target(this.gl,width,height,this.hdrSupported,true);
+    this.scene=target(this.gl,width,height,this.activeHdr,true);
     const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
-    this.bright=target(this.gl,bw,bh,this.hdrSupported);
-    this.ping=target(this.gl,bw,bh,this.hdrSupported);
-    this.pong=target(this.gl,bw,bh,this.hdrSupported);
+    this.bright=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,bw,bh,this.activeHdr);
+    this.pong=target(this.gl,bw,bh,this.activeHdr);
   }
 
   private destroyTarget(t:Target):void{

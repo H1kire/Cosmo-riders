@@ -54,3 +54,13 @@ test('shader library rejects missing and circular includes',()=>{
   library.register('second','#include <first>');
   assert.throws(()=>library.compose('#include <first>'),/Circular shader include/);
 });
+
+test('graphics presets control real render scale and post-process quality',()=>{
+ const low=createGraphicsSettings('low'),medium=createGraphicsSettings('medium'),high=createGraphicsSettings('high'),ultra=createGraphicsSettings('ultra');
+ assert.ok(low.renderScale<medium.renderScale);
+ assert.ok(medium.renderScale<high.renderScale);
+ assert.ok(high.bloomIterations<ultra.bloomIterations);
+ assert.ok(high.shadowOccluders<ultra.shadowOccluders);
+ assert.equal(low.clouds,false);
+ assert.equal(ultra.clouds,true);
+});

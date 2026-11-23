@@ -74,7 +74,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
     if (!source.includes("getContext('webgl2'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL2 renderer or high-detail sphere mesh is missing.');
-    if (!source.includes('new HDRPipeline(') || !source.includes('this.hdr.begin(w,h)') || !source.includes('this.hdr.present(w,h)')) throw new Error('Solar scene must render through the HDR scene target and final post-process pass.');
+    if (!source.includes('new HDRPipeline(') || !source.includes('this.hdr.begin(renderWidth,renderHeight)') || !source.includes('this.hdr.present(w,h)')) throw new Error('Solar scene must render through the HDR scene target and final post-process pass.');
     const hdr = await readFile(new URL('../src/rendering/core/hdr-pipeline.ts', import.meta.url), 'utf8');
     if (!hdr.includes('EXT_color_buffer_float') || !hdr.includes('RGBA16F') || !hdr.includes('HALF_FLOAT')) throw new Error('HDR pipeline must allocate floating-point RGBA16F render targets when supported.');
     if (!hdr.includes('const BRIGHT') || !hdr.includes('const BLUR') || !hdr.includes('const COMPOSITE') || !hdr.includes('uBloomStrength') || !hdr.includes('aces(')) throw new Error('HDR pipeline must execute bright extraction, blur and tone-mapped composite passes.');
@@ -82,10 +82,14 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('far=100,near=Math.max(1e-10,this.distance*.001)')) throw new Error('Focused planetary views must retain the full 100 AU scene range while keeping the near plane proportional to camera distance.');
     if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');
-    if (!source.includes('sunStrength=clamp(uLightIntensity,0.,1.)') || !source.includes('l=.12+.88*sunStrength*sunFacing')) throw new Error('Planetary shading must retain ambient visibility on night sides and clamp direct illumination.');
-    if (!source.includes('if(uKind>5.5){gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.);return;}') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
+    if (!source.includes('sunStrength=clamp(uLightIntensity,0.0,1.0)') || !source.includes('l=.12+.88*sunStrength*sunFacing*visibility')) throw new Error('Planetary shading must retain ambient visibility on night sides and clamp direct illumination.');
+    if (!source.includes('if(uKind>5.5){gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);return;}') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
     if (!source.includes('vec3 c=pow(uColor,vec3(2.2));')) throw new Error('Material colors must be linearized before HDR lighting and tone mapping.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');
+    if (!source.includes('drawAtmosphere(') || !source.includes('drawClouds(') || !source.includes('collectOccluders(') || !source.includes('calculateEclipse(')) throw new Error('Atmosphere, cloud and analytic shadow effects must be connected to the solar renderer.');
+    if (!source.includes('this.hdr.setOpticalSource(') || !hdr.includes('uGlareEnabled') || !hdr.includes('uLensFlareEnabled')) throw new Error('Glare and lens flare must be part of the final GPU composite.');
+    const quality = await readFile(new URL('../src/rendering/quality/quality-settings.ts', import.meta.url), 'utf8');
+    if (!quality.includes('renderScale') || !quality.includes('bloomIterations') || !quality.includes('shadowOccluders') || !source.includes('this.graphics.renderScale') || !source.includes('this.graphics.maxMeshLod')) throw new Error('Quality presets must control actual render resolution and GPU effect quality.');
     const lighting = await readFile(new URL('../src/presentation/lighting-engine.ts', import.meta.url), 'utf8');
     if (!lighting.includes('export class LightingEngine') || !lighting.includes('setPointLight') || !lighting.includes('sampleAt(point, id)')) throw new Error('Lighting engine is missing the renderer sampleAt API.');
     if (!source.includes('uColor*(1.15+b*.12)') || source.includes('uColor*(1.15+fine*.12)')) throw new Error('Sun fragment shader contains an invalid or unresolved variable.');

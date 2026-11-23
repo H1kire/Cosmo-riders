@@ -176,11 +176,15 @@ test('body labels fade smoothly with the inverse of the existing orbit distance 
  assert.equal(planetaryLabelOpacity(radius*2400,radius),0);
  assert.equal(planetaryLabelOpacity(1,0),1);
 });
-test('planet surface maps are sampled in local coordinates and their normals follow the body model',()=>{
+test('planet surfaces are generated directly from continuous spherical shader fields',()=>{
  const source=PLANET_SURFACE_VERTEX+'\\n'+PLANET_SURFACE_FRAGMENT;
  assert.ok(source.includes('vSurfaceDirection=n'));
- assert.ok(source.includes('normalize(vSurfaceDirection)'));
- assert.ok(source.includes('mat3(uModel)*bakedNormal'));
+ assert.ok(source.includes('normalize(vNormal)'));
+ assert.ok(source.includes('domainWarp3(n*2.15'));
+ assert.ok(source.includes('float land=smoothstep(0.505,0.535,continentField)'));
+ assert.ok(source.includes('float softBelts=smoothstep(-0.48,0.58,belts)'));
+ assert.ok(!source.includes('samplerCube'));
+ assert.ok(!source.includes('uGeneratedAlbedo'));
 });
 
 test('focused-body exposure compensates inverse-square solar dimming without changing the light law',()=>{

@@ -238,12 +238,20 @@ export class Solar3DView{
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
   lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
-  let planetOrbitFade=1;
-  if(focus){
-   let anchor=focus;
-   while(anchor.parentId&&anchor.parentId!=='sun')anchor=world.bodies.get(anchor.parentId)??anchor;
-   if(anchor.parentId==='sun')planetOrbitFade=planetaryOrbitOpacity(this.distance,anchor.meanRadiusM/AU);
+  let planetOrbitFade=1,orbitAnchor=focus,orbitCameraDistance=this.distance;
+  if(orbitAnchor){
+   while(orbitAnchor.parentId&&orbitAnchor.parentId!=='sun')orbitAnchor=world.bodies.get(orbitAnchor.parentId)??orbitAnchor;
+  }else{
+   let nearestDistance=Infinity;
+   for(const candidate of bodies){
+    if(candidate.parentId!=='sun')continue;
+    const candidateState=states.get(candidate.id);if(!candidateState)continue;
+    const candidatePosition=mapper(candidate,candidateState.position);
+    const candidateDistance=Math.hypot(candidatePosition[0]-eye[0],candidatePosition[1]-eye[1],candidatePosition[2]-eye[2]);
+    if(candidateDistance<nearestDistance){nearestDistance=candidateDistance;orbitAnchor=candidate;orbitCameraDistance=candidateDistance;}
+   }
   }
+  if(orbitAnchor?.parentId==='sun')planetOrbitFade=planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU);
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));

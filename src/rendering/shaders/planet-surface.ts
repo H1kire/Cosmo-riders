@@ -100,7 +100,7 @@ float shadowVisibility(vec3 point){
       float along=dot(toBlocker,ray);
       if(along>0.0&&along<sunDistance){
         float perpendicular=length(toBlocker-ray*along);
-        float angularSun=uSunRadius/max(sunDistance-along,1e-12);
+        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
         float penumbra=uOccluderRadii[i]+angularSun;
         float umbra=max(0.0,uOccluderRadii[i]-angularSun);
         visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);

@@ -49,3 +49,16 @@ window.addEventListener('storage',event=>{
   if(event.key===FORMAT_KEY)window.dispatchEvent(new Event('number-format-change'));
   if(event.key===LANGUAGE_KEY)applyLanguage(event.newValue??'ru');
 });
+
+const tabButtons=[...document.querySelectorAll<HTMLButtonElement>('[data-settings-tab]')];
+const tabPanels=[...document.querySelectorAll<HTMLElement>('[data-settings-panel]')];
+function selectSettingsTab(tab:string){
+  for(const button of tabButtons){
+    const active=button.dataset.settingsTab===tab;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',String(active));
+  }
+  for(const panel of tabPanels)panel.hidden=panel.dataset.settingsPanel!==tab;
+}
+for(const button of tabButtons)button.addEventListener('click',()=>selectSettingsTab(button.dataset.settingsTab??'general'));
+selectSettingsTab('general');

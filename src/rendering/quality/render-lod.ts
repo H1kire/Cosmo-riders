@@ -11,3 +11,9 @@ export function planetaryOrbitOpacity(cameraDistance:number,focusRadius:number):
   const t=Math.max(0,Math.min(1,(ratio-120)/(2400-120)));
   return t*t*(3-2*t);
 }
+
+/** Approximate orbit radius in output pixels for cheap sub-pixel culling. */
+export function projectedOrbitRadius(semiMajorAxisAU:number,viewportHeight:number,viewDistance:number):number {
+  if(!Number.isFinite(semiMajorAxisAU)||!Number.isFinite(viewportHeight)||!Number.isFinite(viewDistance)||semiMajorAxisAU<=0||viewportHeight<=0||viewDistance<=0)return 0;
+  return semiMajorAxisAU*(viewportHeight*0.5)/(Math.tan(Math.PI/6)*Math.max(viewDistance,semiMajorAxisAU));
+}

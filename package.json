@@ -6,10 +6,17 @@
   "description": "Cosmo-riders browser space simulation with a TypeScript build pipeline.",
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
-    "audit": "tsx scripts/audit.ts",
-    "typecheck": "tsc --noEmit",
+    "audit:static": "tsx scripts/audit.ts",
+    "audit:types": "tsc --noEmit",
+    "audit:imports": "tsx scripts/audit-imports.ts",
+    "audit:assets": "tsx scripts/audit-assets.ts",
+    "audit:build": "vite build && tsx scripts/verify-dist.ts",
+    "audit:deployment": "tsx scripts/audit-deployment.ts",
+    "audit:live": "node scripts/audit-live.mjs",
+    "audit": "npm run test && npm run audit:static && npm run audit:types && npm run audit:imports && npm run audit:assets && npm run audit:build && npm run audit:deployment",
+    "audit:all": "npm run audit",
     "build": "vite build && tsx scripts/verify-dist.ts",
-    "check": "npm run test && npm run audit && npm run typecheck && npm run build"
+    "check": "npm run audit"
   },
   "devDependencies": {
     "tsx": "^4.20.6",

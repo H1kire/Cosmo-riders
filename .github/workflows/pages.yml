@@ -1,35 +1,55 @@
-name: Deploy Cosmo-riders to GitHub Pages
+name: Cosmo-riders — Quality Gate and GitHub Pages
+
 on:
   push:
     branches: [test]
+  pull_request:
+    branches: [test]
   workflow_dispatch:
+
 permissions:
   contents: read
-  pages: write
-  id-token: write
+
 concurrency:
-  # Keep this workflow's lock separate from GitHub's internal Pages deployment job.
-  group: cosmo-riders-pages
+  group: cosmo-riders-pages-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
-      - run: npm install
-      - run: npm run check
-      - uses: actions/upload-pages-artifact@v3
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run complete quality audit
+        run: npm run audit
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Check published pages and MIME types
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          node --version
+          curl --fail --silent --show-error --location "$PAGES_URL" --output /dev/null
+          curl --fail --silent --show-error --location "${PAGES_URL%/}/lab/" --output /dev/null

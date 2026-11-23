@@ -15,6 +15,7 @@ export class LightingEngine {
   }
   removeLight(id) { this.pointLights.delete(id); }
   getLight(id) { return this.pointLights.get(id) ?? null; }
+  getLights() { return [...this.pointLights.entries()].map(([id, light]) => ({ id, position: [...light.position], intensity: light.intensity, color: [...light.color] })); }
   directionAt(point, id) {
     const light = this.pointLights.get(id);
     if (!light) return [0, 0, 1];
@@ -34,7 +35,7 @@ export class LightingEngine {
     const dx = light.position[0] - point[0];
     const dy = light.position[1] - point[1];
     const dz = light.position[2] - point[2];
-    return light.intensity / Math.max(1, dx * dx + dy * dy + dz * dz);
+    return light.intensity / Math.max(1e-12, dx * dx + dy * dy + dz * dz);
   }
   sampleAt(point, id) {
     return {

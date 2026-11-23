@@ -95,6 +95,8 @@ interface Target {
   framebuffer: WebGLFramebuffer;
   texture: WebGLTexture;
   depthBuffer: WebGLRenderbuffer|null;
+  msaaFramebuffer: WebGLFramebuffer|null;
+  msaaColorBuffer: WebGLRenderbuffer|null;
   width: number;
   height: number;
 }
@@ -110,13 +112,30 @@ function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=fa
   gl.texImage2D(gl.TEXTURE_2D,0,hdr?gl.RGBA16F:gl.RGBA8,w,h,0,gl.RGBA,hdr?gl.HALF_FLOAT:gl.UNSIGNED_BYTE,null);
   gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
   gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
-  let depthBuffer:WebGLRenderbuffer|null=null;
+  let depthBuffer:WebGLRenderbuffer|null=null,msaaFramebuffer:WebGLFramebuffer|null=null,msaaColorBuffer:WebGLRenderbuffer|null=null;
   if(depth){
-    depthBuffer=gl.createRenderbuffer();
-    if(!depthBuffer)throw Error('Depth buffer allocation failed');
-    gl.bindRenderbuffer(gl.RENDERBUFFER,depthBuffer);
-    gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,w,h);
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depthBuffer);
+    const samples=Math.min(4,Number(gl.getParameter(gl.MAX_SAMPLES))||0);
+    if(samples>=2){
+      msaaFramebuffer=gl.createFramebuffer();msaaColorBuffer=gl.createRenderbuffer();depthBuffer=gl.createRenderbuffer();
+      if(msaaFramebuffer&&msaaColorBuffer&&depthBuffer){
+        gl.bindFramebuffer(gl.FRAMEBUFFER,msaaFramebuffer);
+        gl.bindRenderbuffer(gl.RENDERBUFFER,msaaColorBuffer);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER,samples,hdr?gl.RGBA16F:gl.RGBA8,w,h);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.RENDERBUFFER,msaaColorBuffer);
+        gl.bindRenderbuffer(gl.RENDERBUFFER,depthBuffer);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER,samples,gl.DEPTH_COMPONENT24,w,h);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depthBuffer);
+        if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){
+          gl.deleteFramebuffer(msaaFramebuffer);gl.deleteRenderbuffer(msaaColorBuffer);gl.deleteRenderbuffer(depthBuffer);
+          msaaFramebuffer=null;msaaColorBuffer=null;depthBuffer=null;
+        }
+      }else{
+        if(msaaFramebuffer)gl.deleteFramebuffer(msaaFramebuffer);
+        if(msaaColorBuffer)gl.deleteRenderbuffer(msaaColorBuffer);
+        if(depthBuffer)gl.deleteRenderbuffer(depthBuffer);
+        msaaFramebuffer=null;msaaColorBuffer=null;depthBuffer=null;
+      }
+    }
   }
   if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){
     gl.deleteFramebuffer(framebuffer);gl.deleteTexture(texture);
@@ -124,7 +143,7 @@ function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=fa
     throw Error('HDR framebuffer incomplete');
   }
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-  return{framebuffer,texture,depthBuffer,width:w,height:h};
+  return{framebuffer,texture,depthBuffer,msaaFramebuffer,msaaColorBuffer,width:w,height:h};
 }
 
 function program(gl:WebGL2RenderingContext,fs:string){
@@ -199,7 +218,7 @@ export class HDRPipeline implements Disposable {
   begin(width:number,height:number):void{
     this.resize(width,height);
     const g=this.gl;
-    g.bindFramebuffer(g.FRAMEBUFFER,this.scene.framebuffer);
+    g.bindFramebuffer(g.FRAMEBUFFER,this.scene.msaaFramebuffer??this.scene.framebuffer);
     g.viewport(0,0,this.scene.width,this.scene.height);
     g.clearColor(0.008,0.016,0.033,1);
     g.clear(g.COLOR_BUFFER_BIT|g.DEPTH_BUFFER_BIT);
@@ -232,6 +251,8 @@ export class HDRPipeline implements Disposable {
     const g=this.gl;
     g.deleteFramebuffer(t.framebuffer);g.deleteTexture(t.texture);
     if(t.depthBuffer)g.deleteRenderbuffer(t.depthBuffer);
+    if(t.msaaColorBuffer)g.deleteRenderbuffer(t.msaaColorBuffer);
+    if(t.msaaFramebuffer)g.deleteFramebuffer(t.msaaFramebuffer);
   }
   private destroyTargets():void{
     this.destroyTarget(this.scene);this.destroyTarget(this.bright);
@@ -240,6 +261,12 @@ export class HDRPipeline implements Disposable {
 
   present(width:number,height:number):void{
     const g=this.gl;
+    if(this.scene.msaaFramebuffer){
+      g.bindFramebuffer(g.READ_FRAMEBUFFER,this.scene.msaaFramebuffer);
+      g.bindFramebuffer(g.DRAW_FRAMEBUFFER,this.scene.framebuffer);
+      g.blitFramebuffer(0,0,this.scene.width,this.scene.height,0,0,this.scene.width,this.scene.height,g.COLOR_BUFFER_BIT,g.NEAREST);
+      g.bindFramebuffer(g.FRAMEBUFFER,null);
+    }
     g.disable(g.DEPTH_TEST);g.disable(g.BLEND);
     let bloomInput:Target=this.scene;
     if(this.settings.bloom){

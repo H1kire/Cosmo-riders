@@ -35,7 +35,7 @@ export class Solar3DView{
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
   this.surfaceMapCache=new SurfaceMapCache(48*1024*1024);
-  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
+  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceLodTransitions=new Map();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -460,7 +460,10 @@ export class Solar3DView{
   }
   if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);g.uniform1f(loc.uPreviousMapsEnabled,0);return;}
   entry.used=++this.surfaceTextureClock;
-  const blend=Math.max(0,Math.min(1,(performance.now()-entry.created)/450));
+  const now=performance.now();let transition=this.surfaceLodTransitions.get(profileKey);
+  if(!transition||transition.resolution!==resolution){transition={resolution,started:0};this.surfaceLodTransitions.set(profileKey,transition);}
+  if(exact&&transition.started===0)transition.started=now;
+  const blend=exact?Math.max(0,Math.min(1,(now-transition.started)/450)):1;
   const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
   if(previous){
@@ -472,7 +475,7 @@ export class Solar3DView{
   g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
  }
  getSurfaceDiagnostics(){
-  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
+  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lodTransitions:this.surfaceLodTransitions?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
  }
  dispose(){
   if(this.disposed)return;
@@ -488,7 +491,7 @@ export class Solar3DView{
   this.orbitCache?.clear();
   for(const entry of this.surfaceGpuTextures?.values()??[])for(const texture of entry.textures)this.gl.deleteTexture(texture);
   for(const job of this.surfaceUploadQueue??[])for(const texture of job.textures??[])this.gl.deleteTexture(texture);
-  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceUploadQueue?.splice(0);this.surfaceMapCache?.dispose();this.surfaceGpuBytes=0;
+  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceUploadQueue?.splice(0);this.surfaceLodTransitions?.clear();this.surfaceMapCache?.dispose();this.surfaceGpuBytes=0;
   this.stellarSourceDefinitions?.clear();
  }
 }

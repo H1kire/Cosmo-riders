@@ -11,7 +11,7 @@ The rendering layer is independent from the physics core. It consumes camera-rel
 6. Glare and lens flare
 7. Tone mapping and final composite
 
-The current branch establishes typed contracts, resource ownership, configuration, compatibility adapters, and initial analytic utilities. GPU effects that are still placeholders are explicitly marked in their source files; they are not considered visually implemented yet.
+The rendering layer now includes a reusable GLSL chunk library (`src/rendering/shaders`) with common math, procedural noise, direct lighting, Rayleigh/Mie scattering helpers, cloud-density helpers, analytic circle-overlap math, and tone-mapping operators. `ShaderLibrary` resolves nested `#include <name>` directives, detects missing/circular includes, and injects compile-time defines. These are reusable shader building blocks; a helper is not considered a rendered effect until a GPU pass or material actually consumes it.
 
 ## Coordinate contract
 Physics remains SI. Rendering consumes camera-relative coordinates in the existing renderer convention. Unit conversion occurs only at the presentation boundary.

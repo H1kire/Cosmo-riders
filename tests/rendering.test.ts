@@ -33,3 +33,24 @@ test('render pipeline orders passes and rejects duplicate names',()=>{
  pipeline.add(pass('post',20));pipeline.add(pass('scene',0));pipeline.render({} as never);
  assert.deepEqual(order,['scene','post']);assert.throws(()=>pipeline.add(pass('scene',2)),/Duplicate/);
 });
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { ShaderLibrary } from '../src/rendering/core/shader-library.ts';
+import { createDefaultShaderLibrary } from '../src/rendering/shaders/index.ts';
+
+test('shader library expands nested reusable chunks and keeps GLSL version first',()=>{
+  const library=createDefaultShaderLibrary();
+  const source=library.compose('#version 300 es\\n#include <common>\\n#include <atmosphere>',{USE_CLOUDS:true,QUALITY:2});
+  assert.ok(source.startsWith('#version 300 es\\n#define USE_CLOUDS 1\\n#define QUALITY 2'));
+  assert.ok(source.includes('float rayleighPhase'));
+  assert.ok(source.includes('float saturate'));
+});
+
+test('shader library rejects missing and circular includes',()=>{
+  const library=new ShaderLibrary();
+  assert.throws(()=>library.compose('#include <missing>'),/Unknown shader chunk/);
+  library.register('first','#include <second>');
+  library.register('second','#include <first>');
+  assert.throws(()=>library.compose('#include <first>'),/Circular shader include/);
+});

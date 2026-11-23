@@ -85,7 +85,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const surface = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
     if (!surface.includes('uLightPositions[4]') || !surface.includes('uLightIntensities[i]/distanceSquared') || !surface.includes('distributionGGX') || !surface.includes('geometrySchlick') || !surface.includes('surfaceAlbedo')) throw new Error('Planetary materials must use inverse-square multi-light shading, microfacet specular and distinct surface maps.');
     if (!surface.includes('vec3 indirect=albedo*0.001') || !surface.includes('uSunRadius/max(sunDistance-along,1e-12)')) throw new Error('Planetary night-side floor or stellar angular penumbra is not physically bounded.');
-    if (!source.includes('g.useProgram(this.bodyProgram);\\n   const state=states.get(body.id);')) throw new Error('Surface shader must be rebound before every planet after atmosphere/cloud passes.');
+    if (!/for\(const body of bodies\)\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/.test(source)) throw new Error('Surface shader must be rebound before every planet after atmosphere/cloud passes.');
     if (!surface.includes('if(uKind>5.5)') || !source.includes('sun:6,mercury:2') || !source.includes('g.uniform1f(l.uKind,5);')) throw new Error('Only the star may use the emissive material path; the vessel must remain non-emissive.');
     if (!surface.includes('pow(uColor,vec3(2.2))')) throw new Error('Base material colors must be converted from sRGB to linear light.');
     if (!source.includes('this.lighting.sampleAt(p,\'sun\')')) throw new Error('Renderer must use the lighting engine.');

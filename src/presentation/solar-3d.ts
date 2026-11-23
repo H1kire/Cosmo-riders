@@ -237,6 +237,7 @@ export class Solar3DView{
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
   this.hdr.begin(renderWidth,renderHeight);
   this.processSurfaceUploads();
+  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels));}}
   const sunState=states.get('sun')??{position:{x:0,y:0,z:0}};
   const sun=sunState.position,bodies=[...world.bodies.values()];
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
@@ -296,7 +297,7 @@ export class Solar3DView{
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    const isStar=!body.parentId;
     const surfaceProfile=isStar?null:createSurfaceProfile(body);
-    const profileKind=surfaceProfile?.class==='gas-giant'?3:surfaceProfile?.class==='ice-giant'?4:surfaceProfile?.class==='dense-atmosphere'?5:surfaceProfile?.class==='oceanic'?1:2;
+    const profileKind=surfaceProfile?.class==='gas-giant'?3:surfaceProfile?.class==='ice-giant'?4:surfaceProfile?.class==='dense-atmosphere'?5:surfaceProfile?.class==='oceanic'?1:surfaceProfile?.class==='icy'||surfaceProfile?.class==='icy-moon'?5.3:surfaceProfile?.class==='volcanic'||surfaceProfile?.class==='volcanic-moon'?5.4:surfaceProfile?.class==='desert'?2.4:surfaceProfile?.class==='airless-moon'?2.2:2;
     g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??profileKind));
    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
     if(isStar){

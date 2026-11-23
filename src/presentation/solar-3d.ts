@@ -462,7 +462,8 @@ export class Solar3DView{
   entry.used=++this.surfaceTextureClock;
   const now=performance.now();let transition=this.surfaceLodTransitions.get(profileKey);
   if(!transition||transition.resolution!==resolution){transition={resolution,started:0};this.surfaceLodTransitions.set(profileKey,transition);}
-  if(exact&&transition.started===0)transition.started=now;
+  if(!exact)transition.started=0;
+  else if(transition.started===0)transition.started=now;
   const blend=exact?Math.max(0,Math.min(1,(now-transition.started)/450)):1;
   const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}

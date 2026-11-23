@@ -80,6 +80,7 @@ test('atmospheric giants do not receive geological relief normals',async()=>{
 });
 test('surface LOD and worker-backed cache remain bounded and deduplicate requests',async()=>{
  assert.equal(surfaceResolutionForProjectedRadius(5),64);assert.equal(surfaceResolutionForProjectedRadius(100),128);assert.equal(surfaceResolutionForProjectedRadius(600),512);
+ assert.equal(surfaceResolutionForProjectedRadius(40,'gas-giant'),64);assert.equal(surfaceResolutionForProjectedRadius(40,'icy-moon'),128);
  const cache=new SurfaceMapCache(1000000),profile=createSurfaceProfile(bodies.earth);
  const [a,b]=await Promise.all([cache.get(profile,8),cache.get(profile,8)]);
  assert.equal(a,b);assert.equal(cache.size,1);

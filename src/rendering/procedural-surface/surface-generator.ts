@@ -260,7 +260,7 @@ export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const
 export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfaceClass:SurfaceClass='rocky'):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  const giant=surfaceClass==='gas-giant'||surfaceClass==='ice-giant';
- const multiplier=giant?1.15:1;
+ const multiplier=giant?.85:1;
  const px=projectedRadius*multiplier;
  return px>1800?2048:px>900?1024:px>520?512:px>150?256:px>35?128:64;
 }

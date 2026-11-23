@@ -1,4 +1,7 @@
-# Procedural Planetary Surface System
+# Shader-Generated Planetary Surfaces
+
+> **Current runtime path:** `Solar3DView` no longer imports or invokes the CPU cube-map generator, Worker, GPU texture cache, or progressive cube-map upload. Planet surfaces are shaded directly in GLSL from continuous 3D fields sampled on the sphere. Earth land/ocean masks and gas-giant atmospheric belts are part of the shader. The former cube-map implementation below is legacy reference material, not the active renderer.
+
 
 ## Scope
 

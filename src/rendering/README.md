@@ -1,5 +1,8 @@
 # Cosmo-riders Visual Engine 0.2
 
+> Planet surfaces are currently generated directly in GLSL on the sphere. CPU-generated cubemaps and their Worker/upload pipeline are legacy code and are not used by `Solar3DView`.
+
+
 The rendering layer is independent from the physics core. It consumes camera-relative render snapshots and never changes orbital state, SI units, SOI transitions, or simulation time.
 
 ## Active render order

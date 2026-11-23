@@ -1,5 +1,8 @@
 # Foundation fixes — Cosmo-riders
 
+> **Surface rendering update:** the active renderer now uses direct GLSL terrain fields; the old CPU cubemap/Worker pipeline is disconnected. Orbit rendering has been returned to the continuous line-strip approach used by `main`, with the corrected satellite reference-frame transform retained. The spacecraft is intentionally absent from the active solar-system view.
+
+
 ## Rendering and camera
 - Global frame exposure no longer changes with the focused body's distance from the Sun.
 - A display-only per-planet gain is applied after physical surface lighting. The inverse-square light law, terminator and eclipse visibility remain in the lighting calculation; the display gain does not brighten the background or other bodies.

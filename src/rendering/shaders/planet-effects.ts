@@ -72,7 +72,7 @@ void main(){
       mieDepth+=exp(-altitude/max(uMieScaleHeight,1e-8))*stepLength/max(uMieScaleHeight,1e-8);
     }
   }
-  float day=max(dot(n,lightDir),0.0);
+  float day=smoothstep(-0.08,0.12,dot(n,lightDir))*uShadowVisibility;
   float rim=atmosphereRim(n,safeNormalize(uCameraPosition-vPosition),2.0);
   vec3 atmosphereColor=pow(uAtmosphereColor,vec3(2.2));
   float opticalAttenuation=exp(-rayleighDepth*0.055-mieDepth*0.11);
@@ -124,7 +124,7 @@ void main(){
   float alpha=edge*holes*uOpacity;
   if(alpha<0.012)discard;
   float diffuse=max(dot(n,safeNormalize(uLight)),0.0);
-  float lighting=0.01+0.99*diffuse*uShadowVisibility;
+  float lighting=diffuse*uShadowVisibility;
   vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting*(uLightIntensity/22.0);
   gl_FragColor=vec4(cloudColor,alpha*0.62);
 }`;

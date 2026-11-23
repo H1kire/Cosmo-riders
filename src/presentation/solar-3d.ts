@@ -285,6 +285,7 @@ export class Solar3DView{
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
    const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
+   const projectedScreen=this.project(vp,p,w/dpr,h/dpr);
    const level=selectMeshLod(px,this.graphics.maxMeshLod),mesh=this.meshes[level];
    
    const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
@@ -331,7 +332,7 @@ export class Solar3DView{
     this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,occluders,timeSeconds);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
-   const screen=this.project(vp,p,w/dpr,h/dpr);
+   const screen=projectedScreen;
    if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius}]);
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
@@ -381,7 +382,7 @@ export class Solar3DView{
   this.surfaceMapPending.add(key);
   this.surfaceMapCache.get(profile,resolution).then(maps=>{
    this.surfaceMapPending.delete(key);if(this.disposed)return;
-   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:performance.now()});
+   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0});
   }).catch(()=>{this.surfaceMapPending.delete(key);});
  }
  processSurfaceUploads(){
@@ -425,7 +426,7 @@ export class Solar3DView{
     this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
    }
    if(bytes<=64*1024*1024){
-    this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes,used:++this.surfaceTextureClock,created:job.created,resolution:job.resolution,profileKey:job.profileKey});
+    this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution:job.resolution,profileKey:job.profileKey});
     this.surfaceGpuBytes+=bytes;
    }else for(const texture of job.textures)g.deleteTexture(texture);
    this.surfaceUploadQueue.shift();

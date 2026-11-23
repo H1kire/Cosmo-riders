@@ -278,10 +278,12 @@ export class Solar3DView{
  drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){
   if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;
   const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;
+  const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);
+  if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12)return;
   let path=this.orbitCache.get(body.id);
   if(!path){path=[];for(let i=0;i<=192;i++){const e=body.orbitalElements;const state=rotateStateToParentEquator(orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/192},parent.mu+body.mu),body,parent);path.push(state.position);}this.orbitCache.set(body.id,path);}
   const data=[];for(const position of path){const absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}
-  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);g.drawArrays(g.LINE_STRIP,0,data.length/3);
+  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);
  }
  render(world,states,timeSeconds,vesselState=null){ render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();

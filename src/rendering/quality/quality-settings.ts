@@ -35,7 +35,7 @@ export const GRAPHICS_PRESETS: Readonly<Record<QualityLevel,GraphicsSettings>> =
   medium:{
     preset:'medium',shadows:true,shadowMapSize:512,shadowOccluders:4,
     atmosphere:true,atmosphereIntensity:0.78,clouds:true,cloudDetail:2,
-    bloom:true,bloomThreshold:1.65,bloomStrength:0.32,bloomIterations:2,
+    bloom:true,bloomThreshold:0.76,bloomStrength:0.24,bloomIterations:2,
     glare:false,glareStrength:0.2,lensFlare:false,lensFlareStrength:0.22,
     hdr:false,exposure:1.0,renderScale:0.78,maxMeshLod:1,textureQuality:'medium'
   },

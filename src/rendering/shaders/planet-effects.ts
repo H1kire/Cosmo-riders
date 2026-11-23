@@ -32,7 +32,8 @@ void main(){
   float phase=rayleighPhase(cosineAngle)*5.0+miePhase(cosineAngle,0.76)*uMie*0.8;
   float horizon=pow(1.0-abs(dot(n,viewDir)),1.35);
   float lit=0.16+0.84*day*uShadowVisibility;
-  vec3 scatter=uAtmosphereColor*(0.28+phase*2.1+horizon*0.18)*lit;
+  vec3 atmosphereColor=pow(uAtmosphereColor,vec3(2.2));
+  vec3 scatter=atmosphereColor*(0.28+phase*2.1+horizon*0.18)*lit;
   float alpha=clamp((rim*0.58+horizon*0.10)*uIntensity,0.0,0.68);
   gl_FragColor=vec4(scatter*uLightColor,alpha);
 }`;

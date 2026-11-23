@@ -25,7 +25,7 @@ float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(
 float shadowVisibility(vec3 point){
  if(uShadows==0)return 1.0;
  vec3 toSun=uSunPosition-point;float sunDistance=length(toSun);vec3 ray=toSun/max(sunDistance,1e-12);float visibility=1.0;
- for(int i=0;i<8;i++){if(i<uOccluderCount){vec3 toBlocker=uOccluders[i]-point;float along=dot(toBlocker,ray);if(along>0.0&&along<sunDistance){float perpendicular=length(toBlocker-ray*along);float penumbra=uOccluderRadii[i]*0.012+along*uSunRadius/max(sunDistance-along,1e-12);float umbra=max(0.0,uOccluderRadii[i]-along*uSunRadius/max(sunDistance-along,1e-12));visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);}}}
+ for(int i=0;i<8;i++){if(i<uOccluderCount){vec3 toBlocker=uOccluders[i]-point;float along=dot(toBlocker,ray);if(along>0.0&&along<sunDistance){float perpendicular=length(toBlocker-ray*along);float penumbra=uOccluderRadii[i]+along*uSunRadius/max(sunDistance-along,1e-12);float umbra=max(0.0,uOccluderRadii[i]-along*uSunRadius/max(sunDistance-along,1e-12));visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);}}}
  return clamp(visibility,0.0,1.0);
 }
 void main(){
@@ -80,7 +80,6 @@ export class Solar3DView{
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
-  this.configurePlanetEffects();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
   this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingEngine();
   this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;
@@ -96,7 +95,7 @@ export class Solar3DView{
   h.hdr=settings.hdr;h.exposure=settings.exposure;h.toneMapping=settings.hdr?'aces':'reinhard';
  }
  configurePlanetEffects(){
-  const profiles=[
+  const profiles:[string,number,[number,number,number],number,number][]=[
    ['earth',110000,[.22,.48,1.0],.62,1.0],
    ['venus',250000,[1.0,.58,.28],.92,1.1],
    ['mars',100000,[1.0,.34,.19],.34,.72],
@@ -109,7 +108,7 @@ export class Solar3DView{
    const body=this.systemBodyById?.get(id);
    if(body)this.atmosphereSystem.setProfile({bodyId:id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:height,rayleigh:color, mie,rayleighScaleHeightM:height*.12,mieScaleHeightM:height*.08,mieAnisotropy:.76,intensity});
   }
-  const cloudProfiles=[
+  const cloudProfiles:[string,number,number,number,number][]=[
    ['earth',18000,.48,.82,5.8],
    ['venus',55000,.59,.78,4.4],
    ['jupiter',70000,.55,.54,7.2],
@@ -163,7 +162,7 @@ export class Solar3DView{
    if(along<=0||along>=sunDistance)continue;
    const px=dx-direction[0]*along,py=dy-direction[1]*along,pz=dz-direction[2]*along;
    const perpendicular=Math.hypot(px,py,pz),radius=other.meanRadiusM;
-   if(perpendicular>radius+body.meanRadiusM*.15)continue;
+   if(perpendicular>radius+body.meanRadiusM)continue;
    candidates.push({state,body:other,score:perpendicular/Math.max(radius,1)});
   }
   candidates.sort((a,b)=>a.score-b.score);
@@ -262,14 +261,14 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  const bodyMeshes=new Map();
+  
   for(const body of bodies){
    const state=states.get(body.id);if(!state)continue;
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
    const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
    const requestedLevel=px>70?2:px>18?1:0,level=Math.min(this.graphics.maxMeshLod,requestedLevel),mesh=this.meshes[level];
-   bodyMeshes.set(body.id,mesh);
+   
    const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
@@ -281,14 +280,14 @@ export class Solar3DView{
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);
    g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);
    this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
-   const centerVisibility=this.getCenterShadowVisibility(body,state,sunState,bodies,states);
    const profile=this.atmosphereSystem.getProfile(body.id);
+   const cloudLayers=this.cloudSystem.getLayers(body.id);
+   const centerVisibility=(profile||cloudLayers.length)?this.getCenterShadowVisibility(body,state,sunState,bodies,states):1;
    if(this.graphics.atmosphere&&profile){
     g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
     this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,centerVisibility);
     g.depthMask(true);g.disable(g.BLEND);
    }
-   const cloudLayers=this.cloudSystem.getLayers(body.id);
    if(this.graphics.clouds&&cloudLayers.length){
     g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
     this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,centerVisibility,timeSeconds);

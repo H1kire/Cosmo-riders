@@ -1,13 +1,13 @@
 import { orbitalElementsToState } from '../physics/orbital-state.ts';
 import { AU } from '../physics/constants.ts';
-import { LightingSystem } from '../rendering/lighting/lighting-system.ts';
+import { LightingSystem, focusedSolarExposureMultiplier } from '../rendering/lighting/lighting-system.ts';
 import { HDRPipeline } from '../rendering/core/hdr-pipeline.ts';
 import { createDefaultShaderLibrary } from '../rendering/shaders/index.ts';
 import { ATMOSPHERE_VERTEX, ATMOSPHERE_FRAGMENT, CLOUD_VERTEX, CLOUD_FRAGMENT } from '../rendering/shaders/planet-effects.ts';
 import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
 import { CloudSystem } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
-import { selectMeshLod, planetaryOrbitOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
+import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
 import { createSurfaceProfile,surfaceResolutionForProjectedRadius,surfaceProfileKey } from '../rendering/procedural-surface/surface-generator.ts';
@@ -23,6 +23,52 @@ const sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),c
 function perspective(f,a,n,fz){const q=1/Math.tan(f/2),d=1/(n-fz);return[q/a,0,0,0,0,q,0,0,0,0,(fz+n)*d,-1,0,0,2*fz*n*d,0];}
 function lookAt(e,t,u){const z=norm(sub(e,t)),x=norm(cross(u,z)),y=cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1];}
 function multiply(a,b){const o=Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o;}
+function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState){
+ const relativePosition=state&&parentState?[state.position.x-parentState.position.x,state.position.y-parentState.position.y,state.position.z-parentState.position.z]:null;
+ const relativeVelocity=state&&parentState?[state.velocity.x-parentState.velocity.x,state.velocity.y-parentState.velocity.y,state.velocity.z-parentState.velocity.z]:null;
+ const mapVector=v=>[v[0],v[2],v[1]];
+ if(body.tidalLock&&relativePosition&&relativeVelocity){
+  const orbitNormal=norm(mapVector(cross(relativePosition,relativeVelocity)));
+  const towardParent=norm(mapVector([parentState.position.x-state.position.x,parentState.position.y-state.position.y,parentState.position.z-state.position.z]));
+  const right=norm(cross(orbitNormal,towardParent));
+  if(Math.hypot(...right)>0.5){
+   const up=norm(cross(towardParent,right));
+   return [right[0]*radius,up[0]*radius,towardParent[0]*radius,0,right[1]*radius,up[1]*radius,towardParent[1]*radius,0,right[2]*radius,up[2]*radius,towardParent[2]*radius,0,p[0],p[1],p[2],1];
+  }
+ }
+ let spinAxis,forward;
+ if(body.poleRightAscensionRad!==null&&body.poleRightAscensionRad!==undefined&&body.poleDeclinationRad!==null&&body.poleDeclinationRad!==undefined){
+  const epsilon=23.4392911*Math.PI/180,ra=body.poleRightAscensionRad,dec=body.poleDeclinationRad;
+  const equatorial=[Math.cos(dec)*Math.cos(ra),Math.cos(dec)*Math.sin(ra),Math.sin(dec)];
+  const ecliptic=[equatorial[0],Math.cos(epsilon)*equatorial[1]+Math.sin(epsilon)*equatorial[2],-Math.sin(epsilon)*equatorial[1]+Math.cos(epsilon)*equatorial[2]];
+  spinAxis=norm(mapVector(ecliptic));
+  const equatorialNorth=mapVector([0,Math.sin(epsilon),Math.cos(epsilon)]);
+  let reference=cross(equatorialNorth,spinAxis);
+  if(Math.hypot(...reference)<1e-7){
+   const axis=[1,0,0],projection=dot(axis,spinAxis);
+   reference=axis.map((value,index)=>value-spinAxis[index]*projection);
+  }
+  forward=norm(reference);
+ }else{
+  const orbitNormal=relativePosition&&relativeVelocity?norm(mapVector(cross(relativePosition,relativeVelocity))):[0,1,0];
+  const reference=[1,0,0],projection=dot(reference,orbitNormal);
+  const orbitX=norm(reference.map((value,index)=>value-orbitNormal[index]*projection));
+  const orbitY=norm(cross(orbitNormal,orbitX));
+  const tilt=body.axialTiltRad??0;
+  spinAxis=norm(orbitNormal.map((value,index)=>value*Math.cos(tilt)+orbitY[index]*Math.sin(tilt)));
+  const projectionX=dot(orbitX,spinAxis);
+  forward=norm(orbitX.map((value,index)=>value-spinAxis[index]*projectionX));
+ }
+ const right=norm(cross(spinAxis,forward));
+ forward=norm(cross(right,spinAxis));
+ const angle=body.rotationAngleAt?.(timeSeconds)??0,ca=Math.cos(angle),sa=Math.sin(angle);
+ const rotatedRight=right.map((value,index)=>value*ca-forward[index]*sa);
+ const rotatedForward=right.map((value,index)=>value*sa+forward[index]*ca);
+ return [rotatedRight[0]*radius,spinAxis[0]*radius,rotatedForward[0]*radius,0,
+  rotatedRight[1]*radius,spinAxis[1]*radius,rotatedForward[1]*radius,0,
+  rotatedRight[2]*radius,spinAxis[2]*radius,rotatedForward[2]*radius,0,p[0],p[1],p[2],1];
+}
+function scaleModelMatrix(model,factor){return [model[0]*factor,model[1]*factor,model[2]*factor,0,model[4]*factor,model[5]*factor,model[6]*factor,0,model[8]*factor,model[9]*factor,model[10]*factor,0,model[12],model[13],model[14],1];}
 function compile(gl,type,src){const s=gl.createShader(type);if(!s)throw Error('WebGL shader allocation failed');let source=src;if(typeof gl.createVertexArray==='function'){source=source.replace(/\battribute\b/g,'in').replace(/\bvarying\b/g,type===gl.VERTEX_SHADER?'out':'in');if(type===gl.FRAGMENT_SHADER&&source.includes('gl_FragColor')){source=source.replace(/(precision\s+\w+\s+float;)/,'$1\nout vec4 outColor;').replace(/gl_FragColor/g,'outColor');}source='#version 300 es\n'+source;}gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const error=gl.getShaderInfoLog(s);gl.deleteShader(s);throw Error(error);}return s;}
 function makeProgram(gl,vs,fs){const vertex=compile(gl,gl.VERTEX_SHADER,vs),fragment=compile(gl,gl.FRAGMENT_SHADER,fs),p=gl.createProgram();if(!p){gl.deleteShader(vertex);gl.deleteShader(fragment);throw Error('WebGL program allocation failed');}gl.attachShader(p,vertex);gl.attachShader(p,fragment);gl.linkProgram(p);gl.detachShader(p,vertex);gl.detachShader(p,fragment);gl.deleteShader(vertex);gl.deleteShader(fragment);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){const error=gl.getProgramInfoLog(p);gl.deleteProgram(p);throw Error(error);}return p;}
 function makeSphere(gl,lat,lon){const p=[],n=[],idx=[];for(let y=0;y<=lat;y++){const v=y/lat,phi=v*Math.PI;for(let x=0;x<=lon;x++){const theta=x/lon*Math.PI*2,q=[-Math.cos(theta)*Math.sin(phi),Math.cos(phi),Math.sin(theta)*Math.sin(phi)];p.push(...q);n.push(...q);}}for(let y=0;y<lat;y++)for(let x=0;x<lon;x++){const a=y*(lon+1)+x,b=a+lon+1;idx.push(a,b,a+1,b,b+1,a+1);}const buffers=[gl.createBuffer(),gl.createBuffer(),gl.createBuffer()];gl.bindBuffer(gl.ARRAY_BUFFER,buffers[0]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(p),gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,buffers[1]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(n),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,buffers[2]);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return{buffers,count:idx.length};}
@@ -34,8 +80,8 @@ export class Solar3DView{
   if(!this.gl)throw Error('WebGL2 недоступен');
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
-  this.surfaceMapCache=new SurfaceMapCache(48*1024*1024);
-  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceLodTransitions=new Map();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
+  this.surfaceMapCache=new SurfaceMapCache(192*1024*1024);
+  this.surfaceGpuTextures=new Map();this.surfaceGpuBudgetBytes=256*1024*1024;this.anisotropyExt=g.getExtension('EXT_texture_filter_anisotropic')??g.getExtension('WEBKIT_EXT_texture_filter_anisotropic');this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceLodTransitions=new Map();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -120,14 +166,14 @@ export class Solar3DView{
   g.uniform1f(l.uIntensity,(profile.intensity??1)*this.graphics.atmosphereIntensity);
   g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
  }
- drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds){
+ drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){
   const g=this.gl,l=this.cloudLoc;
   g.useProgram(this.cloudProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   g.uniform3f(l.uLightColor,...light.color);
   g.uniform1f(l.uTime,timeSeconds%100000);g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);
   for(const layer of layers){
    const shellRadius=radius*(1+layer.altitudeM/body.meanRadiusM);
-   const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
+   const model=scaleModelMatrix(baseModel,shellRadius/radius);
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));g.uniform1f(l.uCoverage,layer.coverage);
    g.uniform2f(l.uWind,layer.wind[0],layer.wind[1]);g.uniform1f(l.uOpacity,layer.opacity);g.uniform1f(l.uScale,layer.scale*this.graphics.cloudDetail);
    g.uniform1f(l.uSeed,body.meanRadiusM*.000001);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
@@ -245,6 +291,13 @@ export class Solar3DView{
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
   if(!this.effectsConfigured){this.configurePlanetEffects();this.effectsConfigured=true;}
   const focus=this.focusId?world.bodies.get(this.focusId):null,focusState=focus?states.get(focus.id):null;
+  const focusSunDistance=focusState?Math.hypot(focusState.position.x-sun.x,focusState.position.y-sun.y,focusState.position.z-sun.z)/AU:1;
+  const targetExposure=this.graphics.exposure*focusedSolarExposureMultiplier(focusSunDistance);
+  const exposureDelta=this.lastExposureUpdateMs?Math.max(0,frameStarted-this.lastExposureUpdateMs):1000;
+  const exposureBlend=1-Math.exp(-exposureDelta/450);
+  this.exposureCompensation+=(targetExposure-this.exposureCompensation)*exposureBlend;
+  this.lastExposureUpdateMs=frameStarted;
+  this.hdr.settings.exposure=this.exposureCompensation;
   if(focusState){this.cameraOrigin=[0,0,0];this.target=this.focusOffset.slice();}
   else{this.cameraOrigin=[0,0,0];this.target=[0,0,0];}
   const eye=[this.target[0]+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target[1]+this.distance*Math.sin(this.pitch),this.target[2]+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)];
@@ -281,18 +334,19 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class),1000000);}}
+  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(renderHeight/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus),qualityLimit={low:512,medium:1024,high:2048,ultra:2048}[this.graphics.textureQuality]??1024;this.requestSurfaceMaps(focusProfile,Math.min(qualityLimit,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class)),1000000);}}
   
   for(const body of bodies){
    g.useProgram(this.bodyProgram);
    const state=states.get(body.id);if(!state)continue;
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
-   const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
+   const px=radius*(renderHeight/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
    const projectedScreen=this.project(vp,p,w/dpr,h/dpr);
    const level=selectMeshLod(px,this.graphics.maxMeshLod),mesh=this.meshes[level];
    
-   const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
+   const parentState=body.parentId?states.get(body.parentId):null;
+   const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState);
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
    g.uniform3f(l.uCameraPosition,...eye);
@@ -308,7 +362,8 @@ export class Solar3DView{
      g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
-     const surfaceResolution=surfaceResolutionForProjectedRadius(px,surfaceProfile!.class);
+     const qualityLimit={low:512,medium:1024,high:2048,ultra:2048}[this.graphics.textureQuality]??1024;
+     const surfaceResolution=Math.min(qualityLimit,surfaceResolutionForProjectedRadius(px,surfaceProfile!.class));
      if(px>=4&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20){const centerBias=1-Math.min(1,Math.hypot(projectedScreen.x-w/(2*dpr),projectedScreen.y-h/(2*dpr))/Math.max(1,Math.hypot(w/dpr,h/dpr)*.5));const priority=(body.id===this.focusId?100000:0)+Math.min(px,10000)*10+centerBias*25;this.requestSurfaceMaps(surfaceProfile!,surfaceResolution,priority);}
      this.bindSurfaceMaps(surfaceProfile!,surfaceResolution,l);
      g.uniform1f(l.uSeed,surfaceProfile!.seed%16777216);
@@ -333,11 +388,11 @@ export class Solar3DView{
    }
    if(this.graphics.clouds&&cloudLayers.length){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
-    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,occluders,timeSeconds);
+    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,occluders,timeSeconds,model);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    const screen=projectedScreen;
-   if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius}]);
+   if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   if(vesselState?.position){
@@ -357,8 +412,9 @@ export class Solar3DView{
    if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}
    node.textContent=world.bodies.get(id)?.name??NAMES[id]??id;
    node.style.transform='translate3d('+Math.round(p.x+8)+'px,'+Math.round(p.y-7)+'px,0)';
+   node.style.opacity=String(p.labelOpacity);
   }
-  for(const [id,node] of this.labelNodes)node.hidden=!this.projected.some(item=>item[0]===id);
+  for(const [id,node] of this.labelNodes){const projected=this.projected.find(item=>item[0]===id);node.hidden=!projected||projected[1].labelOpacity<=0.005;}
   const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
   let sunVisible=Boolean(sunScreen&&sunScreen.z>=-1&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);
   if(sunVisible){
@@ -418,17 +474,17 @@ export class Solar3DView{
   const uploadStarted=performance.now(),g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
   const active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
   const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
-  const channels=[job.maps.albedo,job.maps.height,job.maps.roughness,job.maps.normal];
+  const channels=[{data:job.maps.albedo,resolution:job.maps.resolution,components:4,internalFormat:g.RGBA8,format:g.RGBA},{data:job.maps.height,resolution:job.maps.heightResolution,components:1,internalFormat:g.R8,format:g.RED},{data:job.maps.roughness,resolution:job.maps.roughnessResolution,components:1,internalFormat:g.R8,format:g.RED},{data:job.maps.normal,resolution:job.maps.normalResolution,components:3,internalFormat:g.RGB8,format:g.RGB}];
   if(job.textures.length===0){
-   const reservedBytes=Math.ceil(job.resolution*job.resolution*4*6*4*4/3);
-   while(this.surfaceGpuBytes+reservedBytes>64*1024*1024&&this.surfaceGpuTextures.size){
+   const reservedBytes=Math.ceil((job.maps.albedo.byteLength+job.maps.height.byteLength+job.maps.roughness.byteLength+job.maps.normal.byteLength)*4/3);
+   while(this.surfaceGpuBytes+reservedBytes>this.surfaceGpuBudgetBytes&&this.surfaceGpuTextures.size){
     let oldestKey=null,oldest=Infinity;
     for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
     if(oldestKey===null)break;
     const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
     this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
    }
-   if(reservedBytes>64*1024*1024){this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
+   if(reservedBytes>this.surfaceGpuBudgetBytes){this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
    job.bytes=reservedBytes;this.surfaceGpuBytes+=reservedBytes;
    for(let i=0;i<4;i++){
     const texture=g.createTexture();if(!texture){for(const allocated of job.textures)g.deleteTexture(allocated);this.surfaceGpuBytes-=job.bytes;this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
@@ -437,16 +493,17 @@ export class Solar3DView{
     g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
     g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);
     g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
+    if(this.anisotropyExt){const maxAnisotropy=Number(g.getParameter(this.anisotropyExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT))||1;g.texParameterf(g.TEXTURE_CUBE_MAP,this.anisotropyExt.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,maxAnisotropy));}
     job.textures.push(texture);
    }
   }
-  const faceBytes=job.resolution*job.resolution*4;
   let budget=2;
   while(budget-->0&&job.faceIndex<24){
-   const textureIndex=Math.floor(job.faceIndex/6),face=job.faceIndex%6;
+   const textureIndex=Math.floor(job.faceIndex/6),face=job.faceIndex%6,channel=channels[textureIndex];
+   const faceBytes=channel.resolution*channel.resolution*channel.components;
    g.bindTexture(g.TEXTURE_CUBE_MAP,job.textures[textureIndex]);
-   const data=channels[textureIndex].subarray(face*faceBytes,(face+1)*faceBytes);
-   g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,g.RGBA,job.resolution,job.resolution,0,g.RGBA,g.UNSIGNED_BYTE,data);
+   const data=channel.data.subarray(face*faceBytes,(face+1)*faceBytes);
+   g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,channel.internalFormat,channel.resolution,channel.resolution,0,channel.format,g.UNSIGNED_BYTE,data);
    job.faceIndex++;
   }
   if(job.faceIndex===24&&job.mipIndex<4){

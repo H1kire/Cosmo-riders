@@ -130,3 +130,36 @@ test('Moon rendering inputs preserve the Earth-relative physical orbit and radiu
  assert.ok(Math.abs(moonBody.meanRadiusM/earthBody.meanRadiusM-0.2727)<0.001);
  assert.ok(moonBody.meanRadiusM/AU<0.000012);
 });
+
+test('sidereal rotation is analytic, deterministic and independent of frame stepping',()=>{
+ const body=new CelestialBody({id:'spin-test',name:'Spin test',massKg:1e20,meanRadiusM:1e6,rotationPeriodSeconds:10,rotationDirection:-1,axialTiltRad:.4,primeMeridianRad:.2});
+ assert.equal(body.rotationAngleAt(0),.2);
+ assert.ok(Math.abs(body.rotationAngleAt(2.5)!-(.2-Math.PI/2))<1e-12);
+ assert.ok(Math.abs(body.rotationAngleAt(12.5)!-(.2-2.5*Math.PI))<1e-12);
+ const same=new CelestialBody({id:'spin-test-2',name:'Spin test 2',massKg:1e20,meanRadiusM:1e6,rotationPeriodSeconds:10,rotationDirection:-1,axialTiltRad:.4,primeMeridianRad:.2});
+ assert.equal(body.rotationAngleAt(12345),same.rotationAngleAt(12345));
+});
+test('Solar System planets expose sidereal spin and axial obliquity as physical inputs',()=>{
+ const world=createSolarSystemWorld();
+ for(const id of ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune']){
+  const body=world.bodies.get(id)!;
+  assert.ok(body.rotationPeriodSeconds!==null&&body.rotationPeriodSeconds>0,id+' missing spin period');
+  assert.ok(body.axialTiltRad!==null&&Number.isFinite(body.axialTiltRad),id+' missing axial tilt');
+  assert.ok(body.poleRightAscensionRad!==null&&body.poleDeclinationRad!==null,id+' missing IAU pole direction');
+ }
+ assert.ok(world.bodies.get('venus')!.axialTiltRad!>Math.PI/2);
+ assert.ok(world.bodies.get('uranus')!.axialTiltRad!>Math.PI/2);
+ assert.equal(world.bodies.get('venus')!.rotationDirection,-1);
+ assert.equal(world.bodies.get('uranus')!.rotationDirection,-1);
+ assert.ok(Math.abs(world.bodies.get('venus')!.primeMeridianRad!-160.20*Math.PI/180)<1e-12);
+});
+test('regular moons use parent-facing synchronous orientation and orbital-period spin',()=>{
+ const world=createSolarSystemWorld();
+ for(const id of ['moon','phobos','deimos','io','europa','ganymede','callisto','titan','triton']){
+  const body=world.bodies.get(id)!;
+  assert.equal(body.tidalLock,true,id+' should be tidally locked');
+  assert.ok(body.rotationPeriodSeconds!==null&&body.rotationPeriodSeconds>0,id+' missing synchronous period');
+ }
+ assert.equal(world.bodies.get('hyperion')!.tidalLock,false);
+ assert.equal(world.bodies.get('hyperion')!.rotationPeriodSeconds,null);
+});

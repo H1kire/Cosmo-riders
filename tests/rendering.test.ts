@@ -88,6 +88,8 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
 });
 
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
+import { CLOUD_VERTEX, CLOUD_FRAGMENT } from '../src/rendering/shaders/planet-effects.ts';
+import { focusedSolarExposureMultiplier } from '../src/rendering/lighting/lighting-system.ts';
 
 
 
@@ -139,7 +141,7 @@ test('solar lighting system preserves the primary star and supports additional p
  assert.equal(lighting.getSources().length,2);
 });
 
-import { selectMeshLod, planetaryOrbitOpacity, projectedOrbitRadius } from '../src/rendering/quality/render-lod.ts';
+import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../src/rendering/quality/render-lod.ts';
 
 test('screen-space mesh LOD increases detail only when projected size requires it',()=>{
  assert.equal(selectMeshLod(8,3),0);
@@ -164,4 +166,32 @@ test('sub-pixel orbit paths can be culled before GPU buffer upload',()=>{
  assert.ok(distant<0.8);
  assert.ok(local>100);
  assert.equal(projectedOrbitRadius(0,1080,1),0);
+});
+
+test('body labels fade smoothly with the inverse of the existing orbit distance curve',()=>{
+ const radius=6371000/149597870700;
+ assert.equal(planetaryLabelOpacity(radius*20,radius),1);
+ assert.equal(planetaryLabelOpacity(radius*120,radius),1);
+ assert.ok(planetaryLabelOpacity(radius*1000,radius)>0&&planetaryLabelOpacity(radius*1000,radius)<1);
+ assert.equal(planetaryLabelOpacity(radius*2400,radius),0);
+ assert.equal(planetaryLabelOpacity(1,0),1);
+});
+test('planet surface maps are sampled in local coordinates and their normals follow the body model',()=>{
+ const source=PLANET_SURFACE_VERTEX+'\\n'+PLANET_SURFACE_FRAGMENT;
+ assert.ok(source.includes('vSurfaceDirection=n'));
+ assert.ok(source.includes('normalize(vSurfaceDirection)'));
+ assert.ok(source.includes('mat3(uModel)*bakedNormal'));
+});
+
+test('focused-body exposure compensates inverse-square solar dimming without changing the light law',()=>{
+ assert.equal(focusedSolarExposureMultiplier(1),1);
+ assert.ok(Math.abs(focusedSolarExposureMultiplier(5.2)-27.04)<1e-10);
+ assert.equal(focusedSolarExposureMultiplier(30),900);
+ assert.equal(focusedSolarExposureMultiplier(50),900);
+ assert.equal(focusedSolarExposureMultiplier(0),1);
+});
+test('cloud density fields are sampled in body-local coordinates while lighting uses world normals',()=>{
+ assert.ok(CLOUD_VERTEX.includes('vLocalNormal=aNormal'));
+ assert.ok(CLOUD_FRAGMENT.includes('localDirection=safeNormalize(vLocalNormal)'));
+ assert.ok(CLOUD_FRAGMENT.includes('vec3 n=safeNormalize(vNormal)'));
 });

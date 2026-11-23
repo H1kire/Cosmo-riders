@@ -18,7 +18,7 @@ export interface SurfaceBodyInput {
  surface?:Partial<Omit<SurfaceGenerationProfile,'id'|'seed'|'gravityMS2'>> & {mineralComposition?:readonly string[]};
 }
 export interface SurfaceCubeMaps {
- resolution:number; seed:number; generationMs:number; albedo:Uint8Array; height:Uint8Array; roughness:Uint8Array; normal:Uint8Array;
+ resolution:number; heightResolution:number; roughnessResolution:number; normalResolution:number; seed:number; generationMs:number; albedo:Uint8Array; height:Uint8Array; roughness:Uint8Array; normal:Uint8Array;
 }
 const clamp=(v:number,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
@@ -255,12 +255,14 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  height=clamp(height,-.45,.45);
  return {height,albedo,roughness,material};
 }
-export const SURFACE_GENERATION_VERSION='3.0.0';
+export const SURFACE_GENERATION_VERSION='4.0.0';
 export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const {id: _bodyId,...generationProfile}=profile;const fingerprint=JSON.stringify(generationProfile);return SURFACE_GENERATION_VERSION+':'+stableSeed(fingerprint).toString(16)+':'+fingerprint;}
 export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfaceClass:SurfaceClass='rocky'):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
- const thresholds=surfaceClass==='gas-giant'||surfaceClass==='ice-giant'?[680,220,60]:surfaceClass==='icy'||surfaceClass==='icy-moon'?[460,125,28]:[520,150,35];
- return projectedRadius>thresholds[0]?512:projectedRadius>thresholds[1]?256:projectedRadius>thresholds[2]?128:64;
+ const giant=surfaceClass==='gas-giant'||surfaceClass==='ice-giant';
+ const multiplier=giant?1.15:1;
+ const px=projectedRadius*multiplier;
+ return px>1800?2048:px>900?1024:px>520?512:px>150?256:px>35?128:64;
 }
 const FACE_DIRECTIONS=[
  (u:number,v:number):[number,number,number]=>[1,-v,-u],(u:number,v:number):[number,number,number]=>[-1,-v,u],
@@ -271,30 +273,44 @@ export function cubeFaceDirection(face:number,u:number,v:number):[number,number,
  if(!Number.isInteger(face)||face<0||face>=6)throw new RangeError('Cube face index must be in [0, 5].');
  return normalize(FACE_DIRECTIONS[face](u,v));
 }
-export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,resolution=128,yieldFace?:()=>Promise<void>):Promise<SurfaceCubeMaps>{
- if(!Number.isInteger(resolution)||resolution<8||resolution>1024)throw new RangeError('Surface map resolution must be an integer from 8 to 1024.');
- const generationStarted=performance.now();
- const pixels=6*resolution*resolution,albedo=new Uint8Array(pixels*4),height=new Uint8Array(pixels*4),roughness=new Uint8Array(pixels*4),normal=new Uint8Array(pixels*4);
- const idx=(face:number,x:number,y:number)=>(face*resolution*resolution+y*resolution+x)*4;
- const eps=1/resolution,gas=profile.class==='gas-giant'||profile.class==='ice-giant';
+type CubeChannelSampler=(direction:[number,number,number],u:number,v:number,face:number)=>number[];
+async function generateCubeChannel(resolution:number,components:number,sampler:CubeChannelSampler,yieldFace?:()=>Promise<void>):Promise<Uint8Array>{
+ const output=new Uint8Array(6*resolution*resolution*components);
  for(let face=0;face<6;face++){
-  for(let y=0;y<resolution;y++){for(let x=0;x<resolution;x++){
-   const u=x/(resolution-1)*2-1,v=y/(resolution-1)*2-1,dir=cubeFaceDirection(face,u,v),sample=sampleSurface(dir,profile),i=idx(face,x,y);
-   albedo[i]=Math.round(clamp(sample.albedo[0])*255);albedo[i+1]=Math.round(clamp(sample.albedo[1])*255);albedo[i+2]=Math.round(clamp(sample.albedo[2])*255);albedo[i+3]=255;
-   height[i]=Math.round(clamp(sample.height+.5)*255);height[i+1]=0;height[i+2]=0;height[i+3]=255;
-   roughness[i]=Math.round(clamp(sample.roughness)*255);roughness[i+1]=0;roughness[i+2]=0;roughness[i+3]=255;
-   if(gas){normal[i]=Math.round((dir[0]*.5+.5)*255);normal[i+1]=Math.round((dir[1]*.5+.5)*255);normal[i+2]=Math.round((dir[2]*.5+.5)*255);normal[i+3]=255;continue;}
-   const up: [number,number,number]=Math.abs(dir[1])<.9?[0,1,0]:[1,0,0];
-   const cross=(a:[number,number,number],b:[number,number,number]):[number,number,number]=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-   const t=normalize(cross(dir,up)),b=cross(dir,t);
-   const offset=(axis:[number,number,number],sign:number)=>normalize([dir[0]+axis[0]*eps*sign,dir[1]+axis[1]*eps*sign,dir[2]+axis[2]*eps*sign]);
-   const du=(sampleSurfaceHeight(offset(t,1),profile)-sampleSurfaceHeight(offset(t,-1),profile))/(2*eps);
-   const dv=(sampleSurfaceHeight(offset(b,1),profile)-sampleSurfaceHeight(offset(b,-1),profile))/(2*eps);
-   const n=normalize([dir[0]-t[0]*du*.045-b[0]*dv*.045,dir[1]-t[1]*du*.045-b[1]*dv*.045,dir[2]-t[2]*du*.045-b[2]*dv*.045]);
-   normal[i]=Math.round((n[0]*.5+.5)*255);normal[i+1]=Math.round((n[1]*.5+.5)*255);normal[i+2]=Math.round((n[2]*.5+.5)*255);normal[i+3]=255;
-  }
-  if(yieldFace&&(y&7)===7)await yieldFace();
+  for(let y=0;y<resolution;y++){
+   const v=y/(resolution-1)*2-1;
+   for(let x=0;x<resolution;x++){
+    const u=x/(resolution-1)*2-1,values=sampler(cubeFaceDirection(face,u,v),u,v,face);
+    const index=(face*resolution*resolution+y*resolution+x)*components;
+    for(let channel=0;channel<components;channel++)output[index+channel]=Math.round(clamp(values[channel]??0)*255);
+   }
+   if(yieldFace&&(y&7)===7)await yieldFace();
   }
  }
- return {resolution,seed:profile.seed,generationMs:performance.now()-generationStarted,albedo,height,roughness,normal};
+ return output;
+}
+export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,resolution=128,yieldFace?:()=>Promise<void>):Promise<SurfaceCubeMaps>{
+ if(!Number.isInteger(resolution)||resolution<8||resolution>4096)throw new RangeError('Surface map resolution must be an integer from 8 to 4096.');
+ const generationStarted=performance.now();
+ // Высокочастотная цветовая карта получает полный LOD; геометрические и scalar-карты ограничены независимо.
+ const heightResolution=Math.min(resolution,512),roughnessResolution=Math.min(resolution,512),normalResolution=Math.min(resolution,1024);
+ const gas=profile.class==='gas-giant'||profile.class==='ice-giant';
+ const albedo=await generateCubeChannel(resolution,4,direction=>{
+  const sample=sampleSurface(direction,profile);return [sample.albedo[0],sample.albedo[1],sample.albedo[2],1];
+ },yieldFace);
+ const height=await generateCubeChannel(heightResolution,1,direction=>[sampleSurfaceHeight(direction,profile)+.5],yieldFace);
+ const roughness=await generateCubeChannel(roughnessResolution,1,direction=>[sampleSurface(direction,profile).roughness],yieldFace);
+ const normal=await generateCubeChannel(normalResolution,3,direction=>{
+  if(gas)return [direction[0]*.5+.5,direction[1]*.5+.5,direction[2]*.5+.5];
+  const eps=1/normalResolution;
+  const up:[number,number,number]=Math.abs(direction[1])<.9?[0,1,0]:[1,0,0];
+  const cross=(a:[number,number,number],b:[number,number,number]):[number,number,number]=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const tangent=normalize(cross(direction,up)),bitangent=cross(direction,tangent);
+  const offset=(axis:[number,number,number],sign:number)=>normalize([direction[0]+axis[0]*eps*sign,direction[1]+axis[1]*eps*sign,direction[2]+axis[2]*eps*sign]);
+  const du=(sampleSurfaceHeight(offset(tangent,1),profile)-sampleSurfaceHeight(offset(tangent,-1),profile))/(2*eps);
+  const dv=(sampleSurfaceHeight(offset(bitangent,1),profile)-sampleSurfaceHeight(offset(bitangent,-1),profile))/(2*eps);
+  const n=normalize([direction[0]-tangent[0]*du*.045-bitangent[0]*dv*.045,direction[1]-tangent[1]*du*.045-bitangent[1]*dv*.045,direction[2]-tangent[2]*du*.045-bitangent[2]*dv*.045]);
+  return [n[0]*.5+.5,n[1]*.5+.5,n[2]*.5+.5];
+ },yieldFace);
+ return {resolution,heightResolution,roughnessResolution,normalResolution,seed:profile.seed,generationMs:performance.now()-generationStarted,albedo,height,roughness,normal};
 }

@@ -11,6 +11,18 @@ export interface CelestialBodyDefinition {
   readonly name: string;
   readonly massKg: number;
   readonly meanRadiusM: number;
+  readonly equatorialRadiusM?: number | null;
+  readonly rotationPeriodSeconds?: number | null;
+  readonly axialTiltRad?: number | null;
+  readonly poleRightAscensionRad?: number | null;
+  readonly poleDeclinationRad?: number | null;
+  readonly rotationDirection?: 1 | -1;
+  readonly primeMeridianRad?: number;
+  readonly rotationEpochSeconds?: number;
+  readonly tidalLock?: boolean;
+  readonly solarDaySeconds?: number | null;
+  readonly atmosphereComposition?: readonly string[];
+  readonly hasRings?: boolean;
   readonly mu: number;
   readonly parentId: string | null;
 }

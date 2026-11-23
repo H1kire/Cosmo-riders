@@ -1,10 +1,27 @@
 import { AU, DAY, G } from './constants.ts';
 import { CelestialBody } from './celestial-body.ts';
 import { PhysicsWorld } from './physics-world.ts';
+import { orbitalPeriod } from './orbital-elements.ts';
 
 const deg = (value: number) => value * Math.PI / 180;
-const planet = (id: string, name: string, massKg: number, meanRadiusM: number, aAU: number, eccentricity: number, inclination: number, meanLongitude: number, longitudePerihelion: number, longitudeAscendingNode: number) => ({
+const ENVIRONMENT:Record<string,{temperatureK:number;pressurePa:number}> = {
+ mercury:{temperatureK:440,pressurePa:0},venus:{temperatureK:737,pressurePa:9.2e6},earth:{temperatureK:288,pressurePa:101325},
+ mars:{temperatureK:210,pressurePa:610},jupiter:{temperatureK:165,pressurePa:1e5},saturn:{temperatureK:134,pressurePa:1e5},
+ uranus:{temperatureK:76,pressurePa:1e5},neptune:{temperatureK:72,pressurePa:1e5},
+ moon:{temperatureK:220,pressurePa:0},phobos:{temperatureK:233,pressurePa:0},deimos:{temperatureK:233,pressurePa:0},
+ io:{temperatureK:130,pressurePa:0},europa:{temperatureK:102,pressurePa:0},titan:{temperatureK:94,pressurePa:146000},triton:{temperatureK:38,pressurePa:1.4}
+};
+const ATMOSPHERES:Record<string,readonly string[]> = {
+ venus:['CO₂ ≈96.5%','N₂ ≈3.5%'],earth:['N₂ ≈78.08%','O₂ ≈20.95%','Ar ≈0.93%'],
+ mars:['CO₂ ≈95.3%','N₂ ≈2.7%','Ar ≈1.6%'],jupiter:['H₂','He','следы CH₄, NH₃, H₂O'],
+ saturn:['H₂','He','следы CH₄, NH₃'],uranus:['H₂','He','CH₄'],neptune:['H₂','He','CH₄'],
+ titan:['N₂','CH₄'],triton:['N₂','CH₄']
+};
+const planet = (id: string, name: string, massKg: number, meanRadiusM: number, aAU: number, eccentricity: number, inclination: number, meanLongitude: number, longitudePerihelion: number, longitudeAscendingNode: number, rotationDays:number, axialTiltDeg:number, equatorialRadiusKm:number, solarDayHours:number, hasRings=false, poleRaDeg=0, poleDecDeg=90, primeMeridianDeg=0, rotationDirection:1|-1=1) => ({
   id, name, massKg, meanRadiusM, parentId: 'sun',
+  rotationPeriodSeconds:rotationDays*DAY,axialTiltRad:deg(axialTiltDeg),poleRightAscensionRad:deg(poleRaDeg),poleDeclinationRad:deg(poleDecDeg),primeMeridianRad:deg(primeMeridianDeg),rotationEpochSeconds:0,rotationDirection,
+  equatorialRadiusM:equatorialRadiusKm*1000,solarDaySeconds:solarDayHours*3600,hasRings,
+  surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
     semiMajorAxisM: aAU * AU,
     eccentricity,
@@ -21,11 +38,13 @@ const planet = (id: string, name: string, massKg: number, meanRadiusM: number, a
  */
 const satellite = (
   id: string, name: string, parentId: string, gmKm3S2: number, radiusKm: number,
-  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0
+  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true
 ) => ({
   id, name, parentId,
   massKg: gmKm3S2 * 1e9 / G,
   meanRadiusM: radiusKm * 1000,
+  rotationPeriodSeconds:null,tidalLock,
+  surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
     semiMajorAxisM: aKm * 1000,
     eccentricity: e,
@@ -49,7 +68,7 @@ const satellites = [
   satellite('thebe','Thebe','jupiter',.03015,49.3,221900,.018,1.1,26.6,182.1,340.4),
   satellite('adrastea','Adrastea','jupiter',.00014,8.2,129000,0,0,0,214.5,0),
   satellite('metis','Metis','jupiter',.00250,21.5,128000,0,0,0,166,0),
-  satellite('himalia','Himalia','jupiter',.15155,85,11439000,.160,28.4,321.1,78.3,64.2),
+  satellite('himalia','Himalia','jupiter',.15155,85,11439000,.160,28.4,321.1,78.3,64.2,false),
 
   satellite('mimas','Mimas','saturn',2.50349,198.2,186000,.020,1.6,160.4,275.3,66.2),
   satellite('enceladus','Enceladus','saturn',7.21037,252.1,238400,.005,0,119.5,57,0),
@@ -57,9 +76,9 @@ const satellites = [
   satellite('dione','Dione','saturn',73.11607,561.4,377700,.002,0,116,212,0),
   satellite('rhea','Rhea','saturn',153.94175,763.5,527040,.001,0.35,0,0,0),
   satellite('titan','Titan','saturn',8978.13710,2574.76,1221860,.029,.33,0,0,0),
-  satellite('hyperion','Hyperion','saturn',.37049,135,1481000,.104,.43,0,0,0),
+  satellite('hyperion','Hyperion','saturn',.37049,135,1481000,.104,.43,0,0,0,false),
   satellite('iapetus','Iapetus','saturn',120.51511,734.3,3560830,.028,15.47,0,0,0),
-  satellite('phoebe','Phoebe','saturn',.55479,106.5,12929400,.164,175.2,240.3,308,192.7),
+  satellite('phoebe','Phoebe','saturn',.55479,106.5,12929400,.164,175.2,240.3,308,192.7,false),
   satellite('janus','Janus','saturn',.12662,89.2,151500,.007,.2,11.1,111.7,159.9),
   satellite('epimetheus','Epimetheus','saturn',.03514,58.2,151400,.020,.3,96.3,197.2,189.8),
   satellite('helene','Helene','saturn',.00048,18,377600,.007,.2,194.3,295.5,260.8),
@@ -82,7 +101,7 @@ const satellites = [
   satellite('proteus','Proteus','neptune',2.58342,208,117647,.0005,.5,0,0,0),
   satellite('triton','Triton','neptune',1428.49546,1352.60,354760,.000016,156.8,0,0,0),
   // Nereid's mass is not measured in the JPL parameter table; this low-impact estimate assumes 1.5 g/cm³.
-  satellite('nereid','Nereid','neptune',.206,170,5513400,.751,7.2,0,0,0)
+  satellite('nereid','Nereid','neptune',.206,170,5513400,.751,7.2,0,0,0,false)
 ] as const;
 
 /** Approximate J2000.0 planetary elements. Planetary values follow the JPL
@@ -91,18 +110,18 @@ const satellites = [
  */
 export const SOLAR_SYSTEM_DATA = Object.freeze({
   epoch: 'J2000.0',
-  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000 },
-  mercury: planet('mercury', 'Mercury', 3.3011e23, 2439700, 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593),
-  venus: planet('venus', 'Venus', 4.8675e24, 6051800, 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255),
+  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000, equatorialRadiusM:695700000, rotationPeriodSeconds:25.38*DAY, axialTiltRad:deg(7.25), poleRightAscensionRad:deg(286.13),poleDeclinationRad:deg(63.87),primeMeridianRad:deg(84.176),rotationEpochSeconds:0,rotationDirection:1 },
+  mercury: planet('mercury', 'Mercury', 3.3011e23, 2439700, 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593,58.6462,.034,2440.53,4222.6,false,281.0097,61.4143,329.5469,1),
+  venus: planet('venus', 'Venus', 4.8675e24, 6051800, 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255,243.018,177.36,6051.8,2802,false,272.76,67.16,160.20,-1),
   earth: {
-    id: 'earth', name: 'Earth', massKg: 5.9722e24, meanRadiusM: 6371008.4, parentId: 'sun',
+    id: 'earth', name: 'Earth', massKg: 5.9722e24, meanRadiusM: 6371008.4, parentId: 'sun', rotationPeriodSeconds:.99726968*DAY,axialTiltRad:deg(23.4393),poleRightAscensionRad:deg(0),poleDeclinationRad:deg(90),primeMeridianRad:deg(190.147),rotationEpochSeconds:0,rotationDirection:1,equatorialRadiusM:6378136.6,solarDaySeconds:86400,surface:ENVIRONMENT.earth,atmosphereComposition:ATMOSPHERES.earth,
     elements: { semiMajorAxisM: 1.00000011 * AU, eccentricity: 0.01671022, inclination: deg(0.00005), longitudeAscendingNode: deg(-11.26064), argumentOfPeriapsis: deg(102.94719 - (-11.26064)), meanAnomaly: deg(100.46435 - 102.94719) }
   },
-  mars: planet('mars', 'Mars', 6.4171e23, 3389500, 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891),
-  jupiter: planet('jupiter', 'Jupiter', 1.8982e27, 69911000, 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909),
-  saturn: planet('saturn', 'Saturn', 5.6834e26, 58232000, 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448),
-  uranus: planet('uranus', 'Uranus', 8.6810e25, 25362000, 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503),
-  neptune: planet('neptune', 'Neptune', 1.02413e26, 24622000, 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574),
+  mars: planet('mars', 'Mars', 6.4171e23, 3389500, 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891,1.02595676,25.19,3396.19,24.7,false,317.68143,52.88650,176.630,1),
+  jupiter: planet('jupiter', 'Jupiter', 1.8982e27, 69911000, 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909,.41354,3.13,71492,9.9,true,268.056595,64.495303,284.95,1),
+  saturn: planet('saturn', 'Saturn', 5.6834e26, 58232000, 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448,.44401,26.73,60268,10.7,true,40.589,83.537,38.90,1),
+  uranus: planet('uranus', 'Uranus', 8.6810e25, 25362000, 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503,.71833,97.77,25559,17.2,true,257.311,-15.175,203.81,-1),
+  neptune: planet('neptune', 'Neptune', 1.02413e26, 24622000, 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574,.67125,28.32,24764,16.1,true,299.36,43.46,253.18,1),
   moon: satellites[0],
   ...Object.fromEntries(satellites.map(body => [body.id, body]))
 });
@@ -115,7 +134,9 @@ export function createSolarSystemWorld(options = {}) {
     world.addBody(new CelestialBody({ ...data, orbitalElements: data.elements }));
   }
   for (const data of satellites) {
-    world.addBody(new CelestialBody({ ...data, orbitalElements: data.elements }));
+    const parent=world.bodies.get(data.parentId)!;
+    const rotationPeriodSeconds=data.tidalLock?orbitalPeriod(data.elements.semiMajorAxisM,parent.mu):data.rotationPeriodSeconds;
+    world.addBody(new CelestialBody({ ...data, rotationPeriodSeconds, orbitalElements: data.elements }));
   }
   world.initializeEphemerides();
   return world;

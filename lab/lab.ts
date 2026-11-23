@@ -97,21 +97,31 @@ function updatePlanetInformation(){
   const gravity=item.mu/(item.meanRadiusM*item.meanRadiusM);
   const elements=item.orbitalElements;
   const period=elements&&parent?orbitalPeriod(elements.semiMajorAxisM,parent.mu):null;
-  const kind=!parent?'Звезда':parent.parentId===null?'Планета':'Естественный спутник';
+  const environment=item.surface??null;
+  const rotationPeriod=item.rotationPeriodSeconds??(item.tidalLock&&period?period:null);
+  const formatPeriod=(seconds:number|null)=>seconds===null?'Нет достоверных данных':seconds>=DAY?fmt(seconds/DAY,4)+' суток':fmt(seconds/3600,3)+' ч';
+  const tilt=item.axialTiltRad;
+  const retrograde=tilt!==null&&tilt!==undefined?tilt>Math.PI/2:(item.tidalLock&&(elements?.inclination??0)>Math.PI/2);
+  const atmosphere=environment?.pressurePa===0?'Практически отсутствует':item.atmosphereComposition.length?item.atmosphereComposition.join(', '):'Нет достоверных данных';
+  const pressureLabel=['jupiter','saturn','uranus','neptune'].includes(item.id)?'Опорное давление (1 бар)':'Атмосферное давление';
   const rows=[
-    ['Название',item.name],['Тип объекта',kind],['Родительское тело',parent?.name??'—'],
+    ['Название',item.name],['Тип объекта',!parent?'Звезда':parent.parentId===null?'Планета':'Естественный спутник'],['Родительское тело',parent?.name??'—'],
     ['Масса',fmt(item.massKg,4)+' кг'],['Средний радиус',distanceLabel(item.meanRadiusM)],
+    ['Экваториальный радиус',item.equatorialRadiusM?distanceLabel(item.equatorialRadiusM):'Нет данных'],
     ['Диаметр',distanceLabel(item.meanRadiusM*2)],['Средняя плотность',fmt(density,1)+' кг/м³'],
     ['Ускорение свободного падения',fmt(gravity,4)+' м/с²'],
-    ['Орбитальный период',period?fmt(period/DAY,4)+' суток':'Нет орбиты / данные отсутствуют'],
+    ['Орбитальный период',period?formatPeriod(period):'Нет орбиты / данные отсутствуют'],
     ['Большая полуось',elements?distanceLabel(elements.semiMajorAxisM):'Нет данных'],
     ['Эксцентриситет',elements?fmt(elements.eccentricity,7):'Нет данных'],
     ['Наклонение орбиты',elements?fmt(elements.inclination*180/Math.PI,4)+'°':'Нет данных'],
-    ['Период вращения','Нет данных в модели'],
-    ['Продолжительность суток','Нет данных в модели'],
-    ['Средняя температура','Нет данных в модели'],
-    ['Атмосфера','Параметры не заданы в физической модели'],
-    ['Естественные спутники',String(children.length)]
+    ['Сидерический период вращения',formatPeriod(rotationPeriod)],
+    ['Направление вращения',rotationPeriod===null?'Не определено':retrograde?'Ретроградное':'Прямое'],
+    ['Наклон оси вращения',tilt!==null&&tilt!==undefined?fmt(tilt*180/Math.PI,3)+'°':'Нет достоверных данных'],
+    ['Продолжительность солнечных суток',formatPeriod(item.solarDaySeconds??null)],
+    ['Средняя температура',environment?.temperatureK!==undefined?fmt(environment.temperatureK,1)+' K':'Нет достоверных данных'],
+    [pressureLabel,environment?.pressurePa!==undefined?fmt(environment.pressurePa,4)+' Па':'Нет достоверных данных'],
+    ['Состав атмосферы',atmosphere],['Наличие колец',item.hasRings?'Да':'Нет'],
+    ['Спутники в модели',String(children.length)]
   ];
   host.replaceChildren();
   const heading=document.createElement('div');heading.className='planet-info-heading';heading.textContent=item.name;host.append(heading);

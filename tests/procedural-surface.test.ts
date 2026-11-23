@@ -71,15 +71,17 @@ test('unknown worlds infer dense atmospheres and accept explicit composition ove
 test('cube-sphere maps expose independent PBR channels and are deterministic',async()=>{
  const profile=createSurfaceProfile(bodies.earth),a=await generateSurfaceCubeMaps(profile,8),b=await generateSurfaceCubeMaps(profile,8);
  assert.deepEqual(a.albedo,b.albedo);assert.deepEqual(a.height,b.height);assert.deepEqual(a.roughness,b.roughness);assert.deepEqual(a.normal,b.normal);
- for(const channel of [a.albedo,a.height,a.roughness,a.normal]){assert.equal(channel.length,6*8*8*4);assert.ok(channel.every(v=>v>=0&&v<=255));}
- assert.equal(a.resolution,8);assert.ok(a.generationMs>=0);
+ assert.equal(a.albedo.length,6*8*8*4);assert.equal(a.height.length,6*8*8);assert.equal(a.roughness.length,6*8*8);assert.equal(a.normal.length,6*8*8*3);
+ for(const channel of [a.albedo,a.height,a.roughness,a.normal])assert.ok(channel.every(v=>v>=0&&v<=255));
+ assert.equal(a.resolution,8);assert.equal(a.heightResolution,8);assert.equal(a.roughnessResolution,8);assert.equal(a.normalResolution,8);assert.ok(a.generationMs>=0);
 });
 test('atmospheric giants do not receive geological relief normals',async()=>{
  const maps=await generateSurfaceCubeMaps(createSurfaceProfile(bodies.jupiter),8);
- for(let i=0;i<maps.height.length;i+=4){assert.equal(maps.height[i],128);const nx=maps.normal[i]/255*2-1,ny=maps.normal[i+1]/255*2-1,nz=maps.normal[i+2]/255*2-1;assert.ok(Math.abs(Math.hypot(nx,ny,nz)-1)<.02);}
+ for(let i=0;i<maps.height.length;i++){assert.equal(maps.height[i],128);}
+ for(let i=0;i<maps.normal.length;i+=3){const nx=maps.normal[i]/255*2-1,ny=maps.normal[i+1]/255*2-1,nz=maps.normal[i+2]/255*2-1;assert.ok(Math.abs(Math.hypot(nx,ny,nz)-1)<.02);}
 });
 test('surface LOD and worker-backed cache remain bounded and deduplicate requests',async()=>{
- assert.equal(surfaceResolutionForProjectedRadius(5),64);assert.equal(surfaceResolutionForProjectedRadius(100),128);assert.equal(surfaceResolutionForProjectedRadius(600),512);
+ assert.equal(surfaceResolutionForProjectedRadius(5),64);assert.equal(surfaceResolutionForProjectedRadius(100),128);assert.equal(surfaceResolutionForProjectedRadius(600),512);assert.equal(surfaceResolutionForProjectedRadius(1200),1024);assert.equal(surfaceResolutionForProjectedRadius(1900),2048);
  assert.equal(surfaceResolutionForProjectedRadius(40,'gas-giant'),64);assert.equal(surfaceResolutionForProjectedRadius(40,'icy-moon'),128);
  const cache=new SurfaceMapCache(1000000),profile=createSurfaceProfile(bodies.earth);
  const [a,b]=await Promise.all([cache.get(profile,8),cache.get(profile,8)]);

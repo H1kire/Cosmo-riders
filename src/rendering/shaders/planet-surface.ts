@@ -12,6 +12,7 @@ uniform float uPreviousMapsEnabled;
 uniform float uTectonicActivity;
 uniform float uVolcanicActivity;
 varying vec3 vNormal;
+varying vec3 vSurfaceDirection;
 varying vec3 vPosition;
 
 float hash31(vec3 p){
@@ -61,12 +62,14 @@ void main(){
   vec4 world=uModel*vec4(aPosition*(1.0+relief),1.0);
   vPosition=world.xyz;
   vNormal=normalize(mat3(uModel)*n);
+  vSurfaceDirection=n;
   gl_Position=uViewProjection*world;
 }`;
 
 export const PLANET_SURFACE_FRAGMENT = `precision highp float;
 uniform vec3 uColor;
 uniform vec3 uCameraPosition;
+uniform mat4 uModel;
 uniform vec3 uLightPositions[4];
 uniform vec3 uLightColors[4];
 uniform float uLightIntensities[4];
@@ -97,6 +100,7 @@ uniform float uOccluderRadii[8];
 uniform int uOccluderCount;
 uniform int uShadows;
 varying vec3 vNormal;
+varying vec3 vSurfaceDirection;
 varying vec3 vPosition;
 
 const float PI=3.14159265359;
@@ -309,11 +313,12 @@ void main(){
     gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);
     return;
   }
-  vec3 surfaceDirection=normalize(vNormal);
+  vec3 surfaceDirection=normalize(vSurfaceDirection);
   vec3 bakedNormal=texture(uGeneratedNormal,surfaceDirection).xyz*2.0-1.0;
   float normalBlend=uUseGeneratedMaps;
   if(uPreviousMapsEnabled>0.5){vec3 previousNormal=texture(uPreviousNormal,surfaceDirection).xyz*2.0-1.0;bakedNormal=normalize(mix(previousNormal,bakedNormal,uUseGeneratedMaps));normalBlend=1.0;}
-  vec3 n=normalize(mix(surfaceDirection,bakedNormal,normalBlend*0.62));
+  vec3 worldBakedNormal=normalize(mat3(uModel)*bakedNormal);
+  vec3 n=normalize(mix(normalize(vNormal),worldBakedNormal,normalBlend*0.62));
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);
   float roughness,specularLevel;

@@ -1,1 +1,6 @@
 import{LightingEngine}from'../../presentation/lighting-engine.ts';import{LightSource,type LightSourceOptions}from'./light-source.ts';export class LightingSystem extends LightingEngine{private sources=new Map<string,LightSource>();addSource(o:LightSourceOptions){const s=new LightSource(o);this.sources.set(s.id,s);if(s.kind==='point')this.setPointLight(s.id,[...s.position],{intensity:s.intensity,color:[...s.color]});return s;}updateSource(id:string,p:Partial<Omit<LightSourceOptions,'id'>>){const o=this.sources.get(id);if(!o)throw Error('Unknown light: '+id);return this.addSource({id,kind:p.kind??o.kind,position:p.position??o.position,direction:p.direction??o.direction,color:p.color??o.color,intensity:p.intensity??o.intensity,rangeM:p.rangeM??o.rangeM});}removeSource(id:string){this.sources.delete(id);this.removeLight(id);}getSources(){return[...this.sources.values()];}}
+/** Exposure compensation for the focused body's heliocentric distance; light itself remains inverse-square. */
+export function focusedSolarExposureMultiplier(distanceAU:number):number {
+ if(!Number.isFinite(distanceAU)||distanceAU<=0)return 1;
+ return Math.max(1,Math.min(900,distanceAU*distanceAU));
+}

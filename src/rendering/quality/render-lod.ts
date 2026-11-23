@@ -17,3 +17,9 @@ export function projectedOrbitRadius(semiMajorAxisAU:number,viewportHeight:numbe
   if(!Number.isFinite(semiMajorAxisAU)||!Number.isFinite(viewportHeight)||!Number.isFinite(viewDistance)||semiMajorAxisAU<=0||viewportHeight<=0||viewDistance<=0)return 0;
   return semiMajorAxisAU*(viewportHeight*0.5)/(Math.tan(Math.PI/6)*Math.max(viewDistance,semiMajorAxisAU));
 }
+
+/** Подписи используют ту же плавную дистанционную кривую, но исчезают при удалении. */
+export function planetaryLabelOpacity(cameraDistance:number,bodyRadius:number):number {
+  if(!Number.isFinite(cameraDistance)||!Number.isFinite(bodyRadius)||bodyRadius<=0)return 1;
+  return 1-planetaryOrbitOpacity(cameraDistance,bodyRadius);
+}

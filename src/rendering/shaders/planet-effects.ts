@@ -118,11 +118,13 @@ attribute vec3 aNormal;
 uniform mat4 uViewProjection;
 uniform mat4 uModel;
 varying vec3 vNormal;
+varying vec3 vLocalNormal;
 varying vec3 vPosition;
 void main(){
   vec4 world=uModel*vec4(aPosition,1.0);
   vPosition=world.xyz;
   vNormal=normalize(mat3(uModel)*aNormal);
+  vLocalNormal=aNormal;
   gl_Position=uViewProjection*world;
 }`;
 
@@ -143,6 +145,7 @@ uniform int uOccluderCount;
 uniform int uShadows;
 uniform float uLightIntensity;
 varying vec3 vNormal;
+varying vec3 vLocalNormal;
 varying vec3 vPosition;
 float localShadowVisibility(vec3 point){
   if(uShadows==0)return 1.0;
@@ -179,8 +182,9 @@ float fbmFiltered(vec3 p){
 }
 void main(){
   vec3 n=safeNormalize(vNormal);
+  vec3 localDirection=safeNormalize(vLocalNormal);
   vec3 drift=vec3(uTime*uWind.x,0.0,uTime*uWind.y);
-  vec3 p=n*uScale+drift+vec3(uSeed);
+  vec3 p=localDirection*uScale+drift+vec3(uSeed);
   float broad=fbm(p);
   float fine=fbmFiltered(p*2.65+13.7);
   float density=0.68*broad+0.32*fine;

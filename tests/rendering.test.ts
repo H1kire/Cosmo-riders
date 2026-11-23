@@ -39,8 +39,8 @@ import { createDefaultShaderLibrary } from '../src/rendering/shaders/index.ts';
 
 test('shader library expands nested reusable chunks and keeps GLSL version first',()=>{
   const library=createDefaultShaderLibrary();
-  const source=library.compose('#version 300 es\\n#include <common>\\n#include <atmosphere>',{USE_CLOUDS:true,QUALITY:2});
-  assert.ok(source.startsWith('#version 300 es\\n#define USE_CLOUDS 1\\n#define QUALITY 2'));
+  const source=library.compose('#version 300 es\n#include <common>\n#include <atmosphere>',{USE_CLOUDS:true,QUALITY:2});
+  assert.ok(source.startsWith('#version 300 es\n#define USE_CLOUDS 1\n#define QUALITY 2'));
   assert.ok(source.includes('float rayleighPhase'));
   assert.ok(source.includes('float saturate'));
 });

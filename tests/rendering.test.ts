@@ -110,7 +110,7 @@ test('planet surface shader supports multiple point lights and a non-emissive ni
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('for(int i=0;i<4;i++)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/distanceSquared'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('vec3 indirect=albedo*0.001'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('uSunRadius/max(sunDistance-along,1e-12)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uSunRadius*along/max(sunDistance-along,1e-12)'));
 });
 
 test('atmosphere and cloud shaders receive stellar irradiance independently of surface rendering',()=>{

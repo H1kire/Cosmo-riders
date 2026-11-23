@@ -281,7 +281,7 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class));}}
+  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class),1000000);}}
   
   for(const body of bodies){
    g.useProgram(this.bodyProgram);
@@ -309,7 +309,7 @@ export class Solar3DView{
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
      const surfaceResolution=surfaceResolutionForProjectedRadius(px,surfaceProfile!.class);
-     if(px>=8&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20)this.requestSurfaceMaps(surfaceProfile!,surfaceResolution);
+     if(px>=4&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20){const centerBias=1-Math.min(1,Math.hypot(projectedScreen.x-w/(2*dpr),projectedScreen.y-h/(2*dpr))/Math.max(1,Math.hypot(w/dpr,h/dpr)*.5));const priority=(body.id===this.focusId?100000:0)+Math.min(px,10000)*10+centerBias*25;this.requestSurfaceMaps(surfaceProfile!,surfaceResolution,priority);}
      this.bindSurfaceMaps(surfaceProfile!,surfaceResolution,l);
      g.uniform1f(l.uSeed,surfaceProfile!.seed%16777216);
      g.uniform1f(l.uWaterFraction,surfaceProfile!.waterFraction);
@@ -381,16 +381,37 @@ export class Solar3DView{
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
  }
- requestSurfaceMaps(profile,resolution){
+ requestSurfaceMaps(profile,resolution,priority=0){
   const profileKey=surfaceProfileKey(profile),key=profileKey+':'+resolution;
   if(this.surfaceGpuTextures.has(key)||this.surfaceMapPending.has(key)||this.disposed)return;
   if(this.surfaceUploadQueue.some(job=>job.key===key))return;
+  // Спочатку показуємо базову карту, а деталізовану генеруємо паралельно з її завантаженням у GPU.
+  if(resolution>64&&!this.surfaceGpuTextures.has(profileKey+':64')){
+   this.surfaceMapPending.add(key);
+   this.surfaceMapCache.get(profile,64,priority+100).then(preview=>{
+    if(this.disposed)return null;
+    if(!this.surfaceGpuTextures.has(profileKey+':64')&&!this.surfaceUploadQueue.some(job=>job.key===profileKey+':64')){
+     this.surfaceUploadQueue.push({key:profileKey+':64',profileKey,resolution:64,maps:preview,textures:[],faceIndex:0,mipIndex:0,created:0,priority:priority+100});
+     this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
+    }
+    return this.surfaceMapCache.get(profile,resolution,priority);
+   }).then(maps=>{
+    this.surfaceMapPending.delete(key);
+    if(!maps||this.disposed||this.surfaceGpuTextures.has(key))return;
+    if(!this.surfaceUploadQueue.some(job=>job.key===key)){
+     this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0,priority});
+     this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
+    }
+   }).catch(()=>this.surfaceMapPending.delete(key));
+   return;
+  }
   this.surfaceMapPending.add(key);
-  this.surfaceMapCache.get(profile,resolution).then(maps=>{
-   this.surfaceMapPending.delete(key);if(this.disposed)return;
+  this.surfaceMapCache.get(profile,resolution,priority).then(maps=>{
+   this.surfaceMapPending.delete(key);if(this.disposed||this.surfaceGpuTextures.has(key))return;
    this.lastSurfaceGenerationMs=maps.generationMs;
-   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0});
-  }).catch(()=>{this.surfaceMapPending.delete(key);});
+   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0,priority});
+   this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
+  }).catch(()=>this.surfaceMapPending.delete(key));
  }
  processSurfaceUploads(){
   const uploadStarted=performance.now(),g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
@@ -476,7 +497,7 @@ export class Solar3DView{
   g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
  }
  getSurfaceDiagnostics(){
-  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lodTransitions:this.surfaceLodTransitions?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
+  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedCpuGenerations:this.surfaceMapCache?.queuedCount??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lodTransitions:this.surfaceLodTransitions?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
  }
  dispose(){
   if(this.disposed)return;

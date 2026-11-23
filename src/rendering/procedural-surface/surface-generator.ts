@@ -7,7 +7,7 @@ export interface SurfaceGenerationProfile{
  tectonicActivity:number;volcanicActivity:number;impactAge:number;erosion:number;rotationFactor:number;
 }
 export interface SurfaceSample{height:number;albedo:[number,number,number];roughness:number;material:'rock'|'sand'|'metal'|'ice'|'water'|'lava'|'ash';}
-export interface SurfaceBodyInput{id:string;massKg:number;meanRadiusM:number;surfaceSeed?:number;surface?:Partial<Omit<SurfaceGenerationProfile,'id'|'seed'>>;}
+export interface SurfaceBodyInput{id:string;massKg:number;meanRadiusM:number;surfaceSeed?:number|null;surface?:Partial<Omit<SurfaceGenerationProfile,'id'|'seed'>>;}
 
 const clamp=(v:number,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};

@@ -4,12 +4,13 @@ export type SurfaceClass =
  | 'rocky' | 'oceanic' | 'desert' | 'icy' | 'volcanic' | 'dense-atmosphere'
  | 'gas-giant' | 'ice-giant' | 'airless-moon' | 'icy-moon' | 'volcanic-moon';
 export type SurfaceMaterial = 'silicate-rock' | 'iron-oxide' | 'metal-rich-rock' | 'basalt' | 'sand' | 'water' | 'water-ice' | 'volatile-ice' | 'sulfur' | 'hydrocarbon' | 'cloud' | 'lava';
+export interface SurfaceMineralFlags { ironOxides:boolean; sulfides:boolean; silicates:boolean; organics:boolean; salts:boolean; carbon:boolean; }
 export interface SurfaceGenerationProfile {
  id:string; seed:number; class:SurfaceClass; gravityMS2:number; temperatureK:number; pressurePa:number;
  waterFraction:number; iceFraction:number; ironFraction:number; silicateFraction:number; metalFraction:number;
  volatileFraction:number; hydrocarbonFraction:number; sulfurFraction:number;
  tectonicActivity:number; volcanicActivity:number; impactAge:number; erosion:number; rotationFactor:number;
- mineralComposition:readonly string[];
+ mineralComposition:readonly string[]; mineralFlags:SurfaceMineralFlags;
 }
 export interface SurfaceSample { height:number; albedo:[number,number,number]; roughness:number; material:SurfaceMaterial; }
 export interface SurfaceBodyInput {
@@ -45,7 +46,8 @@ export function createSurfaceProfile(body:SurfaceBodyInput):SurfaceGenerationPro
   waterFraction:fraction(base.waterFraction,.08),iceFraction:fraction(base.iceFraction,.08),ironFraction:fraction(base.ironFraction,.28),silicateFraction:fraction(base.silicateFraction,.58),
   metalFraction:fraction(base.metalFraction,.05),volatileFraction:fraction(base.volatileFraction,.04),hydrocarbonFraction:fraction(base.hydrocarbonFraction,0),sulfurFraction:fraction(base.sulfurFraction,.01),
   tectonicActivity:fraction(base.tectonicActivity,.25),volcanicActivity:fraction(base.volcanicActivity,.18),impactAge:fraction(base.impactAge,.48),erosion:fraction(base.erosion,.3),rotationFactor:fraction(base.rotationFactor,.5),
-  mineralComposition:base.mineralComposition??['silicates','iron-oxides']};
+  mineralComposition:base.mineralComposition??['silicates','iron-oxides'],
+  mineralFlags:{ironOxides:(base.mineralComposition??[]).some(name=>/hematite|magnetite|iron-oxide/i.test(name)),sulfides:(base.mineralComposition??[]).some(name=>/sulfur|sulfide|sulfate/i.test(name)),silicates:(base.mineralComposition??[]).some(name=>/silicate|basalt|plagioclase|pyroxene|olivine|feldspar|quartz/i.test(name)),organics:(base.mineralComposition??[]).some(name=>/organic|tholin|methane|ethane|hydrocarbon/i.test(name)),salts:(base.mineralComposition??[]).some(name=>/salt|chloride|carbonate/i.test(name)),carbon:(base.mineralComposition??[]).some(name=>/graphite|carbon/i.test(name))}};
 }
 function pressureGuess(body:SurfaceBodyInput,gravity:number):Partial<SurfaceGenerationProfile>{
  if(body.surface?.class)return {};
@@ -145,17 +147,17 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  let height=sampleSurfaceHeight([x,y,z],profile);
  if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&ice>.62)){
   const crack=smooth(.72,.91,cells)*(1-profile.erosion*.55);
-  const salt=profile.volatileFraction*.12;
+  const salt=profile.volatileFraction*.12+(profile.mineralFlags.salts?.05:0);
   albedo=[.52+polar*.25+salt-crack*.16,.67+polar*.22+salt-crack*.13,.76+polar*.18+salt-crack*.09];
   roughness=.3+profile.erosion*.25;material='water-ice';
  }else if(profile.class==='volcanic'||profile.class==='volcanic-moon'){
-  const sulfur=profile.sulfurFraction;
+  const sulfur=clamp(profile.sulfurFraction+(profile.mineralFlags.sulfides?.18:0));
   const sulfurField=fbm3(x*19,y*19,z*19,seed+311,4);
   const sulfurPatch=smooth(.35,.72,sulfurField)*sulfur;
   albedo=[.055+lava*.2+sulfurPatch*.55,.035+lava*.09+sulfurPatch*.34,.025+lava*.035+sulfurPatch*.08];
   material=sulfur>.18?'sulfur':'lava';roughness=.58;
  }else if(profile.class==='desert'){
-  const ironOxide=clamp(iron*.75+mineral*.3);
+  const ironOxide=clamp(iron*.75+mineral*.3+(profile.mineralFlags.ironOxides?.18:0));
   const dune=fbm3(x*8+regional,y*8,z*8,seed+271,5);
   albedo=[.24+ironOxide*.34+dune*.16,.105+ironOxide*.12+dune*.1,.045+ironOxide*.06+dune*.07];
   material='iron-oxide';roughness=.91;
@@ -172,8 +174,9 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
    material='basalt';roughness=.86;
   }
  }else{
-  const ironOxide=iron*.38+metal*.18+mineral*.22;
-  const silicateTone=silicate*.22;
+  const ironOxide=iron*.38+metal*.18+mineral*.22+(profile.mineralFlags.ironOxides?.08:0);
+  const silicateTone=silicate*.22*(profile.mineralFlags.silicates?1:.45);
+  if(profile.mineralFlags.carbon)albedo=[albedo[0]*.92,albedo[1]*.94,albedo[2]*.98];
   albedo=[.19+silicateTone+ironOxide*.28+fine*.09,.18+silicateTone*.72+ironOxide*.12+fine*.07,.16+silicateTone*.48+fine*.05];
   albedo=[albedo[0]*(1-profile.erosion*.08),albedo[1]*(1-profile.erosion*.08),albedo[2]*(1-profile.erosion*.08)];
   if(liquid>.08&&broad<.48){albedo=[.012,.055,.12];material='water';roughness=.08;}

@@ -84,6 +84,10 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
  } else if(p.id==='neptune') {
   base=[.035+belt*.08+cloud*.04,.12+belt*.2+cloud*.08,.36+belt*.32+cloud*.1];
   base=[base[0]+storm*.28,base[1]+storm*.26,base[2]+storm*.22];
+ } else if(p.class==='ice-giant') {
+  const methaneHaze=clamp(p.hydrocarbonFraction*.8+p.volatileFraction*.12);
+  base=[.12+belt*.12+cloud*.07,.36+belt*.22+cloud*.09,.52+belt*.22+cloud*.1];
+  base=[base[0]*(1-methaneHaze*.16)+storm*.12,base[1]*(1-methaneHaze*.08)+storm*.16,base[2]+storm*.18];
  } else {
   const methane=p.hydrocarbonFraction;
   base=[.25+belt*.32+cloud*.18,.2+belt*.24+cloud*.13,.12+belt*.12+cloud*.08];
@@ -118,6 +122,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  const lava=fbm3(x*11,y*11,z*11,seed+103,4)*profile.volcanicActivity;
  const latitude=Math.abs(y),polar=smooth(.78,.98,latitude),cold=smooth(300,145,profile.temperatureK);
  const liquidAllowed=profile.temperatureK>=273.15&&profile.temperatureK<=373.15&&profile.pressurePa>=611;
+ const methaneLiquid=profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5;
  const liquid=liquidAllowed?profile.waterFraction:0;
  const ice=clamp(Math.max(profile.iceFraction,cold*profile.volatileFraction));
  const iron=profile.ironFraction,metal=profile.metalFraction,silicate=profile.silicateFraction;
@@ -142,7 +147,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
   material='iron-oxide';roughness=.91;height+=ridged3(x*17,y*17,z*17,seed+281,4)*.025;
  }else if(profile.class==='dense-atmosphere'){
   if(profile.hydrocarbonFraction>.08){
-   const drainage=fbm3(x*15,y*15,z*15,seed+331,5),lake=liquidAllowed?smooth(.54,.68,drainage):0;
+   const drainage=fbm3(x*15,y*15,z*15,seed+331,5),lake=methaneLiquid?smooth(.54,.68,drainage):0;
    albedo=[.24+drainage*.24,.16+drainage*.17,.07+drainage*.09];
    if(lake>.15){albedo=[.045,.035,.018];material='hydrocarbon';roughness=.12;}
    else {material='water-ice';roughness=.72;}

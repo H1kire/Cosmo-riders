@@ -137,6 +137,7 @@ function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=fa
       }
     }
   }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
   if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){
     gl.deleteFramebuffer(framebuffer);gl.deleteTexture(texture);
     if(depthBuffer)gl.deleteRenderbuffer(depthBuffer);

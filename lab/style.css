@@ -48,3 +48,13 @@
 .graphics-options input{accent-color:#69a8e9}
 .graphics-settings .footnote{margin-top:12px}
 @media(max-width:700px){.menu-toggle{padding:7px 9px;font-size:9px}.sidebar.menu-hidden~.universe{left:0}}
+
+/* Primary-body quick navigation */
+.system-navigation{position:absolute;z-index:4;right:18px;bottom:68px;display:flex;gap:6px;max-width:min(72%,900px);overflow-x:auto;padding:7px;background:#091321d9;border:1px solid #29415d;border-radius:8px;backdrop-filter:blur(12px)}
+.system-nav-item{flex:0 0 auto;border:1px solid #29415d;border-radius:6px;padding:7px 10px;background:#101e30;color:#a9bfd9;font-size:10px;white-space:nowrap;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
+.system-nav-item:hover,.system-nav-item.active{background:#1b3856;border-color:#6ba9e8;color:#f0f7ff}
+.planet-info-heading{font-size:17px;font-weight:650;color:#e6f2ff;margin:0 0 10px}
+.planet-info .data-list{max-height:62vh;overflow:auto;padding-right:4px}
+.settings-section{padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid #22364d}
+.settings-section h3{margin:0 0 12px;color:#d9eaff;font-size:12px;letter-spacing:.04em}
+@media(max-width:700px){.system-navigation{left:8px;right:8px;bottom:92px;max-width:none}.system-nav-item{padding:7px 9px;font-size:9px}}

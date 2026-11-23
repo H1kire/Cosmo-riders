@@ -72,6 +72,10 @@ uniform float uIronFraction;
 uniform float uTectonicActivity;
 uniform float uVolcanicActivity;
 uniform float uErosion;
+uniform samplerCube uGeneratedAlbedo;
+uniform samplerCube uGeneratedNormal;
+uniform samplerCube uGeneratedHeightRoughness;
+uniform float uUseGeneratedMaps;
 uniform vec3 uSunPosition;
 uniform float uSunRadius;
 uniform vec3 uOccluders[8];
@@ -243,6 +247,10 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     roughness=0.82;
     specular=0.018;
   }
+  vec3 bakedAlbedo=textureCube(uGeneratedAlbedo,n).rgb;
+  vec4 bakedMaterial=textureCube(uGeneratedHeightRoughness,n);
+  albedo=mix(albedo,bakedAlbedo,uUseGeneratedMaps*0.72);
+  roughness=mix(roughness,bakedMaterial.g,uUseGeneratedMaps);
   return max(albedo,vec3(0.0));
 }
 float distributionGGX(float ndoth,float roughness){
@@ -262,6 +270,8 @@ void main(){
     return;
   }
   vec3 n=normalize(vNormal);
+  vec3 bakedNormal=textureCube(uGeneratedNormal,n).xyz*2.0-1.0;
+  n=normalize(mix(n,bakedNormal,uUseGeneratedMaps*0.62));
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);
   float roughness,specularLevel;

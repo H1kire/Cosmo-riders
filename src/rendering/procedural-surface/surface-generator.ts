@@ -53,7 +53,8 @@ function pressureGuess(body:SurfaceBodyInput,gravity:number):Partial<SurfaceGene
  if(body.surface?.class)return {};
  const surface=body.surface??{},pressure=surface.pressurePa??0,temp=surface.temperatureK??(gravity<2?160:260);
  const density=body.massKg/(4*Math.PI*Math.pow(body.meanRadiusM,3)/3),earthRadii=body.meanRadiusM/6_371_000;
- if(pressure>1e6||(surface.hydrocarbonFraction??0)>.08&&pressure>=1e5&&temp>=90&&temp<=95)return {class:'dense-atmosphere'};
+ const organicMinerals=(surface.mineralComposition??[]).some(name=>/organic|tholin|methane|ethane|hydrocarbon/i.test(name));
+ if(pressure>1e6||((surface.hydrocarbonFraction??0)>.08||organicMinerals)&&pressure>=1e5&&temp>=90&&temp<=95)return {class:'dense-atmosphere'};
  if(earthRadii>=5.5&&density<2200)return {class:'gas-giant',temperatureK:temp,waterFraction:.08,iceFraction:0,ironFraction:0,silicateFraction:0,metalFraction:0,volatileFraction:.45,hydrocarbonFraction:.08,sulfurFraction:.02};
  if(earthRadii>=2.4&&earthRadii<5.5&&density<2600)return {class:'ice-giant',temperatureK:temp,waterFraction:.35,iceFraction:.5,ironFraction:0,silicateFraction:0,metalFraction:0,volatileFraction:.58,hydrocarbonFraction:.14,sulfurFraction:.005};
  if((surface.volcanicActivity??0)>.65)return {class:'volcanic'};
@@ -162,7 +163,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
   albedo=[.24+ironOxide*.34+dune*.16,.105+ironOxide*.12+dune*.1,.045+ironOxide*.06+dune*.07];
   material='iron-oxide';roughness=.91;
  }else if(profile.class==='dense-atmosphere'){
-  if(profile.hydrocarbonFraction>.08){
+  if(profile.hydrocarbonFraction>.08||profile.mineralFlags.organics){
    const drainage=fbm3(x*15,y*15,z*15,seed+331,5),lake=methaneLiquid?smooth(.54,.68,drainage):0;
    albedo=[.24+drainage*.24,.16+drainage*.17,.07+drainage*.09];
    if(lake>.15){albedo=[.045,.035,.018];material='hydrocarbon';roughness=.12;}
@@ -176,8 +177,8 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  }else{
   const ironOxide=iron*.38+metal*.18+mineral*.22+(profile.mineralFlags.ironOxides?.08:0);
   const silicateTone=silicate*.22*(profile.mineralFlags.silicates?1:.45);
-  if(profile.mineralFlags.carbon)albedo=[albedo[0]*.92,albedo[1]*.94,albedo[2]*.98];
   albedo=[.19+silicateTone+ironOxide*.28+fine*.09,.18+silicateTone*.72+ironOxide*.12+fine*.07,.16+silicateTone*.48+fine*.05];
+  if(profile.mineralFlags.carbon)albedo=[albedo[0]*.92,albedo[1]*.94,albedo[2]*.98];
   albedo=[albedo[0]*(1-profile.erosion*.08),albedo[1]*(1-profile.erosion*.08),albedo[2]*(1-profile.erosion*.08)];
   if(liquid>.08&&broad<.48){albedo=[.012,.055,.12];material='water';roughness=.08;}
   if(ice>.08&&polar>.12){albedo=[.72,.81,.88];material='water-ice';roughness=.28;}

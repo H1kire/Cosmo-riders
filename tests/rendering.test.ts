@@ -102,9 +102,12 @@ test('point lights use inverse-square attenuation and expose independent source 
  assert.equal(lighting.intensityAt([1,0,0],'sun'),22);
  assert.equal(lighting.intensityAt([2,0,0],'sun'),5.5);
  const snapshot=lighting.getLights();
- assert.equal(snapshot.length,1);
- snapshot[0].position[0]=100;
+ assert.equal(snapshot.length,2);
+ const sunSnapshot=snapshot.find(source=>source.id==='sun');
+ assert.ok(sunSnapshot);
+ sunSnapshot.position[0]=100;
  assert.deepEqual(lighting.getLight('sun')?.position,[0,0,0]);
+ assert.deepEqual(lighting.getLight('secondary-star')?.position,[0,3,0]);
 });
 
 test('planet surface shader supports multiple point lights and a non-emissive night side',()=>{

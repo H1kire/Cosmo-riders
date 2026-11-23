@@ -63,7 +63,7 @@ export interface PhysicsWorldOptions {
   readonly soiExitFactor?: number;
 }
 
-export type PlanetarySurfaceClass = 'rocky'|'oceanic'|'icy'|'volcanic'|'gas-giant'|'ice-giant';
+export type PlanetarySurfaceClass = 'rocky'|'oceanic'|'desert'|'icy'|'volcanic'|'dense-atmosphere'|'gas-giant'|'ice-giant'|'airless-moon'|'icy-moon'|'volcanic-moon';
 /** Optional persisted world-generation metadata consumed by the procedural renderer. */
 export interface PlanetarySurfaceParameters {
   readonly class?: PlanetarySurfaceClass;
@@ -73,6 +73,11 @@ export interface PlanetarySurfaceParameters {
   readonly iceFraction?: number;
   readonly ironFraction?: number;
   readonly silicateFraction?: number;
+  readonly metalFraction?: number;
+  readonly volatileFraction?: number;
+  readonly hydrocarbonFraction?: number;
+  readonly sulfurFraction?: number;
+  readonly mineralComposition?: readonly string[];
   readonly tectonicActivity?: number;
   readonly volcanicActivity?: number;
   readonly impactAge?: number;

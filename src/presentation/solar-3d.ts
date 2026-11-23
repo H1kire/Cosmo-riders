@@ -201,7 +201,7 @@ export class Solar3DView{
   if(!positionSI.every(Number.isFinite))throw new TypeError('Stellar source coordinates must be finite SI values.');
   this.stellarSourceDefinitions.set(id,{positionSI:[...positionSI],intensity:options.intensity??22,color:[...(options.color??[1,1,1])]});
  }
- removeStellarSource(id:string){this.stellarSourceDefinitions.delete(id);this.lighting.removeSource(id);}
+ removeStellarSource(id:string){if(id==='sun')throw new TypeError('The primary Sun source cannot be removed.');this.stellarSourceDefinitions.delete(id);this.lighting.removeSource(id);}
  home(){this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.focusId=null;}
  mapPosition(p){return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,(item?.[1]?.radius??1e-5)*20);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}

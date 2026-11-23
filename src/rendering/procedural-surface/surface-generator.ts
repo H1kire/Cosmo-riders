@@ -37,10 +37,8 @@ const KNOWN:Record<string,Partial<SurfaceGenerationProfile>>={
 };
 export function createSurfaceProfile(body:SurfaceBodyInput):SurfaceGenerationProfile {
  const seed=body.surfaceSeed??stableSeed(body.id),gravity=6.67430e-11*body.massKg/(body.meanRadiusM*body.meanRadiusM);
- const fallback:Partial<SurfaceGenerationProfile>=gravity<2
-  ?{class:'icy-moon',temperatureK:160,pressurePa:0,waterFraction:.18,iceFraction:.4,ironFraction:.18,silicateFraction:.38,metalFraction:.03,volatileFraction:.1,hydrocarbonFraction:0,sulfurFraction:.01,tectonicActivity:.12,volcanicActivity:.08,impactAge:.55,erosion:.15,rotationFactor:.3,mineralComposition:['water-ice','silicates']}
-  :{class:'rocky',temperatureK:260,pressurePa:0,waterFraction:.08,iceFraction:.08,ironFraction:.28,silicateFraction:.58,metalFraction:.05,volatileFraction:.04,hydrocarbonFraction:0,sulfurFraction:.01,tectonicActivity:.25,volcanicActivity:.18,impactAge:.48,erosion:.3,rotationFactor:.5,mineralComposition:['silicates','iron-oxides']};
- const inferred=body.id.toLowerCase().includes('gas')?{class:'gas-giant' as const}:body.id.toLowerCase().includes('ice')?{class:'ice-giant' as const}:pressureGuess(body,gravity);
+ const fallback:Partial<SurfaceGenerationProfile>={class:'rocky',temperatureK:gravity<2?160:260,pressurePa:0,waterFraction:.08,iceFraction:.08,ironFraction:.28,silicateFraction:.58,metalFraction:.05,volatileFraction:.04,hydrocarbonFraction:0,sulfurFraction:.01,tectonicActivity:.25,volcanicActivity:.18,impactAge:.48,erosion:.3,rotationFactor:.5,mineralComposition:['silicates','iron-oxides']};
+ const inferred=pressureGuess(body,gravity);
  const base={...fallback,...inferred,...KNOWN[body.id.toLowerCase()],...body.surface};
  const fraction=(v:number,d:number)=>clamp(v??d);
  return {id:body.id,seed,class:base.class??'rocky',gravityMS2:gravity,temperatureK:base.temperatureK??260,pressurePa:base.pressurePa??0,
@@ -51,9 +49,16 @@ export function createSurfaceProfile(body:SurfaceBodyInput):SurfaceGenerationPro
 }
 function pressureGuess(body:SurfaceBodyInput,gravity:number):Partial<SurfaceGenerationProfile>{
  if(body.surface?.class)return {};
- const pressure=body.surface?.pressurePa??0,temp=body.surface?.temperatureK??(gravity<2?150:260);
+ const surface=body.surface??{},pressure=surface.pressurePa??0,temp=surface.temperatureK??(gravity<2?160:260);
+ const density=body.massKg/(4*Math.PI*Math.pow(body.meanRadiusM,3)/3),earthRadii=body.meanRadiusM/6_371_000;
  if(pressure>1e6)return {class:'dense-atmosphere'};
- if(temp<125&&gravity<3)return {class:'icy-moon'};
+ if(earthRadii>=5.5&&density<2200)return {class:'gas-giant',volatileFraction:.45,hydrocarbonFraction:.08};
+ if(earthRadii>=2.4&&earthRadii<5.5&&density<2600)return {class:'ice-giant',volatileFraction:.58,hydrocarbonFraction:.14};
+ if((surface.volcanicActivity??0)>.65)return {class:'volcanic'};
+ if(temp<170&&(surface.iceFraction??.2)>.15)return {class:gravity<2?'icy-moon':'icy'};
+ if(temp>=250&&temp<=350&&(surface.waterFraction??0)>.4&&pressure>=611)return {class:'oceanic'};
+ if(temp>320&&(surface.waterFraction??0)<.1)return {class:'desert'};
+ if(gravity<2)return {class:'airless-moon'};
  return {};
 }
 function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile):SurfaceSample{

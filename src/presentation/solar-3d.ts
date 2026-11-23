@@ -55,7 +55,7 @@ export class Solar3DView{
   this.cloudSystem=new CloudSystem();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
   this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingSystem();this.stellarSourceDefinitions=new Map();
-  this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;
+  this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;this.focusTransition=null;
   this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);
   this.labelNodes=new Map();this.bind();
   g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);
@@ -205,12 +205,28 @@ export class Solar3DView{
   this.stellarSourceDefinitions.set(id,{positionSI:[...positionSI],intensity:options.intensity??22,color:options.color?[...options.color] as [number,number,number]:[1,1,1]});
  }
  removeStellarSource(id:string){if(id==='sun')throw new TypeError('The primary Sun source cannot be removed.');this.stellarSourceDefinitions.delete(id);this.lighting.removeSource(id);}
- home(){this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.focusId=null;}
+ focusOn(id,world){
+  const item=world?.bodies?.get(id);
+  if(!item)return false;
+  const radius=item.meanRadiusM/AU;
+  const nextDistance=Math.max(radius*18,1e-9);
+  this.focusId=id;
+  this.focusOffset=[0,0,0];
+  this.focusTransition={from:this.distance,to:nextDistance,started:performance.now(),duration:720};
+  return true;
+ }
+ home(){this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.focusId=null;this.focusTransition=null;}
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,(item?.[1]?.radius??1e-5)*20);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
  drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8)return;let path=this.orbitCache.get(body.id);if(!path){path=[];const eccentricity=Math.max(0,Math.min(0.95,body.orbitalElements.eccentricity??0)),segments=Math.max(512,Math.min(1024,Math.ceil(512*(1+eccentricity))));for(let i=0;i<=segments;i++){const e=body.orbitalElements,s=orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/segments},parent.mu);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.34:.2,body.id==='earth'?.62:.32,body.id==='earth'?.94:.48,.68*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);}
  render(world,states,timeSeconds,vesselState=null){
+  if(this.focusTransition){
+   const progress=Math.min(1,(performance.now()-this.focusTransition.started)/this.focusTransition.duration);
+   const eased=progress*progress*(3-2*progress);
+   this.distance=this.focusTransition.from+(this.focusTransition.to-this.focusTransition.from)*eased;
+   if(progress>=1)this.focusTransition=null;
+  }
   const g=this.gl,c=this.canvas,r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
   const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}

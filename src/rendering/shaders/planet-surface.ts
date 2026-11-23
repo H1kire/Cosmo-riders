@@ -5,6 +5,8 @@ uniform mat4 uModel;
 uniform float uKind;
 uniform float uDetail;
 uniform float uSeed;
+uniform float uUseGeneratedMaps;
+uniform samplerCube uGeneratedHeight;
 uniform float uTectonicActivity;
 uniform float uVolcanicActivity;
 varying vec3 vNormal;
@@ -48,8 +50,10 @@ void main(){
   float relief=0.0;
   if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
   else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009*uDetail;
-  else if(uKind>2.5&&uKind<3.5) relief=(terrain-0.48)*0.00055*uDetail;
-  else if(uKind>3.5&&uKind<5.5) relief=(terrain-0.48)*0.00025*uDetail;
+  float generatedHeight=textureLod(uGeneratedHeight,n,0.0).r-0.5;
+  float heightScale=uKind<1.5?0.009:(uKind<2.5?0.045:(uKind>5.2&&uKind<5.5?0.02:0.0));
+  float generatedRelief=generatedHeight*heightScale*uDetail;
+  relief=mix(relief,generatedRelief,uUseGeneratedMaps);
   vec4 world=uModel*vec4(aPosition*(1.0+relief),1.0);
   vPosition=world.xyz;
   vNormal=normalize(mat3(uModel)*n);
@@ -193,6 +197,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
     bool mercury=uColor.r<0.55&&uColor.g<0.55;
     bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
+    bool desert=uKind>2.3&&uKind<2.5;
     float craterNoise=fbm3Filtered(n*(18.0+uDetail*40.0)+uSeed*3.0)+ridged3(n*25.0+uSeed*9.0)*0.16;
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);
@@ -208,6 +213,10 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
       float frost=ridged3(n*31.0+uSeed*2.0);
       albedo=mix(vec3(0.24,0.16,0.035),vec3(0.78,0.63,0.18),smoothstep(0.25,0.72,sulfur));
       albedo=mix(albedo,vec3(0.88,0.82,0.55),smoothstep(0.72,0.92,frost)*0.45);
+    }else if(desert){
+      float dunes=fbm3(domainWarp3(n*vec3(8.0,3.0,8.0)+uSeed));
+      albedo=mix(vec3(0.25,0.105,0.045),vec3(0.68,0.34,0.13),dunes);
+      albedo+=vec3(0.1,0.035,0.012)*uIronFraction;
     }else{
       vec3 rock=mercury?vec3(0.20,0.19,0.18):vec3(0.30,0.31,0.32);
       albedo=rock*(0.62+0.75*broad+0.18*fine)+vec3(0.12,0.085,0.055)*uIronFraction*medium;
@@ -244,15 +253,26 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     }
     specular=0.035;
   }else if(uKind<5.5){
-    float cloudBands=fbm3(domainWarp3(n*vec3(7.0,24.0,7.0)+vec3(uSeed,broad*3.0,medium*2.0)));
-    float haze=fbm3(n*vec3(18.0,42.0,18.0)+uSeed*2.0);
-    float bands=sin((n.y+0.025*(cloudBands-0.5))*46.0+medium*1.8);
-    vec3 lowerCloud=mix(vec3(0.34,0.19,0.085),vec3(0.66,0.46,0.24),smoothstep(-0.45,0.55,bands));
-    vec3 upperHaze=mix(vec3(0.72,0.55,0.34),vec3(0.94,0.82,0.62),haze);
-    albedo=mix(lowerCloud,upperHaze,smoothstep(0.36,0.72,cloudBands)*0.78);
-    albedo=mix(albedo,vec3(0.96,0.84,0.66),smoothstep(0.76,0.94,haze)*0.34);
-    roughness=0.82;
-    specular=0.018;
+    if(uKind<5.2){
+      float cloudBands=fbm3(domainWarp3(n*vec3(7.0,24.0,7.0)+vec3(uSeed,broad*3.0,medium*2.0)));
+      float haze=fbm3(n*vec3(18.0,42.0,18.0)+uSeed*2.0);
+      float bands=sin((n.y+0.025*(cloudBands-0.5))*46.0+medium*1.8);
+      vec3 lowerCloud=mix(vec3(0.34,0.19,0.085),vec3(0.66,0.46,0.24),smoothstep(-0.45,0.55,bands));
+      vec3 upperHaze=mix(vec3(0.72,0.55,0.34),vec3(0.94,0.82,0.62),haze);
+      albedo=mix(lowerCloud,upperHaze,smoothstep(0.36,0.72,cloudBands)*0.78);
+      albedo=mix(albedo,vec3(0.96,0.84,0.66),smoothstep(0.76,0.94,haze)*0.34);
+      roughness=0.82;specular=0.018;
+    }else if(uKind<5.35){
+      float fractures=ridged3(domainWarp3(n*vec3(12.0,18.0,12.0)+uSeed*3.0));
+      albedo=mix(vec3(0.58,0.72,0.82),vec3(0.86,0.93,0.97),smoothstep(0.28,0.82,fractures));
+      roughness=0.3;specular=0.12;
+    }else{
+      float lavaField=fbm3(domainWarp3(n*vec3(13.0,19.0,13.0)+uSeed*4.0));
+      float sulfurField=fbm3(n*31.0+uSeed*7.0);
+      albedo=mix(vec3(0.045,0.025,0.018),vec3(0.72,0.54,0.12),smoothstep(0.32,0.78,sulfurField));
+      albedo=mix(albedo,vec3(1.0,0.19,0.025),smoothstep(0.68,0.92,lavaField)*0.55);
+      roughness=0.64;specular=0.025;
+    }
   }
   vec3 bakedAlbedo=texture(uGeneratedAlbedo,n).rgb;
   float bakedHeight=texture(uGeneratedHeight,n).r;

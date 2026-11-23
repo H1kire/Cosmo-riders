@@ -69,3 +69,25 @@ Orbit paths use 512–1024 samples depending on orbital eccentricity. The WebGL2
 Procedural terrain uses derivative-filtered fBm octaves (`fwidth`) to suppress noise frequencies smaller than a pixel. Texture-quality presets cap the shader detail independently from geometric LOD, so distant terrain does not pay for close-range detail and close views retain additional detail without uncontrolled aliasing.
 
 Cloud density also filters its fine procedural noise by the fragment footprint, preventing high-frequency cloud detail from turning into shimmer or blocky aliasing at distance. Ultra atmosphere integration uses the shader's full 16-sample limit; High uses 10 samples.
+
+## Procedural planetary surface generation
+
+The renderer now uses the independent `procedural-surface/` subsystem for deterministic, composition-aware worlds.
+
+- `noise.ts`: stable ID hashing, 3D value noise, fBm, ridged multifractal noise, cellular/Worley fields and domain warping.
+- `surface-generator.ts`: physical surface profiles, geological sampling and six-face cube-sphere albedo, height/roughness and object-space normal maps. Sampling uses normalized 3D directions rather than equirectangular UVs, avoiding pole stretching and longitude seams.
+- `surface-map-cache.ts`: asynchronous face-by-face generation and bounded CPU LRU storage.
+- `solar-3d.ts`: screen-space map resolutions (64/128/256/512), cubemap upload, mipmap generation, gradual map blending and a separate 64 MiB GPU texture budget. GPU and CPU resources are released by `dispose()`.
+- `planet-surface.ts`: combines the generated maps with analytic multifractal shading and the existing inverse-square multi-light / eclipse pipeline.
+
+### Determinism and world metadata
+
+A planet uses its explicit `surfaceSeed` when supplied; otherwise its stable celestial-body ID is hashed. Evaluation does not depend on body iteration order or frame count. New generated bodies can persist a `surfaceSeed` and `surface` metadata in `CelestialBodyOptions`, including surface class, temperature, pressure, water/ice/iron/silicate fractions, tectonic and volcanic activity, impact age and erosion.
+
+Known Solar System bodies have curated starting profiles. Unknown bodies receive conservative gravity-based defaults, which can be overridden by their persisted surface metadata. These are procedural visual models, not a full climate or geochemical evolution simulation; missing composition is inferred rather than presented as measured science data.
+
+### LOD and resource policy
+
+Projected screen radius selects 64, 128, 256 or 512 texels per cube face. Lower-resolution maps remain usable while a higher level is generated; a newly uploaded level blends in over 450 ms. Cubemap mipmaps handle minification. CPU map memory is capped at 48 MiB and GPU cubemap memory at 64 MiB. Only bodies requested by the active renderer are generated, and GPU textures are evicted least-recently-used when the budget is exceeded.
+
+The procedural generator is tested independently for seed stability, repeatability, physical profile differences, cube-map dimensions, output bounds and cache behavior in `tests/procedural-surface.test.ts`.

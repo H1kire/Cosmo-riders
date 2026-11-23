@@ -247,3 +247,4 @@ void main(){
   vec3 indirect=albedo*0.0001;
   gl_FragColor=vec4(max(directLight+indirect,vec3(0.0)),1.0);
 }
+`;

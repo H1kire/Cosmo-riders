@@ -78,3 +78,15 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
  assert.ok(CLOUD_FRAGMENT.includes('uWind'));
  assert.ok(CLOUD_FRAGMENT.includes('uShadowVisibility'));
 });
+
+import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';
+
+test('planet surface shader restores distinct procedural maps and physically based lighting',()=>{
+ assert.ok(PLANET_SURFACE_VERTEX.includes('aPosition*(1.0+relief)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('continentField'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('craterBasin'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('distributionGGX'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensity/22.0'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uCameraPosition-vPosition'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uKind>5.5)'));
+});

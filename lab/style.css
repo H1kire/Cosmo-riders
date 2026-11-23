@@ -58,3 +58,8 @@
 .settings-section{padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid #22364d}
 .settings-section h3{margin:0 0 12px;color:#d9eaff;font-size:12px;letter-spacing:.04em}
 @media(max-width:700px){.system-navigation{left:8px;right:8px;bottom:92px;max-width:none}.system-nav-item{padding:7px 9px;font-size:9px}}
+
+.settings-tabs{display:flex;gap:6px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid #22364d}
+.settings-tab{flex:1;border:1px solid #2a405a;border-radius:6px;padding:8px;background:#101d2d;color:#91a9c5;font-size:10px;cursor:pointer}
+.settings-tab.active{background:#1b3856;border-color:#6ba9e8;color:#f0f7ff}
+.settings-section[hidden]{display:none}

@@ -165,12 +165,24 @@ float localShadowVisibility(vec3 point){
   }
   return clamp(visibility,0.0,1.0);
 }
+float fbmFiltered(vec3 p){
+  float footprint=max(max(fwidth(p.x),fwidth(p.y)),fwidth(p.z));
+  float value=0.0,amplitude=0.5;
+  for(int i=0;i<5;i++){
+    float octaveWeight=1.0-smoothstep(0.32,0.92,footprint);
+    value+=valueNoise(p)*amplitude*octaveWeight;
+    p*=2.03;
+    footprint*=2.03;
+    amplitude*=0.5;
+  }
+  return value;
+}
 void main(){
   vec3 n=safeNormalize(vNormal);
   vec3 drift=vec3(uTime*uWind.x,0.0,uTime*uWind.y);
   vec3 p=n*uScale+drift+vec3(uSeed);
   float broad=fbm(p);
-  float fine=fbm(p*2.65+13.7);
+  float fine=fbmFiltered(p*2.65+13.7);
   float density=0.68*broad+0.32*fine;
   float edge=smoothstep(uCoverage,uCoverage+0.19,density);
   float holes=smoothstep(0.12,0.78,fine);

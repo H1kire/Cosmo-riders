@@ -214,10 +214,10 @@ export class HDRPipeline implements Disposable {
     this.activeHdr=this.hdrSupported;
     this.multisampleSamples=Math.max(0,Math.min(4,Math.trunc(multisampleSamples)));
     this.scene=target(gl,width,height,this.activeHdr,true,this.multisampleSamples);
-    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
+    const bw=width,bh=height,blurWidth=Math.max(1,Math.floor(width*0.75)),blurHeight=Math.max(1,Math.floor(height*0.75));
     this.bright=target(gl,bw,bh,this.activeHdr);
-    this.ping=target(gl,bw,bh,this.activeHdr);
-    this.pong=target(gl,bw,bh,this.activeHdr);
+    this.ping=target(gl,blurWidth,blurHeight,this.activeHdr);
+    this.pong=target(gl,blurWidth,blurHeight,this.activeHdr);
     this.brightProgram=program(gl,BRIGHT);
     this.blurProgram=program(gl,BLUR);
     this.compositeProgram=program(gl,COMPOSITE);
@@ -244,10 +244,10 @@ export class HDRPipeline implements Disposable {
     const width=this.scene.width,height=this.scene.height;
     this.destroyTargets();
     this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
-    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
+    const bw=width,bh=height,blurWidth=Math.max(1,Math.floor(width*0.75)),blurHeight=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
-    this.ping=target(this.gl,bw,bh,this.activeHdr);
-    this.pong=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,blurWidth,blurHeight,this.activeHdr);
+    this.pong=target(this.gl,blurWidth,blurHeight,this.activeHdr);
   }
 
   setMultisampleSamples(samples:number):void{
@@ -257,20 +257,20 @@ export class HDRPipeline implements Disposable {
     const width=this.scene.width,height=this.scene.height;
     this.destroyTargets();
     this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
-    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
+    const bw=width,bh=height,blurWidth=Math.max(1,Math.floor(width*0.75)),blurHeight=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
-    this.ping=target(this.gl,bw,bh,this.activeHdr);
-    this.pong=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,blurWidth,blurHeight,this.activeHdr);
+    this.pong=target(this.gl,blurWidth,blurHeight,this.activeHdr);
   }
 
   resize(width:number,height:number):void{
     if(width===this.scene.width&&height===this.scene.height)return;
     this.destroyTargets();
     this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
-    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
+    const bw=width,bh=height,blurWidth=Math.max(1,Math.floor(width*0.75)),blurHeight=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
-    this.ping=target(this.gl,bw,bh,this.activeHdr);
-    this.pong=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,blurWidth,blurHeight,this.activeHdr);
+    this.pong=target(this.gl,blurWidth,blurHeight,this.activeHdr);
   }
 
   private destroyTarget(t:Target):void{

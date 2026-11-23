@@ -17,7 +17,7 @@ export interface SurfaceBodyInput {
  surface?:Partial<Omit<SurfaceGenerationProfile,'id'|'seed'|'gravityMS2'>> & {mineralComposition?:readonly string[]};
 }
 export interface SurfaceCubeMaps {
- resolution:number; seed:number; albedo:Uint8Array; height:Uint8Array; roughness:Uint8Array; normal:Uint8Array;
+ resolution:number; seed:number; generationMs:number; albedo:Uint8Array; height:Uint8Array; roughness:Uint8Array; normal:Uint8Array;
 }
 const clamp=(v:number,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
@@ -203,6 +203,7 @@ export function cubeFaceDirection(face:number,u:number,v:number):[number,number,
 }
 export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,resolution=128,yieldFace?:()=>Promise<void>):Promise<SurfaceCubeMaps>{
  if(!Number.isInteger(resolution)||resolution<8||resolution>1024)throw new RangeError('Surface map resolution must be an integer from 8 to 1024.');
+ const generationStarted=performance.now();
  const pixels=6*resolution*resolution,albedo=new Uint8Array(pixels*4),height=new Uint8Array(pixels*4),roughness=new Uint8Array(pixels*4),normal=new Uint8Array(pixels*4);
  const idx=(face:number,x:number,y:number)=>(face*resolution*resolution+y*resolution+x)*4;
  const eps=1/resolution,gas=profile.class==='gas-giant'||profile.class==='ice-giant';
@@ -224,5 +225,5 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
   }
   if(yieldFace)await yieldFace();
  }
- return {resolution,seed:profile.seed,albedo,height,roughness,normal};
+ return {resolution,seed:profile.seed,generationMs:performance.now()-generationStarted,albedo,height,roughness,normal};
 }

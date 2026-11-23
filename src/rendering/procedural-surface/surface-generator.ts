@@ -134,7 +134,7 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
   case 'oceanic': {
    const crust=fbmPerlin3(x*4,y*4,z*4,seed+101,4);
    const trench=ridged3(x*9+regional,y*9,z*9,seed+103,5)*profile.tectonicActivity;
-   height=(crust-.5)*.075+(regional-.5)*.055+tectonic*.11-trench*.055+volcanic*.035;
+   height=((crust-.5)*.075+(regional-.5)*.055+tectonic*.11-trench*.055+volcanic*.035)*(1-profile.waterFraction*.35);
    break;
   }
   case 'desert': {
@@ -150,7 +150,8 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
    const fracture=ridged3(x*13+regional*.8,y*13,z*13,seed+149,5);
    const plates=fbmPerlin3(x*4,y*4,z*4,seed+151,4);
    const ridge=smooth(.58,.84,fracture)*(1-profile.erosion*.6);
-   height=(plates-.5)*.065+ridge*.095+tectonic*.055+volcanic*.025-craterBasin*impact*.045;
+   const iceStrength=clamp(.65+profile.iceFraction*.4+profile.volatileFraction*.2,.65,1.15);
+   height=((plates-.5)*.065+ridge*.095+tectonic*.055+volcanic*.025-craterBasin*impact*.045)*iceStrength;
    break;
   }
   case 'volcanic':
@@ -184,7 +185,10 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
  const frost=clamp(Math.max(profile.iceFraction,smooth(300,145,profile.temperatureK)*profile.volatileFraction));
  if(frost>.62&&profile.class!=='icy'&&profile.class!=='icy-moon')height+=(ridged3(x*48,y*48,z*48,seed+227,3)-.35)*frost*.025;
  const densityFactor=clamp(Math.sqrt(Math.max(.15,profile.gravityMS2)/9.81),.35,2.2);
- height*=gravityScale*(1-erosion*.48)/Math.sqrt(densityFactor);
+ const silicateStrength=.78+profile.silicateFraction*.32;
+ const metalDamping=1-profile.metalFraction*.18,ironDamping=1-profile.ironFraction*.06;
+ const crustStrength=clamp(silicateStrength*metalDamping*ironDamping,.55,1.15);
+ height*=gravityScale*(1-erosion*.48)*crustStrength/Math.sqrt(densityFactor);
  height+=(detail-.5)*.012;
  return clamp(height,-.45,.45);
 }

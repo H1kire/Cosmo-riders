@@ -148,17 +148,17 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  let height=sampleSurfaceHeight([x,y,z],profile);
  if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&ice>.62)){
   const crack=smooth(.72,.91,cells)*(1-profile.erosion*.55);
-  const salt=profile.volatileFraction*.12+(profile.mineralFlags.salts?.05:0);
+  const salt=profile.volatileFraction*.12+(profile.mineralFlags.salts ? 0.05 : 0);
   albedo=[.52+polar*.25+salt-crack*.16,.67+polar*.22+salt-crack*.13,.76+polar*.18+salt-crack*.09];
   roughness=.3+profile.erosion*.25;material='water-ice';
  }else if(profile.class==='volcanic'||profile.class==='volcanic-moon'){
-  const sulfur=clamp(profile.sulfurFraction+(profile.mineralFlags.sulfides?.18:0));
+  const sulfur=clamp(profile.sulfurFraction+(profile.mineralFlags.sulfides ? 0.18 : 0));
   const sulfurField=fbm3(x*19,y*19,z*19,seed+311,4);
   const sulfurPatch=smooth(.35,.72,sulfurField)*sulfur;
   albedo=[.055+lava*.2+sulfurPatch*.55,.035+lava*.09+sulfurPatch*.34,.025+lava*.035+sulfurPatch*.08];
   material=sulfur>.18?'sulfur':'lava';roughness=.58;
  }else if(profile.class==='desert'){
-  const ironOxide=clamp(iron*.75+mineral*.3+(profile.mineralFlags.ironOxides?.18:0));
+  const ironOxide=clamp(iron*.75+mineral*.3+(profile.mineralFlags.ironOxides ? 0.18 : 0));
   const dune=fbm3(x*8+regional,y*8,z*8,seed+271,5);
   albedo=[.24+ironOxide*.34+dune*.16,.105+ironOxide*.12+dune*.1,.045+ironOxide*.06+dune*.07];
   material='iron-oxide';roughness=.91;
@@ -175,7 +175,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
    material='basalt';roughness=.86;
   }
  }else{
-  const ironOxide=iron*.38+metal*.18+mineral*.22+(profile.mineralFlags.ironOxides?.08:0);
+  const ironOxide=iron*.38+metal*.18+mineral*.22+(profile.mineralFlags.ironOxides ? 0.08 : 0);
   const silicateTone=silicate*.22*(profile.mineralFlags.silicates?1:.45);
   albedo=[.19+silicateTone+ironOxide*.28+fine*.09,.18+silicateTone*.72+ironOxide*.12+fine*.07,.16+silicateTone*.48+fine*.05];
   if(profile.mineralFlags.carbon)albedo=[albedo[0]*.92,albedo[1]*.94,albedo[2]*.98];

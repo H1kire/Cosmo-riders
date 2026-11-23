@@ -93,6 +93,11 @@ const FACE_DIRECTIONS=[
  (u:number,v:number):[number,number,number]=>[u,-v,1],
  (u:number,v:number):[number,number,number]=>[-u,-v,-1]
 ];
+export function cubeFaceDirection(face:number,u:number,v:number):[number,number,number]{
+ if(!Number.isInteger(face)||face<0||face>=FACE_DIRECTIONS.length)throw new RangeError('Cube face index must be in [0, 5].');
+ const direction=FACE_DIRECTIONS[face](u,v),length=Math.hypot(...direction);
+ return direction.map(value=>value/length) as [number,number,number];
+}
 export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,resolution=128,yieldFace?:()=>Promise<void>):Promise<SurfaceCubeMaps>{
  if(!Number.isInteger(resolution)||resolution<8||resolution>1024)throw new RangeError('Surface map resolution must be an integer from 8 to 1024.');
  const pixels=6*resolution*resolution,albedo=new Uint8Array(pixels*4),heightRoughness=new Uint8Array(pixels*4),normal=new Uint8Array(pixels*4);
@@ -100,7 +105,7 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
  const eps=1/resolution;
  for(let face=0;face<6;face++){
   for(let y=0;y<resolution;y++)for(let x=0;x<resolution;x++){
-   const u=(x/(resolution-1))*2-1,v=(y/(resolution-1))*2-1,dir=FACE_DIRECTIONS[face](u,v);
+   const u=(x/(resolution-1))*2-1,v=(y/(resolution-1))*2-1,dir=cubeFaceDirection(face,u,v);
    const sample=sampleSurface(dir,profile),i=index(face,x,y);
    albedo[i]=Math.round(clamp(sample.albedo[0])*255);albedo[i+1]=Math.round(clamp(sample.albedo[1])*255);albedo[i+2]=Math.round(clamp(sample.albedo[2])*255);albedo[i+3]=255;
    heightRoughness[i]=Math.round(clamp(sample.height*.5+.5)*255);heightRoughness[i+1]=Math.round(sample.roughness*255);heightRoughness[i+2]=0;heightRoughness[i+3]=255;

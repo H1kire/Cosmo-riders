@@ -347,7 +347,7 @@ export class Solar3DView{
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   
-  for(const body of bodies){  
+    
   for(const body of bodies){
    g.useProgram(this.bodyProgram);
    const state=states.get(body.id);if(!state)continue;

@@ -191,7 +191,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  height=clamp(height,-.45,.45);
  return {height,albedo,roughness,material};
 }
-export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{return stableSeed(JSON.stringify(profile)).toString(16)+':'+profile.seed;}
+export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const fingerprint=JSON.stringify(profile);return stableSeed(fingerprint).toString(16)+':'+fingerprint;}
 export function surfaceResolutionForProjectedRadius(projectedRadius:number):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  return projectedRadius>520?512:projectedRadius>150?256:projectedRadius>35?128:64;

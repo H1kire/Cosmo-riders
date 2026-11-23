@@ -76,7 +76,7 @@ test('planet effects contain real view-ray scattering and procedural cloud shadi
  assert.ok(ATMOSPHERE_FRAGMENT.includes('mieDepth'));
  assert.ok(CLOUD_FRAGMENT.includes('fbm(p)'));
  assert.ok(CLOUD_FRAGMENT.includes('uWind'));
- assert.ok(CLOUD_FRAGMENT.includes('uShadowVisibility'));
+ assert.ok(CLOUD_FRAGMENT.includes('localShadowVisibility(vPosition)'));
 });
 
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../src/rendering/shaders/planet-surface.ts';

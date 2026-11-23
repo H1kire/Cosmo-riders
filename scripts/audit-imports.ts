@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const extensions=['.ts','.tsx','.js','.jsx','.mjs','.cjs'];
-const ignored=new Set(['node_modules','dist','.git']);
+const ignored=new Set(['node_modules','dist','.git','scripts']);
 async function walk(dir:string):Promise<string[]>{
  const found:string[]=[];
  for(const entry of await readdir(dir,{withFileTypes:true})){

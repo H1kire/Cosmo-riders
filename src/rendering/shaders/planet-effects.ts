@@ -13,7 +13,6 @@ void main(){
 
 export const ATMOSPHERE_FRAGMENT = `#include <common>
 #include <atmosphere>
-uniform vec3 uLight;
 uniform vec3 uLightColor;
 uniform vec3 uCameraPosition;
 uniform vec3 uPlanetCenter;
@@ -107,8 +106,8 @@ void main(){
   float opticalAttenuation=exp(-rayleighDepth*0.055-mieDepth*0.11);
   vec3 rayleigh=atmosphereColor*rayleighDepth*phaseR*0.9;
   vec3 mie=vec3(1.0,0.82,0.62)*mieDepth*phaseM*uMie*0.42;
-  vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.14+0.86*day);
-  scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day);
+  vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.015+0.985*day);
+  scatter+=atmosphereColor*rim*0.055*(0.02+0.98*day);
   float solarIrradiance=uLightIntensity/22.0;
   float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity*solarIrradiance;
   gl_FragColor=vec4(scatter*uLightColor,alpha);
@@ -129,7 +128,6 @@ void main(){
 
 export const CLOUD_FRAGMENT = `#include <common>
 #include <noise>
-uniform vec3 uLight;
 uniform vec3 uLightColor;
 uniform float uTime;
 uniform vec2 uWind;

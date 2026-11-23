@@ -31,6 +31,18 @@ export function createSurfaceProfile(body:SurfaceBodyInput):SurfaceGenerationPro
  const base={...fallback,...known[body.id.toLowerCase()],...body.surface};
  return {id:body.id,seed,class:base.class??'rocky',gravityMS2:gravity,temperatureK:base.temperatureK??260,pressurePa:base.pressurePa??0,waterFraction:clamp(base.waterFraction??.08),iceFraction:clamp(base.iceFraction??.08),ironFraction:clamp(base.ironFraction??.28),silicateFraction:clamp(base.silicateFraction??.58),tectonicActivity:clamp(base.tectonicActivity??.25),volcanicActivity:clamp(base.volcanicActivity??.18),impactAge:clamp(base.impactAge??.48),erosion:clamp(base.erosion??.3),rotationFactor:clamp(base.rotationFactor??.5)};
 }
+export function sampleSurfaceHeight(direction:[number,number,number],profile:SurfaceGenerationProfile):number{
+ const magnitude=Math.hypot(...direction)||1,x=direction[0]/magnitude,y=direction[1]/magnitude,z=direction[2]/magnitude,seed=profile.seed;
+ const warped=domainWarp3(x*3.2,y*3.2,z*3.2,seed,.42),[wx,wy,wz]=warped;
+ const continent=fbm3(wx,wy,wz,seed,6),regional=fbm3(x*13,y*13,z*13,seed+17,5);
+ const ridges=ridged3(wx*21,wy*21,wz*21,seed+31,5);
+ const tectonic=ridged3(x*5+regional,y*5,z*5,seed+89,4)*profile.tectonicActivity;
+ const volcanic=fbm3(x*11,y*11,z*11,seed+103,4)*profile.volcanicActivity;
+ let height=continent*.28+regional*.12+ridges*.12+tectonic*.16+volcanic*.08;
+ const weathering=clamp(profile.erosion+clamp(Math.log10(1+profile.pressurePa)/7)*smooth(150,300,profile.temperatureK)*.18);
+ height*=1-weathering*.45;
+ return height*clamp(1.4/Math.sqrt(Math.max(.1,profile.gravityMS2)),.55,1.8);
+}
 export function sampleSurface(direction:[number,number,number],profile:SurfaceGenerationProfile):SurfaceSample{
  const m=Math.hypot(...direction)||1,[x,y,z]=direction.map(v=>v/m) as [number,number,number],s=profile.seed;
  const warped=domainWarp3(x*3.2,y*3.2,z*3.2,s,.42),[wx,wy,wz]=warped;
@@ -96,8 +108,8 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
    const tangent=[unit[1]*reference[2]-unit[2]*reference[1],unit[2]*reference[0]-unit[0]*reference[2],unit[0]*reference[1]-unit[1]*reference[0]];
    const tangentLength=Math.hypot(...tangent),t1=tangent.map(value=>value/tangentLength),t2=[unit[1]*t1[2]-unit[2]*t1[1],unit[2]*t1[0]-unit[0]*t1[2],unit[0]*t1[1]-unit[1]*t1[0]];
    const offset=(axis:number[],sign:number)=>{const d=unit.map((value,k)=>value+axis[k]*eps*sign),m=Math.hypot(...d);return d.map(value=>value/m) as [number,number,number];};
-   const du=(sampleSurface(offset(t1,1),profile).height-sampleSurface(offset(t1,-1),profile).height)/(2*eps);
-   const dv=(sampleSurface(offset(t2,1),profile).height-sampleSurface(offset(t2,-1),profile).height)/(2*eps);
+   const du=(sampleSurfaceHeight(offset(t1,1),profile)-sampleSurfaceHeight(offset(t1,-1),profile))/(2*eps);
+   const dv=(sampleSurfaceHeight(offset(t2,1),profile)-sampleSurfaceHeight(offset(t2,-1),profile))/(2*eps);
    const nn=unit.map((value,k)=>value-t1[k]*du*.08-t2[k]*dv*.08),normalLength=Math.hypot(...nn),nx=nn[0]/normalLength,ny=nn[1]/normalLength,nz=nn[2]/normalLength;
    normal[i]=Math.round((nx*.5+.5)*255);normal[i+1]=Math.round((ny*.5+.5)*255);normal[i+2]=Math.round((nz*.5+.5)*255);normal[i+3]=255;
   }

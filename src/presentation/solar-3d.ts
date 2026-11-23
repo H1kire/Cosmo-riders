@@ -20,7 +20,7 @@ function perspective(f,a,n,fz){const q=1/Math.tan(f/2),d=1/(n-fz);return[q/a,0,0
 function lookAt(e,t,u){const z=norm(sub(e,t)),x=norm(cross(u,z)),y=cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1];}
 function multiply(a,b){const o=Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o;}
 function compile(gl,type,src){const s=gl.createShader(type);let source=src;if(typeof gl.createVertexArray==='function'){source=source.replace(/\battribute\b/g,'in').replace(/\bvarying\b/g,type===gl.VERTEX_SHADER?'out':'in');if(type===gl.FRAGMENT_SHADER&&source.includes('gl_FragColor')){source=source.replace(/(precision\s+\w+\s+float;)/,'$1\nout vec4 outColor;').replace(/gl_FragColor/g,'outColor');}source='#version 300 es\n'+source;}gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
-function makeProgram(gl,vs,fs){const p=gl.createProgram();gl.attachShader(p,compile(gl,gl.VERTEX_SHADER,vs));gl.attachShader(p,compile(gl,gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
+function makeProgram(gl,vs,fs){const vertex=compile(gl,gl.VERTEX_SHADER,vs),fragment=compile(gl,gl.FRAGMENT_SHADER,fs),p=gl.createProgram();if(!p){gl.deleteShader(vertex);gl.deleteShader(fragment);throw Error('WebGL program allocation failed');}gl.attachShader(p,vertex);gl.attachShader(p,fragment);gl.linkProgram(p);gl.detachShader(p,vertex);gl.detachShader(p,fragment);gl.deleteShader(vertex);gl.deleteShader(fragment);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){const error=gl.getProgramInfoLog(p);gl.deleteProgram(p);throw Error(error);}return p;}
 function makeSphere(gl,lat,lon){const p=[],n=[],idx=[];for(let y=0;y<=lat;y++){const v=y/lat,phi=v*Math.PI;for(let x=0;x<=lon;x++){const theta=x/lon*Math.PI*2,q=[-Math.cos(theta)*Math.sin(phi),Math.cos(phi),Math.sin(theta)*Math.sin(phi)];p.push(...q);n.push(...q);}}for(let y=0;y<lat;y++)for(let x=0;x<lon;x++){const a=y*(lon+1)+x,b=a+lon+1;idx.push(a,b,a+1,b,b+1,a+1);}const buffers=[gl.createBuffer(),gl.createBuffer(),gl.createBuffer()];gl.bindBuffer(gl.ARRAY_BUFFER,buffers[0]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(p),gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,buffers[1]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(n),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,buffers[2]);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return{buffers,count:idx.length};}
 export class Solar3DView{
  [key: string]: any;
@@ -44,9 +44,9 @@ export class Solar3DView{
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uLight','uLightColor','uCameraPosition','uLightIntensity','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
-  this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uShadowVisibility','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples']);
-  this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uShadowVisibility']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uShadowVisibility','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
+  this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uShadowVisibility','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
@@ -108,13 +108,13 @@ export class Solar3DView{
   g.uniform1f(l.uRayleighScaleHeight,profile.rayleighScaleHeightM/AU);g.uniform1f(l.uMieScaleHeight,profile.mieScaleHeightM/AU);
   g.uniform1i(l.uAtmosphereSamples,this.graphics.atmosphereSamples);
   g.uniform1f(l.uIntensity,(profile.intensity??1)*this.graphics.atmosphereIntensity);
-  g.uniform1f(l.uShadowVisibility,shadowVisibility);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
+  g.uniform1f(l.uShadowVisibility,shadowVisibility);g.uniform1f(l.uLightIntensity,light.intensity/22);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
  }
  drawClouds(body,layers,p,radius,mesh,vp,light,shadowVisibility,timeSeconds){
   const g=this.gl,l=this.cloudLoc;
   g.useProgram(this.cloudProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   g.uniform3f(l.uLight,...light.direction);g.uniform3f(l.uLightColor,...light.color);
-  g.uniform1f(l.uTime,timeSeconds%100000);g.uniform1f(l.uShadowVisibility,shadowVisibility);
+  g.uniform1f(l.uTime,timeSeconds%100000);g.uniform1f(l.uShadowVisibility,shadowVisibility);g.uniform1f(l.uLightIntensity,light.intensity/22);
   for(const layer of layers){
    const shellRadius=radius*(1+layer.altitudeM/body.meanRadiusM);
    const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
@@ -232,11 +232,15 @@ export class Solar3DView{
   const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
   const sunRenderPosition=mapper(null,sun);
   this.lighting.setPointLight('sun',sunRenderPosition,{intensity:22,color:[1,.96,.86]});
+  const lightSources=this.lighting.getLights().slice(0,4);
+  const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
+  lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   
   for(const body of bodies){
+   g.useProgram(this.bodyProgram);
    const state=states.get(body.id);if(!state)continue;
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
@@ -246,7 +250,9 @@ export class Solar3DView{
    const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
-   g.uniform3f(l.uLight,...light.direction);g.uniform3f(l.uLightColor,...light.color);g.uniform3f(l.uCameraPosition,...eye);g.uniform1f(l.uLightIntensity,light.intensity);
+   g.uniform3f(l.uCameraPosition,...eye);
+   g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);
+   g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    g.uniform3f(l.uColor,...(COLORS[body.id]??[.5,.6,.8]));g.uniform1f(l.uKind,KINDS[body.id]??2);
    g.uniform1f(l.uDetail,Math.max(0,Math.min(1,px/90)));g.uniform1f(l.uSeed,bodies.indexOf(body)*13.17);
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
@@ -277,7 +283,7 @@ export class Solar3DView{
     const mesh=this.meshes[0],shipDistance=Math.max(1e-12,Math.hypot(ship[0]-eye[0],ship[1]-eye[1],ship[2]-eye[2]));
     const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
     g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
-    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uLight,0,0,1);g.uniform3f(l.uLightColor,1,1,1);g.uniform3f(l.uCameraPosition,...eye);g.uniform1f(l.uLightIntensity,1);
+    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uCameraPosition,...eye);g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
     g.uniform1f(l.uKind,5);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);
     g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
     this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);

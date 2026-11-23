@@ -35,7 +35,7 @@ export class Solar3DView{
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
   this.surfaceMapCache=new SurfaceMapCache(48*1024*1024);
-  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceGpuBytes=0;this.surfaceTextureClock=0;
+  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -227,6 +227,7 @@ export class Solar3DView{
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
  drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8)return;let path=this.orbitCache.get(body.id);if(!path){path=[];const eccentricity=Math.max(0,Math.min(0.95,body.orbitalElements.eccentricity??0)),segments=Math.max(512,Math.min(1024,Math.ceil(512*(1+eccentricity))));for(let i=0;i<=segments;i++){const e=body.orbitalElements,s=orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/segments},parent.mu);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.34:.2,body.id==='earth'?.62:.32,body.id==='earth'?.94:.48,.68*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);}
  render(world,states,timeSeconds,vesselState=null){
+  const frameStarted=performance.now();
   if(this.focusTransition){
    const progress=Math.min(1,(performance.now()-this.focusTransition.started)/this.focusTransition.duration);
    const eased=progress*progress*(3-2*progress);
@@ -377,6 +378,8 @@ export class Solar3DView{
   if(sunScreen)this.hdr.setOpticalSource([sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)],sunVisible);
   else this.hdr.setOpticalSource([.5,.5],false);
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
+  this.lastFrameDurationMs=performance.now()-frameStarted;
+  this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
  }
  requestSurfaceMaps(profile,resolution){
   const profileKey=surfaceProfileKey(profile),key=profileKey+':'+resolution;
@@ -385,11 +388,12 @@ export class Solar3DView{
   this.surfaceMapPending.add(key);
   this.surfaceMapCache.get(profile,resolution).then(maps=>{
    this.surfaceMapPending.delete(key);if(this.disposed)return;
+   this.lastSurfaceGenerationMs=maps.generationMs;
    this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0});
   }).catch(()=>{this.surfaceMapPending.delete(key);});
  }
  processSurfaceUploads(){
-  const g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
+  const uploadStarted=performance.now(),g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
   const active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
   const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
   const channels=[job.maps.albedo,job.maps.height,job.maps.roughness,job.maps.normal];
@@ -419,7 +423,9 @@ export class Solar3DView{
    job.mipIndex++;
   }
   g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);
+  job.uploadSubmissionMs=(job.uploadSubmissionMs??0)+(performance.now()-uploadStarted);
   if(job.faceIndex===24&&job.mipIndex===4){
+   this.lastSurfaceUploadSubmissionMs=job.uploadSubmissionMs;
    const bytes=Math.ceil(job.resolution*job.resolution*4*6*4*4/3);
    while(this.surfaceGpuBytes+bytes>64*1024*1024&&this.surfaceGpuTextures.size){
     let oldestKey=null,oldest=Infinity;
@@ -444,6 +450,9 @@ export class Solar3DView{
   const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
   g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
+ }
+ getSurfaceDiagnostics(){
+  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
  }
  dispose(){
   if(this.disposed)return;

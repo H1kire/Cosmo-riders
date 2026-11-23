@@ -44,7 +44,7 @@ const satellite = (
   massKg: gmKm3S2 * 1e9 / G,
   meanRadiusM: radiusKm * 1000,
   rotationPeriodSeconds:null,tidalLock,
-  orbitalReferenceFrame:parentId==='earth'?'ecliptic':'parent-equator',
+  orbitalReferenceFrame:(parentId==='earth'?'ecliptic':'parent-equator') as 'ecliptic'|'parent-equator',
   surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
     semiMajorAxisM: aKm * 1000,

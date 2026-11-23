@@ -306,8 +306,7 @@ export class Solar3DView{
   if(focusState){this.cameraOrigin=[0,0,0];this.target=this.focusOffset.slice();}
   else{this.cameraOrigin=[0,0,0];this.target=[0,0,0];}
   const eye=[this.target[0]+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target[1]+this.distance*Math.sin(this.pitch),this.target[2]+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)];
-  const focusRadius=focus?.meanRadiusM/AU??0;
-  const near=Math.max(1e-12,Math.min(this.distance*.0005,focusRadius>0?focusRadius*.015:this.distance*.0005));
+  const focusRadius=focus?focus.meanRadiusM/AU:0;
   const far=100,near=Math.max(1e-10,Math.min(this.distance*.01,focusRadius>0?focusRadius*.02:this.distance*.01));
   const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];

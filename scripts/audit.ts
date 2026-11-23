@@ -73,7 +73,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   }],
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
-    if (!source.includes("getContext('webgl2'") || !source.includes('makeSphere(g,44,60)')) throw new Error('WebGL2 renderer or high-detail sphere mesh is missing.');
+    if (!source.includes("getContext('webgl2'") || !source.includes('makeSphere(g,44,60)') || !source.includes('removeEventListener(\'graphics-settings-change\',this.graphicsChangeHandler)') || !source.includes('this.hdr?.dispose()')) throw new Error('WebGL2 renderer or high-detail sphere mesh is missing.');
     if (!source.includes('new HDRPipeline(') || !source.includes('this.hdr.begin(renderWidth,renderHeight)') || !source.includes('this.hdr.present(w,h)')) throw new Error('Solar scene must render through the HDR scene target and final post-process pass.');
     const hdr = await readFile(new URL('../src/rendering/core/hdr-pipeline.ts', import.meta.url), 'utf8');
     if (!hdr.includes('EXT_color_buffer_float') || !hdr.includes('RGBA16F') || !hdr.includes('HALF_FLOAT')) throw new Error('HDR pipeline must allocate floating-point RGBA16F render targets when supported.');

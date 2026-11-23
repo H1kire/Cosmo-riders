@@ -11,7 +11,7 @@
 | `npm test` | Регрессионные тесты физики, рендеринга, процедурных поверхностей и форматирования. |
 | `npm run audit:static` | Проектные архитектурные инварианты из `scripts/audit.ts`. |
 | `npm run audit:types` | Проверка TypeScript через `tsc --noEmit`. |
-| `npm run audit:imports` | Локальные импорты, динамические импорты, URL Worker, существование файлов и регистр путей. |
+| `npm run audit:imports` | Локальные импорты, динамические импорты, URL Worker, существование файлов, регистр путей и циклические зависимости. |
 | `npm run audit:assets` | Локальные ссылки `src`, `href`, `poster` и CSS `url()` в HTML/CSS с учётом каталога `public/`. |
 | `npm run audit:build` | Production-сборка Vite и проверка сгенерированных entry points. |
 | `npm run audit:deployment` | Проверка `dist/`, JS/CSS ссылок, отсутствия исходных TS-файлов и наличия `.nojekyll`. |

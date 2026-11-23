@@ -281,7 +281,7 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels));}}
+  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(h/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus);this.requestSurfaceMaps(focusProfile,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class));}}
   
   for(const body of bodies){
    g.useProgram(this.bodyProgram);
@@ -308,7 +308,7 @@ export class Solar3DView{
      g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
      g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
     }else{
-     const surfaceResolution=surfaceResolutionForProjectedRadius(px);
+     const surfaceResolution=surfaceResolutionForProjectedRadius(px,surfaceProfile.class);
      if(px>=8&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20)this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
      this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
      g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);

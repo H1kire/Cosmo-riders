@@ -47,10 +47,11 @@ void main(){
 
 export const PLANET_SURFACE_FRAGMENT = `precision highp float;
 uniform vec3 uColor;
-uniform vec3 uLight;
-uniform vec3 uLightColor;
 uniform vec3 uCameraPosition;
-uniform float uLightIntensity;
+uniform vec3 uLightPositions[4];
+uniform vec3 uLightColors[4];
+uniform float uLightIntensities[4];
+uniform int uLightCount;
 uniform float uKind;
 uniform float uDetail;
 uniform float uSeed;
@@ -99,7 +100,7 @@ float shadowVisibility(vec3 point){
       float along=dot(toBlocker,ray);
       if(along>0.0&&along<sunDistance){
         float perpendicular=length(toBlocker-ray*along);
-        float angularSun=uSunRadius*along/max(sunDistance-along,1e-12);
+        float angularSun=uSunRadius/max(sunDistance-along,1e-12);
         float penumbra=uOccluderRadii[i]+angularSun;
         float umbra=max(0.0,uOccluderRadii[i]-angularSun);
         visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);
@@ -211,28 +212,34 @@ void main(){
     return;
   }
   vec3 n=normalize(vNormal);
-  vec3 l=normalize(uLight);
   vec3 v=normalize(uCameraPosition-vPosition);
-  vec3 h=normalize(l+v);
-  float ndotl=max(dot(n,l),0.0);
   float ndotv=max(dot(n,v),0.001);
-  float ndoth=max(dot(n,h),0.0);
-  float vdoth=max(dot(v,h),0.0);
-  float visibility=shadowVisibility(vPosition);
-  float irradiance=clamp(uLightIntensity/22.0,0.0,1.5);
   float roughness,specularLevel;
   vec3 albedo=surfaceAlbedo(n,roughness,specularLevel);
-  float direct=ndotl*visibility*irradiance;
   vec3 f0=mix(vec3(0.018),vec3(0.075),specularLevel);
-  vec3 fresnel=f0+(1.0-f0)*pow(1.0-vdoth,5.0);
-  float d=distributionGGX(ndoth,roughness);
-  float geometry=geometrySchlick(ndotv,roughness)*geometrySchlick(max(ndotl,0.001),roughness);
-  vec3 specular=d*geometry*fresnel/max(4.0*ndotv*max(ndotl,0.001),0.001);
-  vec3 radiance=uLightColor*irradiance*visibility;
-  vec3 diffuse=albedo*radiance*ndotl*(1.0-specularLevel*0.7);
-  vec3 ambient=albedo*vec3(0.012,0.015,0.022);
-  float rim=pow(1.0-ndotv,4.0);
-  vec3 limbTint=vec3(0.012,0.025,0.05)*rim;
-  vec3 color=diffuse+specular*radiance*ndotl+ambient+limbTint;
-  gl_FragColor=vec4(max(color,vec3(0.0)),1.0);
-}`;
+  vec3 directLight=vec3(0.0);
+  for(int i=0;i<4;i++){
+    if(i<uLightCount){
+      vec3 toLight=uLightPositions[i]-vPosition;
+      float distanceSquared=max(dot(toLight,toLight),1e-12);
+      vec3 l=toLight*inversesqrt(distanceSquared);
+      vec3 h=normalize(l+v);
+      float ndotl=max(dot(n,l),0.0);
+      if(ndotl>0.0){
+        float visibility=i==0?shadowVisibility(vPosition):1.0;
+        vec3 radiance=uLightColors[i]*(uLightIntensities[i]/distanceSquared)*visibility;
+        float ndoth=max(dot(n,h),0.0);
+        float vdoth=max(dot(v,h),0.0);
+        vec3 fresnel=f0+(1.0-f0)*pow(1.0-vdoth,5.0);
+        float distribution=distributionGGX(ndoth,roughness);
+        float geometry=geometrySchlick(ndotv,roughness)*geometrySchlick(max(ndotl,0.001),roughness);
+        vec3 specular=distribution*geometry*fresnel/max(4.0*ndotv*max(ndotl,0.001),0.001);
+        vec3 diffuse=albedo*(1.0-specularLevel*0.7)/PI;
+        directLight+=(diffuse+specular)*radiance*ndotl;
+      }
+    }
+  }
+  // Only a very small indirect floor remains; a planet in deep shadow is not self-emissive.
+  vec3 indirect=albedo*0.001;
+  gl_FragColor=vec4(max(directLight+indirect,vec3(0.0)),1.0);
+}

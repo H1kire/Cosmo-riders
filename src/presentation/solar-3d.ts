@@ -52,7 +52,7 @@ export class Solar3DView{
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
-  this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingSystem();
+  this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingSystem();this.stellarSourceDefinitions=new Map();
   this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;
   this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);
   this.labelNodes=new Map();this.bind();
@@ -196,6 +196,12 @@ export class Solar3DView{
   },{passive:false});
   c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
  }
+ setStellarSource(id:string,positionSI:[number,number,number],options:{intensity?:number;color?:number[]}={}){
+  if(!id||id==='sun')throw new TypeError('Use a unique non-primary stellar source id.');
+  if(!positionSI.every(Number.isFinite))throw new TypeError('Stellar source coordinates must be finite SI values.');
+  this.stellarSourceDefinitions.set(id,{positionSI:[...positionSI],intensity:options.intensity??22,color:[...(options.color??[1,1,1])]});
+ }
+ removeStellarSource(id:string){this.stellarSourceDefinitions.delete(id);this.lighting.removeSource(id);}
  home(){this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.focusId=null;}
  mapPosition(p){return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,(item?.[1]?.radius??1e-5)*20);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
@@ -223,6 +229,11 @@ export class Solar3DView{
   if(this.lighting.getSources().some(source=>source.id==='sun'))this.lighting.updateSource('sun',{position:sunRenderPosition});
   else this.lighting.addSource({id:'sun',kind:'point',position:sunRenderPosition,intensity:22,color:[1,.96,.86]});
   // Keep externally registered stellar sources while refreshing the primary star position.
+  for(const [id,source] of this.stellarSourceDefinitions){
+   const position=mapper(null,{x:source.positionSI[0],y:source.positionSI[1],z:source.positionSI[2]});
+   if(this.lighting.getSources().some(item=>item.id===id))this.lighting.updateSource(id,{position});
+   else this.lighting.addSource({id,kind:'point',position,intensity:source.intensity,color:source.color});
+  }
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
   lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
@@ -318,5 +329,6 @@ export class Solar3DView{
   this.labels?.remove();
   this.labelNodes?.clear();
   this.orbitCache?.clear();
+  this.stellarSourceDefinitions?.clear();
  }
 }

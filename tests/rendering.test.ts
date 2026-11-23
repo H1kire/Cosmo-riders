@@ -126,3 +126,17 @@ test('atmosphere and cloud shaders receive stellar irradiance independently of s
  assert.ok(CLOUD_FRAGMENT.includes('uLightIntensity/22.0'));
  assert.ok(CLOUD_FRAGMENT.includes('float lighting=diffuse*localShadowVisibility(vPosition)'));
 });
+
+
+import { LightingSystem } from '../src/rendering/lighting/lighting-system.ts';
+
+test('solar lighting system preserves the primary star and supports additional point sources',()=>{
+ const lighting=new LightingSystem();
+ lighting.addSource({id:'sun',kind:'point',position:[0,0,0],intensity:22,color:[1,.96,.86]});
+ lighting.addSource({id:'binary-companion',kind:'point',position:[3,0,0],intensity:6,color:[.7,.8,1]});
+ lighting.updateSource('sun',{position:[1,0,0]});
+ const lights=lighting.getLights();
+ assert.equal(lights.length,2);
+ assert.deepEqual(lights.find(light=>light.id==='sun')?.position,[1,0,0]);
+ assert.equal(lighting.getSources().length,2);
+});

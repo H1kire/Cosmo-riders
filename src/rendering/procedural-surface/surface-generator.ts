@@ -192,9 +192,10 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  return {height,albedo,roughness,material};
 }
 export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const fingerprint=JSON.stringify(profile);return stableSeed(fingerprint).toString(16)+':'+fingerprint;}
-export function surfaceResolutionForProjectedRadius(projectedRadius:number):number {
+export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfaceClass:SurfaceClass='rocky'):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
- return projectedRadius>520?512:projectedRadius>150?256:projectedRadius>35?128:64;
+ const thresholds=surfaceClass==='gas-giant'||surfaceClass==='ice-giant'?[680,220,60]:surfaceClass==='icy'||surfaceClass==='icy-moon'?[460,125,28]:[520,150,35];
+ return projectedRadius>thresholds[0]?512:projectedRadius>thresholds[1]?256:projectedRadius>thresholds[2]?128:64;
 }
 const FACE_DIRECTIONS=[
  (u:number,v:number):[number,number,number]=>[1,-v,-u],(u:number,v:number):[number,number,number]=>[-1,-v,u],

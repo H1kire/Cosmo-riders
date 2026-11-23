@@ -112,3 +112,18 @@ test('Perlin gradient noise is deterministic and bounded',()=>{
  assert.notEqual(a,fbmPerlin3(.13,.27,.39,1235,5));
  assert.ok(a>=0&&a<=1);
 });
+
+test('surface cache identity depends on generated data rather than display id',()=>{
+ const profile=createSurfaceProfile(bodies.earth);
+ const renamed={...profile,id:'earth-copy'};
+ assert.equal(surfaceProfileKey(profile),surfaceProfileKey(renamed));
+});
+test('gas and ice giant atmospheric fields are driven by physical profile values',()=>{
+ const jupiter=createSurfaceProfile(bodies.jupiter),saturn=createSurfaceProfile(bodies.saturn);
+ const uranus=createSurfaceProfile(bodies.uranus),neptune=createSurfaceProfile(bodies.neptune);
+ const direction:[number,number,number]=[.21,.61,.44];
+ assert.notDeepEqual(sampleSurface(direction,jupiter).albedo,sampleSurface(direction,saturn).albedo);
+ assert.notDeepEqual(sampleSurface(direction,uranus).albedo,sampleSurface(direction,neptune).albedo);
+ const generic=createSurfaceProfile({id:'generic-giant',massKg:1.9e27,meanRadiusM:7e7,surface:{class:'gas-giant',temperatureK:150,pressurePa:1e5,volatileFraction:.5,hydrocarbonFraction:.1,rotationFactor:.8}});
+ assert.equal(sampleSurface(direction,generic).material,'cloud');
+});

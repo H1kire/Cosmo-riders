@@ -65,43 +65,46 @@ function pressureGuess(body:SurfaceBodyInput,gravity:number):Partial<SurfaceGene
  return {};
 }
 function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile):SurfaceSample{
- const lat=y,seed=p.seed;
+ const latitude=y,seed=p.seed;
  const flow=domainWarp3(x*3.2,y*18,z*3.2,seed,.32);
- const broad=fbm3(flow[0]*2,flow[1],flow[2]*2,seed+211,6);
+ const broad=fbmPerlin3(flow[0]*2,flow[1],flow[2]*2,seed+211,6);
  const cloud=fbm3(x*14,y*36,z*14,seed+307,5);
  const turbulence=ridged3(x*11,y*22,z*11,seed+401,5);
- const rotation=p.rotationFactor,thermal=smooth(70,350,p.temperatureK);
- const bandWave=Math.sin((y* (p.class==='ice-giant'?34:58+rotation*28) + broad*.09)*Math.PI*2);
- const belt=smooth(-.28,.38,bandWave+ (broad-.5)*.5);
- const jet=fbm3(x*22,y*8,z*22,seed+503,4);
+ const rotation=clamp(p.rotationFactor),thermal=smooth(70,350,p.temperatureK);
+ const bandFrequency=p.class==='ice-giant'?30+rotation*18:42+rotation*28;
+ const bandWave=Math.sin((y*bandFrequency+broad*.11)*Math.PI*2);
+ const belt=smooth(-.28,.38,bandWave+(broad-.5)*.55);
+ const jet=fbmPerlin3(x*22,y*8,z*22,seed+503,4);
  const vortexField=worley3(x*5+jet*1.3,y*3,z*5,seed+601);
  const vortex=1-smooth(.12,.42,vortexField);
  const storm=smooth(.68,.94,cloud+turbulence*.22)*vortex;
  let base:[number,number,number];
- if(p.id==='jupiter') {
-  const dark:[number,number,number]=[.28,.13,.075],light:[number,number,number]=[.78,.56,.34];
+ if(p.class==='gas-giant'){
+  const warm=clamp((p.temperatureK-120)/65),pale=clamp(p.volatileFraction*.7+p.hydrocarbonFraction*.35);
+  const dark:[number,number,number]=[.22+warm*.09,.105+warm*.035,.065+warm*.015];
+  const light:[number,number,number]=[.69+pale*.13,.48+pale*.13,.29+pale*.1];
   base=dark.map((v,i)=>v+(light[i]-v)*belt) as [number,number,number];
-  base=[base[0]+storm*.38,base[1]+storm*.12,base[2]+storm*.035];
- } else if(p.id==='saturn') {
-  const dark:[number,number,number]=[.43,.34,.22],light:[number,number,number]=[.82,.72,.52];
-  base=dark.map((v,i)=>v+(light[i]-v)*belt) as [number,number,number];
-  base=[base[0]+storm*.12,base[1]+storm*.09,base[2]+storm*.045];
- } else if(p.id==='uranus') {
-  base=[.18+belt*.12+cloud*.045,.43+belt*.16+cloud*.07,.58+belt*.16+cloud*.08];
-  base=[base[0]+storm*.18,base[1]+storm*.2,base[2]+storm*.2];
- } else if(p.id==='neptune') {
-  base=[.035+belt*.08+cloud*.04,.12+belt*.2+cloud*.08,.36+belt*.32+cloud*.1];
-  base=[base[0]+storm*.28,base[1]+storm*.26,base[2]+storm*.22];
- } else if(p.class==='ice-giant') {
-  const methaneHaze=clamp(p.hydrocarbonFraction*.8+p.volatileFraction*.12+smooth(70,140,p.temperatureK)*.12);
-  base=[.12+belt*.12+cloud*.07+thermal*.025,.36+belt*.22+cloud*.09+thermal*.02,.52+belt*.22+cloud*.1+thermal*.015];
-  base=[base[0]*(1-methaneHaze*.16)+storm*.12,base[1]*(1-methaneHaze*.08)+storm*.16,base[2]+storm*.18];
- } else {
+  const stormTint=clamp(.45+rotation*.4+p.waterFraction*.3);
+  base=[base[0]+storm*stormTint*.34,base[1]+storm*stormTint*.14,base[2]+storm*stormTint*.055];
+  const haze=clamp(p.volatileFraction*.18+p.hydrocarbonFraction*.12);
+  base=base.map((v,i)=>v*(1-haze*.16)+(i===0?.025:i===1?.018:.01)) as [number,number,number];
+ }else if(p.class==='ice-giant'){
+  const methane=clamp(p.hydrocarbonFraction*2.8),deepBlue=clamp((p.volatileFraction-.45)*2.2),dynamic=clamp(rotation*.8+(1-thermal)*.2);
+  base=[
+   .12+belt*.11+cloud*.055+deepBlue*.025,
+   .34+belt*.2+cloud*.075-methane*.08,
+   .49+belt*.23+cloud*.09+deepBlue*.13
+  ];
+  const stormContrast=storm*(.1+dynamic*.16);
+  base=[base[0]+stormContrast*.55,base[1]+stormContrast*.8,base[2]+stormContrast];
+  const haze=clamp(methane*.22+p.volatileFraction*.12);
+  base=base.map((v,i)=>v*(1-haze*.12)+(i===0?.012:i===1?.025:.035)) as [number,number,number];
+ }else{
   const methane=p.hydrocarbonFraction;
   base=[.25+belt*.32+cloud*.18+thermal*.08,.2+belt*.24+cloud*.13+thermal*.045,.12+belt*.12+cloud*.08+thermal*.025];
   base=[base[0]*(1-methane*.25),base[1]*(1-methane*.2),base[2]*(1-methane*.1)];
  }
- const polar=smooth(.72,.98,Math.abs(lat));
+ const polar=smooth(.72,.98,Math.abs(latitude));
  const haze=clamp(p.volatileFraction*.25+p.pressurePa/1e7*.15+thermal*.08);
  base=base.map((v,i)=>v*(1-haze*.12)+polar*(i===0?.12:.16)) as [number,number,number];
  return {height:0,albedo:base,roughness:clamp(.72-cloud*.18,.35,.9),material:'cloud'};
@@ -249,7 +252,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  return {height,albedo,roughness,material};
 }
 export const SURFACE_GENERATION_VERSION='3.0.0';
-export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const fingerprint=JSON.stringify(profile);return SURFACE_GENERATION_VERSION+':'+stableSeed(fingerprint).toString(16)+':'+fingerprint;}
+export function surfaceProfileKey(profile:SurfaceGenerationProfile):string{const {id: _bodyId,...generationProfile}=profile;const fingerprint=JSON.stringify(generationProfile);return SURFACE_GENERATION_VERSION+':'+stableSeed(fingerprint).toString(16)+':'+fingerprint;}
 export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfaceClass:SurfaceClass='rocky'):number {
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  const thresholds=surfaceClass==='gas-giant'||surfaceClass==='ice-giant'?[680,220,60]:surfaceClass==='icy'||surfaceClass==='icy-moon'?[460,125,28]:[520,150,35];

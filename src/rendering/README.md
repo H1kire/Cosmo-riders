@@ -36,3 +36,12 @@ The new rendering systems preserve the legacy `LightingEngine` point-light sampl
 `src/rendering/shaders/planet-surface.ts` provides a dedicated surface material pass. It generates deterministic, sphere-space procedural maps for Earth (continents, oceans, deserts and polar ice), rocky bodies (crater fields and terrain variation), Mars (rust-colored geology), and the gas/ice giants (warped atmospheric bands and storm structure). The vertex stage adds restrained terrain relief, while the fragment stage uses distance-attenuated sunlight, analytic eclipse visibility, roughness-dependent GGX highlights, and a low night-side ambient term. The surface pass is independent of atmosphere and cloud shells, whose opacity is deliberately limited so they cannot wash out the underlying body.
 
 These are procedural GPU materials, not downloaded photographic satellite maps. They are deterministic and do not require network access or external texture files at runtime.
+
+
+## Surface, atmosphere, and lighting isolation
+
+Planet surfaces are rendered by a dedicated surface program before optional atmosphere and cloud shell passes. Each body iteration explicitly rebinds the surface program after effect passes; effect toggles therefore cannot leave the next body's material uniforms targeting the wrong WebGL program. Surface albedo is generated in sphere-direction space (the current renderer does not load external bitmap/UV texture assets), avoiding UV seam and texture-fetch failure modes. Atmosphere and clouds are separate shell passes and their settings only gate those passes.
+
+The surface shader supports up to four point lights per draw, evaluates each light direction and inverse-square attenuation per fragment in camera-relative AU coordinates, and keeps the first stellar source as the analytic shadow/penumbra source. Atmospheric scattering and cloud illumination also scale with the primary star's inverse-square irradiance. The indirect floor on unlit surfaces is intentionally very small to avoid making the night hemisphere appear emissive. Extra light sources currently contribute direct surface illumination; their individual occlusion volumes can be added without changing the material interface.
+
+The solar renderer rebinds its surface program after optional passes. Shader objects are detached and deleted after linking; HDR targets are explicitly destroyed on resize and HDR mode changes, and the HDR pipeline exposes dispose() for renderer teardown.

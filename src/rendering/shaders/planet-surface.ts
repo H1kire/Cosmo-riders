@@ -191,7 +191,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=mix(0.72,0.035,land);
   }else if(uKind<2.5){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
-    bool mercury=uColor.r<0.55&&uColor.g<0.55;\n    bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
+    bool mercury=uColor.r<0.55&&uColor.g<0.55;
+    bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
     float craterNoise=fbm3Filtered(n*(18.0+uDetail*40.0)+uSeed*3.0)+ridged3(n*25.0+uSeed*9.0)*0.16;
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);

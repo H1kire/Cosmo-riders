@@ -26,18 +26,6 @@ export class SurfaceMapCache {
    this.worker=worker;return worker;
   } catch { this.workerFailed=true;return null; }
  }
- private store(request:Pending,maps:SurfaceCubeMaps):void {
-  const key=(maps as any).__cacheKey as string|undefined;
-  if(!key)return;
-  const bytes=maps.albedo.byteLength+maps.height.byteLength+maps.roughness.byteLength+maps.normal.byteLength;
-  while(this.bytes+bytes>this.maxBytes&&this.entries.size){
-   let oldestKey:string|undefined,oldest=Infinity;
-   for(const [candidate,entry] of this.entries)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
-   if(oldestKey===undefined)break;
-   this.bytes-=this.entries.get(oldestKey)!.bytes;this.entries.delete(oldestKey);
-  }
-  if(bytes<=this.maxBytes){this.entries.set(key,{maps,bytes,used:++this.clock});this.bytes+=bytes;}
- }
  async get(profile:SurfaceGenerationProfile,resolution:number):Promise<SurfaceCubeMaps> {
   const key=surfaceProfileKey(profile)+':'+resolution,hit=this.entries.get(key);
   if(hit){hit.used=++this.clock;return hit.maps;}

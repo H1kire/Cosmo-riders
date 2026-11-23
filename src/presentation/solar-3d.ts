@@ -8,38 +8,8 @@ import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
 import { CloudSystem } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
+import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
 
-const BODY_VERTEX = `attribute vec3 aPosition; attribute vec3 aNormal;
-uniform mat4 uViewProjection; uniform mat4 uModel;
-uniform float uKind; uniform float uDetail; uniform float uSeed;
-varying vec3 vNormal; varying vec3 vPosition;
-float vhash(vec3 p){p=fract(p*.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
-float vnoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(vhash(i),vhash(i+vec3(1.,0.,0.)),f.x),mix(vhash(i+vec3(0.,1.,0.)),vhash(i+vec3(1.,1.,0.)),f.x),f.y),mix(mix(vhash(i+vec3(0.,0.,1.)),vhash(i+vec3(1.,0.,1.)),f.x),mix(vhash(i+vec3(0.,1.,1.)),vhash(i+vec3(1.,1.,1.)),f.x),f.y),f.z);}
-void main(){vec3 n=normalize(aNormal);float h=vnoise(n*(16.+uDetail*48.)+uSeed);float relief=0.;if(uKind>1.4&&uKind<2.5)relief=(h-.5)*.035;else if(uKind>.5&&uKind<1.5)relief=(h-.5)*.012;else if(uKind>3.5)relief=(h-.5)*.004;vec4 p=uModel*vec4(aPosition,1.0);vPosition=p.xyz;vNormal=mat3(uModel)*n;gl_Position=uViewProjection*p;}`;
-const BODY_FRAGMENT = `precision highp float;
-uniform vec3 uColor;uniform vec3 uLight;uniform vec3 uLightColor;uniform float uLightIntensity;uniform float uKind;uniform float uDetail;uniform float uSeed;
-uniform vec3 uSunPosition;uniform float uSunRadius;uniform vec3 uOccluders[8];uniform float uOccluderRadii[8];uniform int uOccluderCount;uniform int uShadows;
-varying vec3 vNormal;varying vec3 vPosition;
-float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
-float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(hash(i),hash(i+vec3(1.,0.,0.)),f.x),mix(hash(i+vec3(0.,1.,0.)),hash(i+vec3(1.,1.,0.)),f.x),f.y),mix(mix(hash(i+vec3(0.,0.,1.)),hash(i+vec3(1.,0.,1.)),f.x),mix(hash(i+vec3(0.,1.,1.)),hash(i+vec3(1.,1.,1.)),f.x),f.y),f.z);}
-float shadowVisibility(vec3 point){
- if(uShadows==0)return 1.0;
- vec3 toSun=uSunPosition-point;float sunDistance=length(toSun);vec3 ray=toSun/max(sunDistance,1e-12);float visibility=1.0;
- for(int i=0;i<8;i++){if(i<uOccluderCount){vec3 toBlocker=uOccluders[i]-point;float along=dot(toBlocker,ray);if(along>0.0&&along<sunDistance){float perpendicular=length(toBlocker-ray*along);float penumbra=uOccluderRadii[i]+along*uSunRadius/max(sunDistance-along,1e-12);float umbra=max(0.0,uOccluderRadii[i]-along*uSunRadius/max(sunDistance-along,1e-12));visibility*=smoothstep(umbra,max(umbra+1e-12,penumbra),perpendicular);}}}
- return clamp(visibility,0.0,1.0);
-}
-void main(){
- if(uKind>5.5){gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);return;}
- vec3 n=normalize(vNormal);float sunFacing=max(dot(n,normalize(uLight)),0.0);float visibility=shadowVisibility(vPosition);float sunStrength=clamp(uLightIntensity,0.0,1.0);float l=.12+.88*sunStrength*sunFacing*visibility;float a=noise(n*(4.0+uDetail*7.0)+uSeed);float b=noise(n*(18.0+uDetail*34.0)+uSeed*3.0);vec3 c=pow(uColor,vec3(2.2));
- if(uKind>4.5){c=uColor*(1.15+b*.12);}
- else if(uKind<.5){float q=sin((n.y*18.0+a*2.0)*3.14159)*.5+.5;c=mix(c,c*vec3(1.35,.9,.64),q*.32+b*.08);}
- else if(uKind<1.5){float land=smoothstep(.46,.58,a*.7+b*.3);c=mix(c*vec3(.12,.34,.8),c*vec3(.25,.68,.28),land);c=mix(c,vec3(.85,.9,.94),smoothstep(.72,.86,abs(n.y))*.85);}
- else if(uKind<2.5){float cr=smoothstep(.62,.8,noise(n*70.0+uSeed));c*=.72+.3*a-cr*.16;}
- else if(uKind<3.5){float bands=sin(n.y*55.0+a*6.0)*.5+.5;c=mix(c*.7,c*1.25,bands);}
- else if(uKind<5.5){c=pow(uColor,vec3(2.2));}
- float limb=pow(max(dot(n,normalize(uLight)),0.0),.35);vec3 lit=c*uLightColor*l+vec3(.025,.04,.07)*(1.0-limb);
- gl_FragColor=vec4(lit,1.0);
-}`;
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
@@ -68,13 +38,13 @@ export class Solar3DView{
     this.graphics={...this.graphics,...value};
     this.applyGraphicsSettings(this.graphics);
   });
-  this.bodyProgram=makeProgram(g,BODY_VERTEX,BODY_FRAGMENT);
+  this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);
   this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));
   this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uLight','uLightColor','uLightIntensity','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uLight','uLightColor','uCameraPosition','uLightIntensity','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uShadowVisibility','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uShadowVisibility']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
@@ -276,7 +246,7 @@ export class Solar3DView{
    const model=[radius,0,0,0,0,radius,0,0,0,0,radius,0,p[0],p[1],p[2],1];
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
-   g.uniform3f(l.uLight,...light.direction);g.uniform3f(l.uLightColor,...light.color);g.uniform1f(l.uLightIntensity,light.intensity);
+   g.uniform3f(l.uLight,...light.direction);g.uniform3f(l.uLightColor,...light.color);g.uniform3f(l.uCameraPosition,...eye);g.uniform1f(l.uLightIntensity,light.intensity);
    g.uniform3f(l.uColor,...(COLORS[body.id]??[.5,.6,.8]));g.uniform1f(l.uKind,KINDS[body.id]??2);
    g.uniform1f(l.uDetail,Math.max(0,Math.min(1,px/90)));g.uniform1f(l.uSeed,bodies.indexOf(body)*13.17);
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
@@ -307,7 +277,7 @@ export class Solar3DView{
     const mesh=this.meshes[0],shipDistance=Math.max(1e-12,Math.hypot(ship[0]-eye[0],ship[1]-eye[1],ship[2]-eye[2]));
     const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
     g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
-    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uLight,0,0,1);g.uniform3f(l.uLightColor,1,1,1);g.uniform1f(l.uLightIntensity,1);
+    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uLight,0,0,1);g.uniform3f(l.uLightColor,1,1,1);g.uniform3f(l.uCameraPosition,...eye);g.uniform1f(l.uLightIntensity,1);
     g.uniform1f(l.uKind,5);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);
     g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
     this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);

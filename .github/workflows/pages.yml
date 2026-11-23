@@ -8,7 +8,8 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  # Keep this workflow's lock separate from GitHub's internal Pages deployment job.
+  group: cosmo-riders-pages
   cancel-in-progress: true
 jobs:
   build:

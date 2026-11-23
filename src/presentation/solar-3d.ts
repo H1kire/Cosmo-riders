@@ -10,7 +10,7 @@ import { createGraphicsSettings, type GraphicsSettings } from '../rendering/qual
 import { selectMeshLod, planetaryOrbitOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
-import { createSurfaceProfile,surfaceResolutionForProjectedRadius } from '../rendering/procedural-surface/surface-generator.ts';
+import { createSurfaceProfile,surfaceResolutionForProjectedRadius,surfaceProfileKey } from '../rendering/procedural-surface/surface-generator.ts';
 import { SurfaceMapCache } from '../rendering/procedural-surface/surface-map-cache.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
@@ -296,7 +296,7 @@ export class Solar3DView{
    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));const surfaceProfile=createSurfaceProfile(body);
     const surfaceResolution=surfaceResolutionForProjectedRadius(px);
     this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
-    this.bindSurfaceMaps(surfaceProfile.seed,surfaceResolution,l);
+    this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
     g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
     g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
     g.uniform1f(l.uIceFraction,surfaceProfile.iceFraction);
@@ -365,7 +365,7 @@ export class Solar3DView{
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
  }
  requestSurfaceMaps(profile,resolution){
-  const key=profile.seed+':'+resolution;
+  const profileKey=surfaceProfileKey(profile),key=profileKey+':'+resolution;
   if(this.surfaceGpuTextures.has(key)||this.surfaceMapPending.has(key)||this.disposed)return;
   this.surfaceMapPending.add(key);
   this.surfaceMapCache.get(profile,resolution).then(maps=>{
@@ -392,13 +392,13 @@ export class Solar3DView{
     const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
     this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
    }
-   if(bytes<=64*1024*1024){this.surfaceGpuTextures.set(key,{textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution});this.surfaceGpuBytes+=bytes;}
+   if(bytes<=64*1024*1024){this.surfaceGpuTextures.set(key,{textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution,profileKey});this.surfaceGpuBytes+=bytes;}
    else for(const texture of textures)g.deleteTexture(texture);
   }).catch(()=>{this.surfaceMapPending.delete(key);});
  }
- bindSurfaceMaps(seed,resolution,loc){
-  const g=this.gl;let entry=this.surfaceGpuTextures.get(seed+':'+resolution);
-  if(!entry){let best=0;for(const [key,value] of this.surfaceGpuTextures){if(key.startsWith(seed+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}}}
+ bindSurfaceMaps(profile,resolution,loc){
+  const g=this.gl,profileKey=surfaceProfileKey(profile);let entry=this.surfaceGpuTextures.get(profileKey+':'+resolution);
+  if(!entry){let best=0;for(const [key,value] of this.surfaceGpuTextures){if(key.startsWith(profileKey+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}}}
   if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);return;}
   entry.used=++this.surfaceTextureClock;
   const blend=Math.max(0,Math.min(1,(performance.now()-entry.created)/450));

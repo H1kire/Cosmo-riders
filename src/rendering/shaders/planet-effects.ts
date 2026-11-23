@@ -79,7 +79,7 @@ void main(){
   vec3 mie=vec3(1.0,0.82,0.62)*mieDepth*phaseM*uMie*0.42;
   vec3 scatter=(rayleigh+mie)*opticalAttenuation*(0.14+0.86*day*uShadowVisibility);
   scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day*uShadowVisibility);
-  float alpha=clamp((1.0-opticalAttenuation)*0.42+rim*0.12,0.0,0.62)*uIntensity;
+  float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity;
   gl_FragColor=vec4(scatter*uLightColor,alpha);
 }`;
 
@@ -123,5 +123,5 @@ void main(){
   float diffuse=max(dot(n,safeNormalize(uLight)),0.0);
   float lighting=0.24+0.76*diffuse*uShadowVisibility;
   vec3 cloudColor=vec3(0.88,0.93,1.0)*uLightColor*lighting;
-  gl_FragColor=vec4(cloudColor,alpha*0.88);
+  gl_FragColor=vec4(cloudColor,alpha*0.62);
 }`;

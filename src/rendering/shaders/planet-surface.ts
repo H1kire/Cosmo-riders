@@ -172,14 +172,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     albedo=mix(albedo,albedo*vec3(0.66,0.78,0.92),smoothstep(0.68,0.88,storms)*0.24);
     roughness=0.58;
     specular=0.045;
-  }else if(uKind<5.5){
-    if(uColor.r>0.65&&uColor.g>0.45){
-      float swirl=fbm3(n*vec3(12.0,28.0,12.0)+vec3(broad*5.0,uSeed,medium*4.0));
-      float bands=sin((n.y+0.035*(swirl-0.5))*105.0);
-      albedo=mix(vec3(0.42,0.25,0.12),vec3(0.78,0.58,0.34),smoothstep(-0.3,0.45,bands));
-      albedo=mix(albedo,vec3(0.88,0.73,0.52),smoothstep(0.72,0.9,swirl)*0.34);
-      roughness=0.66;
-    }else if(uColor.g>uColor.r){
+  }else if(uKind<4.5){
+    if(uColor.g>uColor.r){
       float bands=sin((n.y+0.018*(broad-0.5))*72.0);
       albedo=mix(vec3(0.22,0.48,0.53),vec3(0.46,0.78,0.79),smoothstep(-0.2,0.55,bands)*0.38);
       albedo*=0.94+0.12*medium;
@@ -192,6 +186,16 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
       roughness=0.7;
     }
     specular=0.035;
+  }else if(uKind<5.5){
+    float cloudBands=fbm3(n*vec3(7.0,24.0,7.0)+vec3(uSeed,broad*3.0,medium*2.0));
+    float haze=fbm3(n*vec3(18.0,42.0,18.0)+uSeed*2.0);
+    float bands=sin((n.y+0.025*(cloudBands-0.5))*46.0+medium*1.8);
+    vec3 lowerCloud=mix(vec3(0.34,0.19,0.085),vec3(0.66,0.46,0.24),smoothstep(-0.45,0.55,bands));
+    vec3 upperHaze=mix(vec3(0.72,0.55,0.34),vec3(0.94,0.82,0.62),haze);
+    albedo=mix(lowerCloud,upperHaze,smoothstep(0.36,0.72,cloudBands)*0.78);
+    albedo=mix(albedo,vec3(0.96,0.84,0.66),smoothstep(0.76,0.94,haze)*0.34);
+    roughness=0.82;
+    specular=0.018;
   }
   return max(albedo,vec3(0.0));
 }
@@ -207,7 +211,7 @@ float geometrySchlick(float ndotv,float roughness){
   return ndotv/max(ndotv*(1.0-k)+k,0.0001);
 }
 void main(){
-  if(uKind>5.5){
+  if(uKind>5.5&&uKind<6.5){
     gl_FragColor=vec4(pow(uColor,vec3(2.2))*2.8,1.0);
     return;
   }

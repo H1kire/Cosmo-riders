@@ -120,7 +120,7 @@ test('planet surface shader supports multiple point lights and a non-emissive ni
 
 test('atmosphere and cloud shaders receive stellar irradiance independently of surface rendering',()=>{
  assert.ok(ATMOSPHERE_FRAGMENT.includes('uLightIntensity/22.0'));
- assert.ok(ATMOSPHERE_FRAGMENT.includes('smoothstep(-0.08,0.12,dot(n,lightDir))*uShadowVisibility'));
+ assert.ok(ATMOSPHERE_FRAGMENT.includes('visibilitySum+=localShadowVisibility(samplePosition)'));
  assert.ok(CLOUD_FRAGMENT.includes('uLightIntensity/22.0'));
- assert.ok(CLOUD_FRAGMENT.includes('float lighting=diffuse*uShadowVisibility'));
+ assert.ok(CLOUD_FRAGMENT.includes('float lighting=diffuse*localShadowVisibility(vPosition)'));
 });

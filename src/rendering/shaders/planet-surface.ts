@@ -284,9 +284,11 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   vec3 bakedAlbedo=texture(uGeneratedAlbedo,n).rgb;
   float bakedHeight=texture(uGeneratedHeight,n).r;
   float bakedRoughness=texture(uGeneratedRoughness,n).r;
-  albedo=mix(albedo,bakedAlbedo,uUseGeneratedMaps);
-  roughness=mix(roughness,bakedRoughness,uUseGeneratedMaps);
-  albedo*=mix(1.0,0.9+0.2*bakedHeight,uUseGeneratedMaps);
+  float mapBlend=uUseGeneratedMaps;
+  if(uPreviousMapsEnabled>0.5){bakedAlbedo=mix(texture(uPreviousAlbedo,n).rgb,bakedAlbedo,uUseGeneratedMaps);bakedHeight=mix(texture(uPreviousHeight,n).r,bakedHeight,uUseGeneratedMaps);bakedRoughness=mix(texture(uPreviousRoughness,n).r,bakedRoughness,uUseGeneratedMaps);mapBlend=1.0;}
+  albedo=mix(albedo,bakedAlbedo,mapBlend);
+  roughness=mix(roughness,bakedRoughness,mapBlend);
+  albedo*=mix(1.0,0.9+0.2*bakedHeight,mapBlend);
   return max(albedo,vec3(0.0));
 }
 float distributionGGX(float ndoth,float roughness){
@@ -307,7 +309,9 @@ void main(){
   }
   vec3 surfaceDirection=normalize(vNormal);
   vec3 bakedNormal=texture(uGeneratedNormal,surfaceDirection).xyz*2.0-1.0;
-  vec3 n=normalize(mix(surfaceDirection,bakedNormal,uUseGeneratedMaps*0.62));
+  float normalBlend=uUseGeneratedMaps;
+  if(uPreviousMapsEnabled>0.5){vec3 previousNormal=texture(uPreviousNormal,surfaceDirection).xyz*2.0-1.0;bakedNormal=normalize(mix(previousNormal,bakedNormal,uUseGeneratedMaps));normalBlend=1.0;}
+  vec3 n=normalize(mix(surfaceDirection,bakedNormal,normalBlend*0.62));
   vec3 v=normalize(uCameraPosition-vPosition);
   float ndotv=max(dot(n,v),0.001);
   float roughness,specularLevel;

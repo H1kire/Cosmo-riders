@@ -4,6 +4,6 @@ scope.onmessage=async event=>{
  const {id,profile,resolution}=event.data;
  try{
   const maps=await generateSurfaceCubeMaps(profile,resolution);
-  scope.postMessage({id,maps},[maps.albedo.buffer,maps.height.buffer,maps.roughness.buffer,maps.normal.buffer]);
+  scope.postMessage({id,maps},[maps.albedo.buffer as ArrayBuffer,maps.height.buffer as ArrayBuffer,maps.roughness.buffer as ArrayBuffer,maps.normal.buffer as ArrayBuffer]);
  }catch(error){scope.postMessage({id,error:error instanceof Error?error.message:String(error)});}
 };

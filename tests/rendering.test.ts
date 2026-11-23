@@ -93,6 +93,7 @@ test('planet surface shader restores distinct procedural maps and physically bas
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uKind>5.5&&uKind<6.5)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('float cloudBands=fbm3(n*vec3(7.0,24.0,7.0)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('}else if(uKind<4.5)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uColor.g>uColor.b*0.85)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('}else if(uKind<5.5)'));
 });
 

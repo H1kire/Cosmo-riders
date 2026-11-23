@@ -127,3 +127,17 @@ test('gas and ice giant atmospheric fields are driven by physical profile values
  const generic=createSurfaceProfile({id:'generic-giant',massKg:1.9e27,meanRadiusM:7e7,surface:{class:'gas-giant',temperatureK:150,pressurePa:1e5,volatileFraction:.5,hydrocarbonFraction:.1,rotationFactor:.8}});
  assert.equal(sampleSurface(direction,generic).material,'cloud');
 });
+
+test('all reference Solar System bodies generate finite material maps',async()=>{
+ const results=[];
+ for(const [id,body] of Object.entries(bodies)){
+  const profile=createSurfaceProfile(body);
+  const maps=await generateSurfaceCubeMaps(profile,8);
+  for(const channel of [maps.albedo,maps.height,maps.roughness,maps.normal]){
+   assert.ok(channel.every(Number.isFinite),id+' contains non-finite map values');
+  }
+  assert.equal(maps.albedo.length,6*8*8*4);
+  results.push({id,signature:maps.albedo.slice(0,96).join(',')});
+ }
+ assert.ok(new Set(results.map(item=>item.signature)).size>=9,'reference bodies should not collapse into a few shared texture templates');
+});

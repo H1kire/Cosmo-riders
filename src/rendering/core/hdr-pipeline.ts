@@ -101,7 +101,7 @@ interface Target {
   height: number;
 }
 
-function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=false):Target{
+function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=false,samplesRequested=4):Target{
   const framebuffer=gl.createFramebuffer(),texture=gl.createTexture();
   if(!framebuffer||!texture){if(framebuffer)gl.deleteFramebuffer(framebuffer);if(texture)gl.deleteTexture(texture);throw Error('HDR render target allocation failed');}
   gl.bindTexture(gl.TEXTURE_2D,texture);
@@ -114,7 +114,7 @@ function target(gl:WebGL2RenderingContext,w:number,h:number,hdr:boolean,depth=fa
   gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
   let depthBuffer:WebGLRenderbuffer|null=null,msaaFramebuffer:WebGLFramebuffer|null=null,msaaColorBuffer:WebGLRenderbuffer|null=null;
   if(depth){
-    const samples=Math.min(4,Number(gl.getParameter(gl.MAX_SAMPLES))||0);
+    const samples=Math.min(4,Math.max(0,Math.trunc(samplesRequested)),Number(gl.getParameter(gl.MAX_SAMPLES))||0);
     if(samples>=2){
       msaaFramebuffer=gl.createFramebuffer();msaaColorBuffer=gl.createRenderbuffer();depthBuffer=gl.createRenderbuffer();
       if(msaaFramebuffer&&msaaColorBuffer&&depthBuffer){
@@ -193,6 +193,7 @@ export interface HDRPipelineSettings {
 export class HDRPipeline implements Disposable {
   readonly hdrSupported:boolean;
   private activeHdr:boolean;
+  private multisampleSamples:number;
   scene:Target;
   private bright:Target;
   private ping:Target;
@@ -208,10 +209,11 @@ export class HDRPipeline implements Disposable {
     exposure:1,toneMapping:'aces',hdr:true
   };
 
-  constructor(private gl:WebGL2RenderingContext,width:number,height:number){
+  constructor(private gl:WebGL2RenderingContext,width:number,height:number,multisampleSamples=4){
     this.hdrSupported=Boolean(gl.getExtension('EXT_color_buffer_float'));
     this.activeHdr=this.hdrSupported;
-    this.scene=target(gl,width,height,this.activeHdr,true);
+    this.multisampleSamples=Math.max(0,Math.min(4,Math.trunc(multisampleSamples)));
+    this.scene=target(gl,width,height,this.activeHdr,true,this.multisampleSamples);
     const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(gl,bw,bh,this.activeHdr);
     this.ping=target(gl,bw,bh,this.activeHdr);
@@ -241,7 +243,20 @@ export class HDRPipeline implements Disposable {
     this.activeHdr=next;
     const width=this.scene.width,height=this.scene.height;
     this.destroyTargets();
-    this.scene=target(this.gl,width,height,this.activeHdr,true);
+    this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
+    const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
+    this.bright=target(this.gl,bw,bh,this.activeHdr);
+    this.ping=target(this.gl,bw,bh,this.activeHdr);
+    this.pong=target(this.gl,bw,bh,this.activeHdr);
+  }
+
+  setMultisampleSamples(samples:number):void{
+    const next=Math.max(0,Math.min(4,Math.trunc(samples)));
+    if(next===this.multisampleSamples)return;
+    this.multisampleSamples=next;
+    const width=this.scene.width,height=this.scene.height;
+    this.destroyTargets();
+    this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
     const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
     this.ping=target(this.gl,bw,bh,this.activeHdr);
@@ -251,7 +266,7 @@ export class HDRPipeline implements Disposable {
   resize(width:number,height:number):void{
     if(width===this.scene.width&&height===this.scene.height)return;
     this.destroyTargets();
-    this.scene=target(this.gl,width,height,this.activeHdr,true);
+    this.scene=target(this.gl,width,height,this.activeHdr,true,this.multisampleSamples);
     const bw=Math.max(1,Math.floor(width*0.75)),bh=Math.max(1,Math.floor(height*0.75));
     this.bright=target(this.gl,bw,bh,this.activeHdr);
     this.ping=target(this.gl,bw,bh,this.activeHdr);

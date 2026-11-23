@@ -152,7 +152,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   float medium=fbm3(domainWarp3(n*(7.0+uDetail*6.0)+uSeed*2.7));
   float fine=fbm3Filtered(n*(8.0+uDetail*42.0)+uSeed*5.1);
   float ridges=ridged3(warped*9.0);
-  float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity;
+  float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity*(1.0-uErosion*0.55);
   float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;
   float cells=fbm3(n*47.0+uSeed*11.7);
   float latitude=abs(n.y);
@@ -193,7 +193,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     if(mars){
       vec3 rust=mix(vec3(0.16,0.035,0.018),vec3(0.56,0.16,0.065),broad);
       rust=mix(rust,vec3(0.29,0.095,0.045),medium*0.55);
-      albedo=rust*(0.82+0.28*fine)+vec3(0.08,0.035,0.012)*uIronFraction*mineral;
+      albedo=rust*(0.82+0.28*fine)+vec3(0.08,0.035,0.012)*uIronFraction*cells;
       albedo+=vec3(0.09,0.035,0.015)*craterRim;
       albedo*=1.0-0.22*craterBasin;
       albedo=mix(albedo,vec3(0.72,0.68,0.61),smoothstep(0.91,0.97,latitude)*clamp(uIceFraction*2.0,0.0,1.0));

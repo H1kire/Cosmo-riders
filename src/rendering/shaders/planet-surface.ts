@@ -111,8 +111,8 @@ float shadowVisibility(vec3 point){
 }
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   float broad=fbm3(n*3.1+uSeed);
-  float medium=fbm3(n*13.0+uSeed*2.7);
-  float fine=fbm3(n*(42.0+uDetail*24.0)+uSeed*5.1);
+  float medium=fbm3(n*(7.0+uDetail*6.0)+uSeed*2.7);
+  float fine=fbm3(n*(8.0+uDetail*34.0)+uSeed*5.1);
   float latitude=abs(n.y);
   vec3 albedo=pow(uColor,vec3(2.2));
   roughness=0.82;
@@ -143,7 +143,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   }else if(uKind<2.5){
     bool mars=uColor.r>0.6&&uColor.g<0.4;
     bool mercury=uColor.r<0.55&&uColor.g<0.55;
-    float craterNoise=fbm3(n*58.0+uSeed*3.0);
+    float craterNoise=fbm3(n*(18.0+uDetail*40.0)+uSeed*3.0);
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);
     if(mars){

@@ -82,7 +82,7 @@ void main(){
   scatter+=atmosphereColor*rim*0.055*(0.18+0.82*day*uShadowVisibility);
   float solarIrradiance=uLightIntensity/22.0;
   float alpha=clamp((1.0-opticalAttenuation)*0.24+rim*0.055,0.0,0.34)*uIntensity*solarIrradiance;
-  gl_FragColor=vec4(scatter*uLightColor*solarIrradiance,alpha);
+  gl_FragColor=vec4(scatter*uLightColor,alpha);
 }`;
 
 export const CLOUD_VERTEX = `attribute vec3 aPosition;

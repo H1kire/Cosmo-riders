@@ -42,6 +42,7 @@ const SHIP_DRY_MASS_KG = 7000;
 let world, vessel, paused = false, lastFrame = 0, trail = [];
 let renderedBodyStates = null, renderedVesselState = null;
 let focusBodyId = null, pendingGlobalTransition = false;
+let selectedBodyId: string|null = null;
 const LOCAL_VIEW_START_ZOOM = 2500;
 const orbitPathCache = new Map();
 const cameraZoom = { solar: 1, lunar: 0.34, vessel: 1 };
@@ -88,15 +89,15 @@ function renderSystemNavigation(){
 function updatePlanetInformation(){
   const host=$('planet-info');
   if(!host||!vessel||!world)return;
-  const item=currentPrimary();
-  if(!item){host.textContent='Нет данных о текущем небесном теле.';return;}
+  const item=(selectedBodyId?world.bodies.get(selectedBodyId):null)??currentPrimary();
+  if(!item){host.textContent='Нет данных о выбранном небесном теле.';return;}
   const parent=item.parentId?body(item.parentId):null;
   const children=[...world.bodies.values()].filter(candidate=>candidate.parentId===item.id);
   const volume=4*Math.PI*Math.pow(item.meanRadiusM,3)/3;
   const density=item.massKg/volume;
   const gravity=item.mu/(item.meanRadiusM*item.meanRadiusM);
   const elements=item.orbitalElements;
-  const period=elements&&parent?orbitalPeriod(elements.semiMajorAxisM,parent.mu):null;
+  const period=elements&&parent?orbitalPeriod(elements.semiMajorAxisM,parent.mu+item.mu):null;
   const environment=item.surface??null;
   const rotationPeriod=item.rotationPeriodSeconds??(item.tidalLock&&period?period:null);
   const formatPeriod=(seconds:number|null)=>seconds===null?'Нет достоверных данных':seconds>=DAY?fmt(seconds/DAY,4)+' суток':fmt(seconds/3600,3)+' ч';
@@ -444,6 +445,7 @@ $('camera-home').addEventListener('click',()=>{
   solar3D?.home();
   trackingTargetId=null;
   selectedPlanetId=null;
+  selectedBodyId=null;
   focusBodyId=null;pendingGlobalTransition=false;
   drawAll();
 });
@@ -512,6 +514,9 @@ function updateTelemetry(){
   $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
 }
 function applyPoweredBurn(deltaVMS){
+  // Ручной импульс разрешён только на штатной скорости симуляции.
+  world.setTimeScale(1);
+  $('time-scale').value='1';
   const primaryState=currentPrimaryState(),relativeVelocity=subtract(vessel.velocity,primaryState.velocity);
   let direction=normalize(relativeVelocity);if(deltaVMS<0)direction=scale(direction,-1);
   try{
@@ -584,6 +589,10 @@ function animate(timestamp){
 }
 $('scenario').addEventListener('change',event=>{createScenario((event.target as HTMLInputElement).value);});
 $('time-scale').addEventListener('change',event=>world.setTimeScale(Number((event.target as HTMLInputElement).value)));
+solar3D?.canvas.addEventListener('bodyselect',event=>{
+  selectedBodyId=(event as CustomEvent<{id:string}>).detail?.id??null;
+  updatePlanetInformation();
+});
 $('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
 $('step-button').addEventListener('click',()=>{if(!paused){paused=true;world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}world.step();updateTelemetry();drawAll();});
 $('reset-button').addEventListener('click',()=>{paused=false;world.setPaused(false);$('pause-button').textContent='Ⅱ Пауза';createScenario($('scenario').value);});

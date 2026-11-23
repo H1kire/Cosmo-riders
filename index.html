@@ -9,24 +9,28 @@
  <a class="brand" href="./" aria-label="Cosmo-riders"><span class="brand-mark">C</span><span><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></span></a>
  <button id="menu-toggle" class="menu-toggle" type="button" aria-expanded="true" aria-controls="app-sidebar" title="Показать или скрыть меню">☰ Меню</button>
  <div class="top-status"><i class="live-dot"></i><span>СИМУЛЯЦИЯ АКТИВНА</span><i class="divider"></i><span>J2000.0</span></div>
- <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 суток</strong></div><label class="time-scale-control"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale"><option value="1">1× · Реальное время</option><option value="60">60×</option><option value="600">600×</option><option value="3600" selected>3 600×</option><option value="21600">21 600×</option><option value="86400">86 400×</option></select></label>
+ <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 суток</strong></div><label class="time-scale-control"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale"><option value="0">0× · Пауза</option><option value="1" selected>1× · Реальное время</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="50">50×</option><option value="100">100×</option></select></label>
 </header>
 <aside class="sidebar" id="app-sidebar">
  <div class="side-label">КОСМИЧЕСКИЙ ЦЕНТР</div>
  <button class="nav-item active" data-open-window="window-system"><span>◎</span> Солнечная система</button>
  <div class="side-divider"></div>
  <button class="nav-item" data-open-window="window-model"><span>▤</span> Информация о планете</button>
+ <button class="nav-item" data-open-window="window-ship"><span>◈</span> Корабль и телеметрия</button>
+ <button class="nav-item" data-open-window="window-flight"><span>✦</span> Управление полётом</button>
+ <button class="nav-item" data-open-window="window-maneuvers"><span>⌁</span> Планировщик манёвров</button>
+ <button class="nav-item" data-open-window="window-local"><span>◉</span> Локальная система</button>
  <button class="nav-item" data-open-window="window-settings"><span>⚙</span> Настройки</button>
  <div class="side-divider"></div>
  <div class="side-label">ИНСТРУМЕНТЫ КАМЕРЫ</div>
- <div class="camera-tools"><button id="camera-home" class="button subtle">⌖ Сбросить камеру</button><small>ЛКМ + перетаскивание — вращение 3D-камеры<br>Колесо мыши — приближение / удаление<br>Клик по телу — перейти к нему<br>ПКМ + перетаскивание — сдвиг камеры<br>Home — сброс камеры</small></div>
+ <div class="camera-tools"><button id="camera-home" class="button subtle">⌖ Сбросить камеру</button><small>ПКМ + перетаскивание — вращение 3D-камеры<br>СКМ + перетаскивание — панорамирование<br>ЛКМ — выбор небесного тела<br>Колесо мыши — приближение / удаление<br>Home — сброс камеры</small></div>
  <div class="sidebar-bottom"><i class="status-dot"></i> PHYSICS CORE <b>READY</b></div>
 </aside>
 <main class="universe">
  <div class="universe-title"><span>STARMAP / SOLAR SYSTEM</span><b>СОЛНЕЧНАЯ СИСТЕМА</b><small>Перемещайте камеру и исследуйте орбиты планет</small></div>
  <canvas id="solar-view" aria-label="Интерактивная карта Солнечной системы"></canvas>
  <nav id="system-navigation" class="system-navigation" aria-label="Навигация по звёздной системе"></nav>
- <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ЛКМ — ВРАЩЕНИЕ 3D-КАМЕРЫ</span><span>КЛИК — ФОКУС НА ТЕЛЕ</span><span>ПКМ — ПАНОРАМИРОВАНИЕ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
+ <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ПКМ — ВРАЩЕНИЕ 3D-КАМЕРЫ</span><span>КЛИК — ФОКУС НА ТЕЛЕ</span><span>СКМ — ПАНОРАМИРОВАНИЕ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
  <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span></div>
  <div class="zoom-dock"><button class="zoom-button" data-zoom-view="solar" data-zoom-action="out">−</button><output id="zoom-value-solar">100%</output><button class="zoom-button" data-zoom-view="solar" data-zoom-action="in">+</button></div>
 </main>

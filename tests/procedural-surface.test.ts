@@ -81,8 +81,8 @@ test('atmospheric giants do not receive geological relief normals',async()=>{
  for(let i=0;i<maps.normal.length;i+=3){const nx=maps.normal[i]/255*2-1,ny=maps.normal[i+1]/255*2-1,nz=maps.normal[i+2]/255*2-1;assert.ok(Math.abs(Math.hypot(nx,ny,nz)-1)<.02);}
 });
 test('surface LOD and worker-backed cache remain bounded and deduplicate requests',async()=>{
- assert.equal(surfaceResolutionForProjectedRadius(5),64);assert.equal(surfaceResolutionForProjectedRadius(100),128);assert.equal(surfaceResolutionForProjectedRadius(200),256);assert.equal(surfaceResolutionForProjectedRadius(400),512);assert.equal(surfaceResolutionForProjectedRadius(600),1024);assert.equal(surfaceResolutionForProjectedRadius(800),2048);
- assert.equal(surfaceResolutionForProjectedRadius(40,'gas-giant'),64);assert.equal(surfaceResolutionForProjectedRadius(40,'icy-moon'),128);
+ assert.equal(surfaceResolutionForProjectedRadius(5),64);assert.equal(surfaceResolutionForProjectedRadius(20),128);assert.equal(surfaceResolutionForProjectedRadius(100),256);assert.equal(surfaceResolutionForProjectedRadius(200),512);assert.equal(surfaceResolutionForProjectedRadius(400),1024);assert.equal(surfaceResolutionForProjectedRadius(600),2048);assert.equal(surfaceResolutionForProjectedRadius(800),2048);
+ assert.equal(surfaceResolutionForProjectedRadius(40,'gas-giant'),128);assert.equal(surfaceResolutionForProjectedRadius(40,'icy-moon'),256);
  const cache=new SurfaceMapCache(1000000),profile=createSurfaceProfile(bodies.earth);
  const [a,b]=await Promise.all([cache.get(profile,8),cache.get(profile,8)]);
  assert.equal(a,b);assert.equal(cache.size,1);

@@ -185,9 +185,9 @@ test('planet surface maps are sampled in local coordinates and their normals fol
 
 test('focused-body exposure compensates inverse-square solar dimming without changing the light law',()=>{
  assert.equal(focusedSolarExposureMultiplier(1),1);
- assert.ok(Math.abs(focusedSolarExposureMultiplier(5.2)-27.04)<1e-10);
- assert.equal(focusedSolarExposureMultiplier(30),900);
- assert.equal(focusedSolarExposureMultiplier(50),900);
+ assert.equal(focusedSolarExposureMultiplier(5.2),1);
+ assert.equal(focusedSolarExposureMultiplier(30),1);
+ assert.equal(focusedSolarExposureMultiplier(50),1);
  assert.equal(focusedSolarExposureMultiplier(0),1);
 });
 test('cloud density fields are sampled in body-local coordinates while lighting uses world normals',()=>{

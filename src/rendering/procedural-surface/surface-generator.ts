@@ -193,7 +193,7 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
  return clamp(height,-.45,.45);
 }
 function normalize(d:[number,number,number]):[number,number,number]{const m=Math.hypot(d[0],d[1],d[2])||1;return[d[0]/m,d[1]/m,d[2]/m];}
-export function sampleSurface(direction:[number,number,number],profile:SurfaceGenerationProfile):SurfaceSample {
+export function sampleSurface(direction:[number,number,number],profile:SurfaceGenerationProfile,includeHeight=true):SurfaceSample {
  const [x,y,z]=normalize(direction),seed=profile.seed;
  if(profile.class==='gas-giant'||profile.class==='ice-giant')return atmosphereSample(x,y,z,profile);
  const broad=fbm3(x*3.2,y*3.2,z*3.2,seed,5),regional=fbm3(x*13,y*13,z*13,seed+17,4);
@@ -209,7 +209,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  const iron=profile.ironFraction,metal=profile.metalFraction,silicate=profile.silicateFraction;
  const craterRim=smooth(.18,.28,craters)*(1-smooth(.32,.5,craters))*profile.impactAge;
  let albedo:[number,number,number]=[.3,.28,.24],roughness=.88,material:SurfaceMaterial='silicate-rock';
- let height=sampleSurfaceHeight([x,y,z],profile);
+ let height=includeHeight?sampleSurfaceHeight([x,y,z],profile):0;
  if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&ice>.62)){
   const crack=smooth(.72,.91,cells)*(1-profile.erosion*.55);
   const salt=profile.volatileFraction*.12+(profile.mineralFlags.salts ? 0.05 : 0);
@@ -295,10 +295,16 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
  const heightResolution=Math.min(resolution,512),roughnessResolution=Math.min(resolution,512),normalResolution=Math.min(resolution,1024);
  const gas=profile.class==='gas-giant'||profile.class==='ice-giant';
  const albedo=await generateCubeChannel(resolution,4,direction=>{
-  const sample=sampleSurface(direction,profile);return [sample.albedo[0],sample.albedo[1],sample.albedo[2],1];
+  const sample=sampleSurface(direction,profile,false);return [sample.albedo[0],sample.albedo[1],sample.albedo[2],1];
  },yieldFace);
  const height=await generateCubeChannel(heightResolution,1,direction=>[sampleSurfaceHeight(direction,profile)+.5],yieldFace);
- const roughness=await generateCubeChannel(roughnessResolution,1,direction=>[sampleSurface(direction,profile).roughness],yieldFace);
+ const roughness=await generateCubeChannel(roughnessResolution,1,direction=>{
+  if(gas)return [0.62];
+  const seed=profile.seed,[x,y,z]=normalize(direction);
+  const variation=fbm3(x*17,y*17,z*17,seed+401,3)*0.08;
+  const base=profile.class==='icy'||profile.class==='icy-moon'?0.42:profile.class==='volcanic'||profile.class==='volcanic-moon'?0.58:profile.class==='desert'?0.91:profile.class==='dense-atmosphere'?0.76:0.82;
+  return [clamp(base+variation,0.06,0.98)];
+ },yieldFace);
  const normal=await generateCubeChannel(normalResolution,3,direction=>{
   if(gas)return [direction[0]*.5+.5,direction[1]*.5+.5,direction[2]*.5+.5];
   const eps=1/normalResolution;

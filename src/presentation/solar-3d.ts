@@ -292,18 +292,25 @@ export class Solar3DView{
    g.uniform3f(l.uCameraPosition,...eye);
    g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
-   g.uniform3f(l.uColor,...(COLORS[body.id]??[.5,.6,.8]));g.uniform1f(l.uKind,KINDS[body.id]??2);
-   g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));const surfaceProfile=createSurfaceProfile(body);
-    const surfaceResolution=surfaceResolutionForProjectedRadius(px);
-    this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
-    this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
-    g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
-    g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
-    g.uniform1f(l.uIceFraction,surfaceProfile.iceFraction);
-    g.uniform1f(l.uIronFraction,surfaceProfile.ironFraction);
-    g.uniform1f(l.uTectonicActivity,surfaceProfile.tectonicActivity);
-    g.uniform1f(l.uVolcanicActivity,surfaceProfile.volcanicActivity);
-    g.uniform1f(l.uErosion,surfaceProfile.erosion);
+   g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??2));
+   g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));const isStar=!body.parentId;
+    if(isStar){
+     g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uSeed,0);
+     g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
+     g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
+    }else{
+     const surfaceProfile=createSurfaceProfile(body);
+     const surfaceResolution=surfaceResolutionForProjectedRadius(px);
+     this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
+     this.bindSurfaceMaps(surfaceProfile,surfaceResolution,l);
+     g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
+     g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
+     g.uniform1f(l.uIceFraction,surfaceProfile.iceFraction);
+     g.uniform1f(l.uIronFraction,surfaceProfile.ironFraction);
+     g.uniform1f(l.uTectonicActivity,surfaceProfile.tectonicActivity);
+     g.uniform1f(l.uVolcanicActivity,surfaceProfile.volcanicActivity);
+     g.uniform1f(l.uErosion,surfaceProfile.erosion);
+    }
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);

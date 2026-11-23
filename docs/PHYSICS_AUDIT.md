@@ -40,3 +40,8 @@ Run `npm run check` with Node.js 20+. Tests cover SI constants, vector arithmeti
 - Planet rendering is procedural and currently has no high-resolution real surface textures, tiled/quadtree terrain, true heightmap displacement, atmospheric scattering, shadows, eclipses or body rotation. The current geometry LOD is a first visual tier, not the final terrain system.
 - The planetary ephemeris remains a compact Keplerian approximation, not a precision JPL ephemeris.
 - N-body gravity, attitude, staging, aerodynamics, heating, collisions and surface physics are not implemented.
+
+
+## Development-branch correction (2026-11-23)
+
+The older status statements above describe an earlier stage and are superseded for the current development branch: planetary spin, procedural cube-map surfaces, atmosphere/cloud passes and analytic eclipse visibility are now present. Satellite propagation uses combined parent/body GM and explicit ecliptic or approximate parent-equatorial reference frames. This remains a Keplerian mean-element model, not a precision ephemeris. See FOUNDATION_FIXES.md.

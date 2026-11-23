@@ -36,3 +36,8 @@ The surface pipeline produces deterministic cube-map material data for rocky bod
 - Atmospheric giant maps are generated as static deterministic patterns; they do not model fluid dynamics or time-evolving weather.
 - Worker generation is serialized through one Worker. Priority affects queued jobs but cannot preempt a job already executing.
 - A 2048 map is still a substantial CPU/VRAM allocation; the focused body gets the highest priority and lower-resolution previews remain visible while it is generated. No benchmark claims are made without measurements on a specified browser, GPU and scene. CI checks logic and build contracts; visual seam checks, GPU timing, frame-time comparison and memory-pressure behavior still require browser testing.
+
+
+## Current LOD and sampling update
+
+The focused-body texture LOD now uses earlier screen-space thresholds, while keeping 2048 texels per cube-map face as the maximum. Albedo generation skips the unused height calculation; roughness is generated from a lower-cost class-aware procedural field rather than evaluating the full surface material function again. The change reduces redundant CPU work but requires visual comparison of roughness appearance in the browser.

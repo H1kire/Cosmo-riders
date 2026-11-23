@@ -179,7 +179,7 @@ function getOrbitPath(id){
   if(!celestial?.parentId||!celestial.orbitalElements){orbitPathCache.set(id,[]);return [];}
   const parent=body(celestial.parentId),elements=celestial.orbitalElements,points=[],segments=128;
   for(let i=0;i<=segments;i++){
-    const sample=orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu);
+    const sample=orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu+child.mu);
     points.push(sample.position);
   }
   orbitPathCache.set(id,points);

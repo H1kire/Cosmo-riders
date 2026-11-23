@@ -38,3 +38,7 @@ The propulsion layer currently calculates a burn's rocket-equation mass loss and
 The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The 3D browser view uses a logarithmic global spatial projection and a local linear scale around the focused body; projection never changes the underlying SI physics. Planet appearance is procedural rather than sourced from high-resolution satellite texture maps, and the current LOD does not yet provide a tiled terrain/quadtree surface system.
 
 All internal physical quantities use metres, kilograms, seconds, metres per second, metres per second squared, pascals, newtons and cubic metres per second squared. Convert units only for display.
+
+## Foundation fixes
+
+The development branch records the current implementation of adaptive camera clipping, screen-space body picking, distance-independent frame exposure, corrected atmosphere/cloud light normalization, satellite orbital reference frames, combined two-body gravity, 0×–100× time controls and restored utility-window navigation in [docs/FOUNDATION_FIXES.md](docs/FOUNDATION_FIXES.md). The satellite catalogue remains a modeled subset, not a complete list of natural satellites.

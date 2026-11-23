@@ -64,3 +64,14 @@ test('graphics presets control real render scale and post-process quality',()=>{
  assert.equal(low.clouds,false);
  assert.equal(ultra.clouds,true);
 });
+
+import { ATMOSPHERE_FRAGMENT, CLOUD_FRAGMENT } from '../src/rendering/shaders/planet-effects.ts';
+
+test('planet effects contain real view-ray scattering and procedural cloud shading',()=>{
+ assert.ok(ATMOSPHERE_FRAGMENT.includes('for(int i=0;i<16;i++)'));
+ assert.ok(ATMOSPHERE_FRAGMENT.includes('rayleighDepth'));
+ assert.ok(ATMOSPHERE_FRAGMENT.includes('mieDepth'));
+ assert.ok(CLOUD_FRAGMENT.includes('fbm(p)'));
+ assert.ok(CLOUD_FRAGMENT.includes('uWind'));
+ assert.ok(CLOUD_FRAGMENT.includes('uShadowVisibility'));
+});

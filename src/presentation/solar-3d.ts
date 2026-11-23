@@ -288,14 +288,14 @@ export class Solar3DView{
    const cloudLayers=this.cloudSystem.getLayers(body.id);
    const centerVisibility=(profile||cloudLayers.length)?this.getCenterShadowVisibility(body,state,sunState,bodies,states):1;
    if(this.graphics.atmosphere&&profile){
-    g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
+    g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
     this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,centerVisibility);
-    g.depthMask(true);g.disable(g.BLEND);
+    g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    if(this.graphics.clouds&&cloudLayers.length){
-    g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
+    g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
     this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,centerVisibility,timeSeconds);
-    g.depthMask(true);g.disable(g.BLEND);
+    g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    const screen=this.project(vp,p,w/dpr,h/dpr);
    if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius}]);

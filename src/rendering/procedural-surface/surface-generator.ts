@@ -63,6 +63,10 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  return {height,albedo,roughness,material};
 }
 export interface SurfaceCubeMaps{resolution:number;seed:number;albedo:Uint8Array;heightRoughness:Uint8Array;normal:Uint8Array;}
+export function surfaceResolutionForProjectedRadius(projectedRadius:number):number{
+ if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
+ return projectedRadius>420?512:projectedRadius>70?256:projectedRadius>18?128:64;
+}
 const FACE_DIRECTIONS=[
  (u:number,v:number):[number,number,number]=>[1,-v,-u],
  (u:number,v:number):[number,number,number]=>[-1,-v,u],
@@ -80,7 +84,7 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
   for(let y=0;y<resolution;y++)for(let x=0;x<resolution;x++){
    const u=(x/(resolution-1))*2-1,v=(y/(resolution-1))*2-1,dir=FACE_DIRECTIONS[face](u,v);
    const sample=sampleSurface(dir,profile),i=index(face,x,y);
-   albedo[i]=Math.round(sample.albedo[0]*255);albedo[i+1]=Math.round(sample.albedo[1]*255);albedo[i+2]=Math.round(sample.albedo[2]*255);albedo[i+3]=255;
+   albedo[i]=Math.round(clamp(sample.albedo[0])*255);albedo[i+1]=Math.round(clamp(sample.albedo[1])*255);albedo[i+2]=Math.round(clamp(sample.albedo[2])*255);albedo[i+3]=255;
    heightRoughness[i]=Math.round(clamp(sample.height*.5+.5)*255);heightRoughness[i+1]=Math.round(sample.roughness*255);heightRoughness[i+2]=0;heightRoughness[i+3]=255;
    const du=sampleSurface(FACE_DIRECTIONS[face](u+eps,v),profile).height-sampleSurface(FACE_DIRECTIONS[face](u-eps,v),profile).height;
    const dv=sampleSurface(FACE_DIRECTIONS[face](u,v+eps),profile).height-sampleSurface(FACE_DIRECTIONS[face](u,v-eps),profile).height;

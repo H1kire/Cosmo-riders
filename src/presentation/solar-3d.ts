@@ -45,8 +45,8 @@ export class Solar3DView{
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60)];
   this.lineBuffer=g.createBuffer();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
-  this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uShadowVisibility','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
-  this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uShadowVisibility','uLightIntensity']);
+  this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
+  this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLight','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
@@ -97,7 +97,7 @@ export class Solar3DView{
   g.bindBuffer(g.ARRAY_BUFFER,mesh.buffers[1]);g.enableVertexAttribArray(loc.aNormal);g.vertexAttribPointer(loc.aNormal,3,g.FLOAT,false,0,0);
   g.bindBuffer(g.ELEMENT_ARRAY_BUFFER,mesh.buffers[2]);
  }
- drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,shadowVisibility){
+ drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){
   const g=this.gl,l=this.atmosphereLoc,shellRadius=radius*(1+profile.atmosphereHeightM/profile.groundRadiusM);
   const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
   g.useProgram(this.atmosphereProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
@@ -108,13 +108,13 @@ export class Solar3DView{
   g.uniform1f(l.uRayleighScaleHeight,profile.rayleighScaleHeightM/AU);g.uniform1f(l.uMieScaleHeight,profile.mieScaleHeightM/AU);
   g.uniform1i(l.uAtmosphereSamples,this.graphics.atmosphereSamples);
   g.uniform1f(l.uIntensity,(profile.intensity??1)*this.graphics.atmosphereIntensity);
-  g.uniform1f(l.uShadowVisibility,shadowVisibility);g.uniform1f(l.uLightIntensity,light.intensity/22);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
+  g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
  }
- drawClouds(body,layers,p,radius,mesh,vp,light,shadowVisibility,timeSeconds){
+ drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds){
   const g=this.gl,l=this.cloudLoc;
   g.useProgram(this.cloudProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   g.uniform3f(l.uLight,...light.direction);g.uniform3f(l.uLightColor,...light.color);
-  g.uniform1f(l.uTime,timeSeconds%100000);g.uniform1f(l.uShadowVisibility,shadowVisibility);g.uniform1f(l.uLightIntensity,light.intensity/22);
+  g.uniform1f(l.uTime,timeSeconds%100000);g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);
   for(const layer of layers){
    const shellRadius=radius*(1+layer.altitudeM/body.meanRadiusM);
    const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
@@ -230,7 +230,7 @@ export class Solar3DView{
   this.projected=[];
   const renderOrigin=focusState?focusState.position:sun;
   const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
-  const sunRenderPosition=mapper(null,sun);
+  const sunRenderPosition=mapper(null,sun);this.currentSunPosition=sunRenderPosition;
   this.lighting.setPointLight('sun',sunRenderPosition,{intensity:22,color:[1,.96,.86]});
   // Keep externally registered stellar sources while refreshing the primary star position.
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
@@ -263,15 +263,15 @@ export class Solar3DView{
    this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
-   const centerVisibility=this.graphics.shadows&&(profile||cloudLayers.length)?this.getCenterShadowVisibility(body,state,sunState,bodies,states):1;
+   const effectOccluders=occluders;
    if(this.graphics.atmosphere&&profile){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
-    this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,centerVisibility);
+    this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,effectOccluders);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    if(this.graphics.clouds&&cloudLayers.length){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
-    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,centerVisibility,timeSeconds);
+    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,effectOccluders,timeSeconds);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    const screen=this.project(vp,p,w/dpr,h/dpr);

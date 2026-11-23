@@ -118,7 +118,7 @@ test('point lights use inverse-square attenuation and expose independent source 
 test('planet surface shader supports multiple point lights and a non-emissive night side',()=>{
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uniform vec3 uLightPositions[4]'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('for(int i=0;i<4;i++)'));
- assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/distanceSquared'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/(22.0*distanceSquared)'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('vec3 indirect=albedo*0.0001'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uSunRadius*along/max(sunDistance-along,1e-12)'));
 });

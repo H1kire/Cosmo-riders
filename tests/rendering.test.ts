@@ -90,3 +90,30 @@ test('planet surface shader restores distinct procedural maps and physically bas
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('uCameraPosition-vPosition'));
  assert.ok(PLANET_SURFACE_FRAGMENT.includes('if(uKind>5.5)'));
 });
+
+
+import { LightingEngine } from '../src/presentation/lighting-engine.ts';
+
+test('point lights use inverse-square attenuation and expose independent source snapshots',()=>{
+ const lighting=new LightingEngine();
+ lighting.setPointLight('sun',[0,0,0],{intensity:22,color:[1,.96,.86]});
+ assert.equal(lighting.intensityAt([1,0,0],'sun'),22);
+ assert.equal(lighting.intensityAt([2,0,0],'sun'),5.5);
+ const snapshot=lighting.getLights();
+ assert.equal(snapshot.length,1);
+ snapshot[0].position[0]=100;
+ assert.deepEqual(lighting.getLight('sun')?.position,[0,0,0]);
+});
+
+test('planet surface shader supports multiple point lights and a non-emissive night side',()=>{
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uniform vec3 uLightPositions[4]'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('for(int i=0;i<4;i++)'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uLightIntensities[i]/distanceSquared'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('vec3 indirect=albedo*0.001'));
+ assert.ok(PLANET_SURFACE_FRAGMENT.includes('uSunRadius/max(sunDistance-along,1e-12)'));
+});
+
+test('atmosphere and cloud shaders receive stellar irradiance independently of surface rendering',()=>{
+ assert.ok(ATMOSPHERE_FRAGMENT.includes('uLightIntensity/22.0'));
+ assert.ok(CLOUD_FRAGMENT.includes('uLightIntensity/22.0'));
+});

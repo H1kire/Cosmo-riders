@@ -232,7 +232,7 @@ export class Solar3DView{
   const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
   const sunRenderPosition=mapper(null,sun);
   this.lighting.setPointLight('sun',sunRenderPosition,{intensity:22,color:[1,.96,.86]});
-  const lightSources=this.lighting.getLights().slice(0,4);
+  const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
   lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper);

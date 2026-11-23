@@ -263,15 +263,14 @@ export class Solar3DView{
    this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
-   const effectOccluders=occluders;
    if(this.graphics.atmosphere&&profile){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
-    this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,effectOccluders);
+    this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    if(this.graphics.clouds&&cloudLayers.length){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
-    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,effectOccluders,timeSeconds);
+    this.drawClouds(body,cloudLayers,p,radius,mesh,vp,light,occluders,timeSeconds);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    const screen=this.project(vp,p,w/dpr,h/dpr);

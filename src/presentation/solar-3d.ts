@@ -76,7 +76,7 @@ export class Solar3DView{
  configurePlanetEffects(){
   const profiles:[string,number,[number,number,number],number,number][]=[
    ['earth',110000,[.22,.48,1.0],.62,1.0],
-   ['titan',400000,[.72,.43,.18],.96,1.25],\n   ['titan',400000,[.72,.43,.18],.96,1.25],
+   ['titan',400000,[.72,.43,.18],.96,1.25],
    ['venus',250000,[1.0,.58,.28],.92,1.1],
    ['mars',100000,[1.0,.34,.19],.34,.72],
    ['jupiter',1200000,[.82,.62,.43],.48,.58],

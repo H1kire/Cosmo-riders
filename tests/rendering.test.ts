@@ -97,6 +97,8 @@ import { LightingEngine } from '../src/presentation/lighting-engine.ts';
 test('point lights use inverse-square attenuation and expose independent source snapshots',()=>{
  const lighting=new LightingEngine();
  lighting.setPointLight('sun',[0,0,0],{intensity:22,color:[1,.96,.86]});
+ lighting.setPointLight('secondary-star',[0,3,0],{intensity:4,color:[.5,.7,1]});
+ assert.equal(lighting.getLights().length,2);
  assert.equal(lighting.intensityAt([1,0,0],'sun'),22);
  assert.equal(lighting.intensityAt([2,0,0],'sun'),5.5);
  const snapshot=lighting.getLights();

@@ -37,6 +37,10 @@ test('known bodies receive distinct physical surface classes and chemistry',()=>
  assert.ok(profiles.mercury.metalFraction>profiles.moon.metalFraction);
  assert.ok(profiles.io.sulfurFraction>profiles.mars.sulfurFraction);
  assert.ok(profiles.titan.hydrocarbonFraction>0);
+ const gasExoplanet=createSurfaceProfile({id:'exoplanet-gas',massKg:1e27,meanRadiusM:7e7});
+ const iceExoplanet=createSurfaceProfile({id:'exoplanet-ice',massKg:1e26,meanRadiusM:2.5e7});
+ assert.equal(gasExoplanet.class,'gas-giant');assert.equal(iceExoplanet.class,'ice-giant');
+ assert.equal(gasExoplanet.silicateFraction,0);assert.equal(iceExoplanet.ironFraction,0);
 });
 test('surface samples use class-specific material families and composition',()=>{
  const earth=createSurfaceProfile(bodies.earth),mars=createSurfaceProfile(bodies.mars),moon=createSurfaceProfile(bodies.moon);
@@ -48,6 +52,8 @@ test('surface samples use class-specific material families and composition',()=>
  assert.notDeepEqual(sampleSurface(direction,moon).albedo,sampleSurface(direction,mars).albedo);
  assert.equal(sampleSurface(direction,gas).material,'cloud');
  assert.equal(sampleSurface(direction,iceGiant).material,'cloud');
+ assert.notDeepEqual(sampleSurface(direction,gas).albedo,sampleSurface(direction,createSurfaceProfile(bodies.saturn)).albedo);
+ assert.notDeepEqual(sampleSurface(direction,iceGiant).albedo,sampleSurface(direction,createSurfaceProfile(bodies.uranus)).albedo);
  assert.ok(sampleSurface(direction,io).material==='sulfur'||sampleSurface(direction,io).material==='lava');
  assert.equal(sampleSurface(direction,europa).material,'water-ice');
  assert.ok(sampleSurface(direction,titan).material==='hydrocarbon'||sampleSurface(direction,titan).material==='water-ice');
@@ -62,7 +68,7 @@ test('cube-sphere maps expose independent PBR channels and are deterministic',as
  const profile=createSurfaceProfile(bodies.earth),a=await generateSurfaceCubeMaps(profile,8),b=await generateSurfaceCubeMaps(profile,8);
  assert.deepEqual(a.albedo,b.albedo);assert.deepEqual(a.height,b.height);assert.deepEqual(a.roughness,b.roughness);assert.deepEqual(a.normal,b.normal);
  for(const channel of [a.albedo,a.height,a.roughness,a.normal]){assert.equal(channel.length,6*8*8*4);assert.ok(channel.every(v=>v>=0&&v<=255));}
- assert.equal(a.resolution,8);
+ assert.equal(a.resolution,8);assert.ok(a.generationMs>=0);
 });
 test('atmospheric giants do not receive geological relief normals',async()=>{
  const maps=await generateSurfaceCubeMaps(createSurfaceProfile(bodies.jupiter),8);

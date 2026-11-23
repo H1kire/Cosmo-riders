@@ -35,7 +35,7 @@ export class Solar3DView{
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
   this.surfaceMapCache=new SurfaceMapCache(48*1024*1024);
-  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;
+  this.surfaceGpuTextures=new Map();this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceGpuBytes=0;this.surfaceTextureClock=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -51,7 +51,7 @@ export class Solar3DView{
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
-  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeightRoughness','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
+  this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uGeneratedAlbedo','uGeneratedNormal','uGeneratedHeight','uGeneratedRoughness','uUseGeneratedMaps','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
@@ -75,7 +75,7 @@ export class Solar3DView{
  }
  configurePlanetEffects(){
   const profiles:[string,number,[number,number,number],number,number][]=[
-   ['earth',110000,[.22,.48,1.0],.62,1.0],
+   ['earth',110000,[.22,.48,1.0],.62,1.0],\n   ['titan',400000,[.72,.43,.18],.96,1.25],
    ['venus',250000,[1.0,.58,.28],.92,1.1],
    ['mars',100000,[1.0,.34,.19],.34,.72],
    ['jupiter',1200000,[.82,.62,.43],.48,.58],
@@ -88,7 +88,7 @@ export class Solar3DView{
    if(body)this.atmosphereSystem.setProfile({bodyId:id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:height,rayleigh:color, mie,rayleighScaleHeightM:height*.12,mieScaleHeightM:height*.08,mieAnisotropy:.76,intensity});
   }
   const cloudProfiles:[string,number,number,number,number][]=[
-   ['earth',18000,.48,.82,5.8],
+   ['earth',18000,.48,.82,5.8],\n   ['titan',18000,.72,.62,3.8],
    ['venus',55000,.59,.78,4.4],
    ['jupiter',70000,.55,.54,7.2],
    ['saturn',65000,.58,.48,6.0],
@@ -235,7 +235,7 @@ export class Solar3DView{
   const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
-  this.hdr.begin(renderWidth,renderHeight);
+  this.hdr.begin(renderWidth,renderHeight);\n  this.processSurfaceUploads();
   const sunState=states.get('sun')??{position:{x:0,y:0,z:0}};
   const sun=sunState.position,bodies=[...world.bodies.values()];
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
@@ -375,24 +375,46 @@ export class Solar3DView{
  requestSurfaceMaps(profile,resolution){
   const profileKey=surfaceProfileKey(profile),key=profileKey+':'+resolution;
   if(this.surfaceGpuTextures.has(key)||this.surfaceMapPending.has(key)||this.disposed)return;
+  if(this.surfaceUploadQueue.some(job=>job.key===key))return;
   this.surfaceMapPending.add(key);
   this.surfaceMapCache.get(profile,resolution).then(maps=>{
    this.surfaceMapPending.delete(key);if(this.disposed)return;
-   const g=this.gl,active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
-   const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
-   const upload=(data)=>{
-    const texture=g.createTexture();if(!texture)return null;
+   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:performance.now()});
+  }).catch(()=>{this.surfaceMapPending.delete(key);});
+ }
+ processSurfaceUploads(){
+  const g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
+  const active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
+  const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
+  const channels=[job.maps.albedo,job.maps.height,job.maps.roughness,job.maps.normal];
+  if(job.textures.length===0){
+   for(let i=0;i<4;i++){
+    const texture=g.createTexture();if(!texture){for(const allocated of job.textures)g.deleteTexture(allocated);this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
     g.bindTexture(g.TEXTURE_CUBE_MAP,texture);
-    const faceBytes=resolution*resolution*4;
-    for(let face=0;face<6;face++)g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,g.RGBA,resolution,resolution,0,g.RGBA,g.UNSIGNED_BYTE,data.subarray(face*faceBytes,(face+1)*faceBytes));
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);g.generateMipmap(g.TEXTURE_CUBE_MAP);
-    return texture;
-   };
-   const textures=[upload(maps.albedo),upload(maps.normal),upload(maps.heightRoughness)];
-   g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);
-   if(textures.some(texture=>!texture)){for(const texture of textures)if(texture)g.deleteTexture(texture);return;}
-   const bytes=resolution*resolution*4*6*3;
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
+    job.textures.push(texture);
+   }
+  }
+  const faceBytes=job.resolution*job.resolution*4;
+  let budget=2;
+  while(budget-->0&&job.faceIndex<24){
+   const textureIndex=Math.floor(job.faceIndex/6),face=job.faceIndex%6;
+   g.bindTexture(g.TEXTURE_CUBE_MAP,job.textures[textureIndex]);
+   const data=channels[textureIndex].subarray(face*faceBytes,(face+1)*faceBytes);
+   g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,g.RGBA,job.resolution,job.resolution,0,g.RGBA,g.UNSIGNED_BYTE,data);
+   job.faceIndex++;
+  }
+  if(job.faceIndex===24&&job.mipIndex<4){
+   g.bindTexture(g.TEXTURE_CUBE_MAP,job.textures[job.mipIndex]);
+   g.generateMipmap(g.TEXTURE_CUBE_MAP);
+   job.mipIndex++;
+  }
+  g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);
+  if(job.faceIndex===24&&job.mipIndex===4){
+   const bytes=Math.ceil(job.resolution*job.resolution*4*6*4*4/3);
    while(this.surfaceGpuBytes+bytes>64*1024*1024&&this.surfaceGpuTextures.size){
     let oldestKey=null,oldest=Infinity;
     for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
@@ -400,9 +422,12 @@ export class Solar3DView{
     const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
     this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
    }
-   if(bytes<=64*1024*1024){this.surfaceGpuTextures.set(key,{textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution,profileKey});this.surfaceGpuBytes+=bytes;}
-   else for(const texture of textures)g.deleteTexture(texture);
-  }).catch(()=>{this.surfaceMapPending.delete(key);});
+   if(bytes<=64*1024*1024){
+    this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes,used:++this.surfaceTextureClock,created:job.created,resolution:job.resolution,profileKey:job.profileKey});
+    this.surfaceGpuBytes+=bytes;
+   }else for(const texture of job.textures)g.deleteTexture(texture);
+   this.surfaceUploadQueue.shift();
+  }
  }
  bindSurfaceMaps(profile,resolution,loc){
   const g=this.gl,profileKey=surfaceProfileKey(profile);let entry=this.surfaceGpuTextures.get(profileKey+':'+resolution);
@@ -410,8 +435,8 @@ export class Solar3DView{
   if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);return;}
   entry.used=++this.surfaceTextureClock;
   const blend=Math.max(0,Math.min(1,(performance.now()-entry.created)/450));
-  const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedNormal,loc.uGeneratedHeightRoughness];
-  for(let i=0;i<3;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
+  const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
+  for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
   g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
  }
  dispose(){
@@ -427,7 +452,7 @@ export class Solar3DView{
   this.labelNodes?.clear();
   this.orbitCache?.clear();
   for(const entry of this.surfaceGpuTextures?.values()??[])for(const texture of entry.textures)this.gl.deleteTexture(texture);
-  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceMapCache?.clear();this.surfaceGpuBytes=0;
+  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceUploadQueue?.splice(0);this.surfaceMapCache?.dispose();this.surfaceGpuBytes=0;
   this.stellarSourceDefinitions?.clear();
  }
 }

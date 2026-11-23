@@ -54,6 +54,20 @@ const checks: Array<[string, () => Promise<void>]> = [
     const compatibility = await readFile(new URL('../src/rendering/lighting/lighting-system.ts', import.meta.url), 'utf8');
     if (!compatibility.includes('extends LightingEngine')) throw new Error('New lighting system must preserve the legacy LightingEngine API.');
   }],
+  ['Deterministic procedural planetary geology and cube-map LOD', async () => {
+    const noise = await readFile(new URL('../src/rendering/procedural-surface/noise.ts', import.meta.url), 'utf8');
+    const generator = await readFile(new URL('../src/rendering/procedural-surface/surface-generator.ts', import.meta.url), 'utf8');
+    const cache = await readFile(new URL('../src/rendering/procedural-surface/surface-map-cache.ts', import.meta.url), 'utf8');
+    const renderer = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
+    const shader = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
+    for (const feature of ['stableSeed','fbm3','ridged3','worley3','domainWarp3']) if (!noise.includes('function '+feature)) throw new Error('Procedural noise primitive is missing: '+feature);
+    for (const feature of ['createSurfaceProfile','sampleSurface','generateSurfaceCubeMaps','FACE_DIRECTIONS','surfaceResolutionForProjectedRadius']) if (!generator.includes(feature)) throw new Error('Planetary surface generator feature is missing: '+feature);
+    for (const feature of ['SurfaceMapCache','maxBytes','clear()']) if (!cache.includes(feature)) throw new Error('Surface map cache feature is missing: '+feature);
+    if (!renderer.includes('createSurfaceProfile(body)') || !renderer.includes('requestSurfaceMaps(surfaceProfile,surfaceResolution)') || !renderer.includes('bindSurfaceMaps(surfaceProfile.seed,surfaceResolution,l)') || !renderer.includes('g.deleteTexture(texture)')) throw new Error('Solar renderer must request, bind and dispose generated maps.');
+    if (!shader.includes('domainWarp3') || !shader.includes('ridged3') || !shader.includes('uGeneratedAlbedo') || !shader.includes('uGeneratedNormal') || !shader.includes('uGeneratedHeightRoughness')) throw new Error('Planet shader must combine multifractal geology and generated material maps.');
+    const body = await readFile(new URL('../src/physics/celestial-body.ts', import.meta.url), 'utf8');
+    if (!body.includes('surfaceSeed') || !body.includes('Number.isSafeInteger(surfaceSeed)')) throw new Error('Celestial bodies must support persisted deterministic surface seeds.');
+  }],
   ['SI unit constants', async () => {
     const source = await readFile(new URL('../src/physics/constants.ts', import.meta.url), 'utf8');
     if (!source.includes('G = 6.67430e-11') || !source.includes('AU = 149_597_870_700')) throw new Error('Expected SI constants are missing.');

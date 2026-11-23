@@ -12,6 +12,7 @@ export interface CelestialBodyOptions {
   readonly parentId?: string | null;
   readonly semiMajorAxisM?: number | null;
   readonly orbitalElements?: ClassicalOrbitalElements | null;
+  readonly surfaceSeed?: number;
 }
 
 export class CelestialBody {
@@ -25,6 +26,7 @@ export class CelestialBody {
   readonly parentId: string | null;
   readonly semiMajorAxisM: number | null;
   readonly orbitalElements: ClassicalOrbitalElements | null;
+  readonly surfaceSeed: number | null;
 
   constructor({
     id,
@@ -36,6 +38,7 @@ export class CelestialBody {
     parentId = null,
     semiMajorAxisM = null,
     orbitalElements = null,
+    surfaceSeed = null,
   }: CelestialBodyOptions) {
     if (typeof id !== 'string' || !id.trim()) throw new TypeError('Body id must be non-empty.');
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Body name must be non-empty.');
@@ -45,6 +48,7 @@ export class CelestialBody {
       throw new TypeError('position and velocity must be finite 3D vectors.');
     }
     if (semiMajorAxisM !== null) assertPositiveFinite(semiMajorAxisM, 'semiMajorAxisM');
+    if (surfaceSeed !== null && !Number.isSafeInteger(surfaceSeed)) throw new RangeError('surfaceSeed must be a safe integer.');
     if (orbitalElements !== null) {
       if (!parentId) throw new Error('An orbiting body must have a parentId.');
       if (!Number.isFinite(orbitalElements.semiMajorAxisM) || orbitalElements.semiMajorAxisM <= 0) {
@@ -64,6 +68,7 @@ export class CelestialBody {
     this.parentId = parentId;
     this.semiMajorAxisM = semiMajorAxisM ?? orbitalElements?.semiMajorAxisM ?? null;
     this.orbitalElements = orbitalElements ? Object.freeze({ ...orbitalElements }) : null;
+    this.surfaceSeed = surfaceSeed;
     Object.freeze(this);
   }
 }

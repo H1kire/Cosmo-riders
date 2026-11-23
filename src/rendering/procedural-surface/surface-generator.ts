@@ -228,7 +228,7 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
    const n=normalize([dir[0]-t[0]*du*.045-b[0]*dv*.045,dir[1]-t[1]*du*.045-b[1]*dv*.045,dir[2]-t[2]*du*.045-b[2]*dv*.045]);
    normal[i]=Math.round((n[0]*.5+.5)*255);normal[i+1]=Math.round((n[1]*.5+.5)*255);normal[i+2]=Math.round((n[2]*.5+.5)*255);normal[i+3]=255;
   }
-  if(yieldFace)await yieldFace();
+  if(yieldFace&&(y&7)===7)await yieldFace();
  }
  return {resolution,seed:profile.seed,generationMs:performance.now()-generationStarted,albedo,height,roughness,normal};
 }

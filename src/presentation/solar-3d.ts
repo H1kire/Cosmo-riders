@@ -294,6 +294,9 @@ export class Solar3DView{
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    g.uniform3f(l.uColor,...(COLORS[body.id]??[.5,.6,.8]));g.uniform1f(l.uKind,KINDS[body.id]??2);
    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));const surfaceProfile=createSurfaceProfile(body);
+    const surfaceResolution=surfaceResolutionForProjectedRadius(px);
+    this.requestSurfaceMaps(surfaceProfile,surfaceResolution);
+    this.bindSurfaceMaps(surfaceProfile.seed,surfaceResolution,l);
     g.uniform1f(l.uSeed,surfaceProfile.seed%16777216);
     g.uniform1f(l.uWaterFraction,surfaceProfile.waterFraction);
     g.uniform1f(l.uIceFraction,surfaceProfile.iceFraction);

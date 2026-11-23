@@ -62,3 +62,20 @@ export interface PhysicsWorldOptions {
   readonly soiEnterFactor?: number;
   readonly soiExitFactor?: number;
 }
+
+export type PlanetarySurfaceClass = 'rocky'|'oceanic'|'icy'|'volcanic'|'gas-giant'|'ice-giant';
+/** Optional persisted world-generation metadata consumed by the procedural renderer. */
+export interface PlanetarySurfaceParameters {
+  readonly class?: PlanetarySurfaceClass;
+  readonly temperatureK?: number;
+  readonly pressurePa?: number;
+  readonly waterFraction?: number;
+  readonly iceFraction?: number;
+  readonly ironFraction?: number;
+  readonly silicateFraction?: number;
+  readonly tectonicActivity?: number;
+  readonly volcanicActivity?: number;
+  readonly impactAge?: number;
+  readonly erosion?: number;
+  readonly rotationFactor?: number;
+}

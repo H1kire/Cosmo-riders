@@ -36,28 +36,33 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  const warped=domainWarp3(x*3.2,y*3.2,z*3.2,s,.42),[wx,wy,wz]=warped;
  const continent=fbm3(wx,wy,wz,s,6),regional=fbm3(x*13,y*13,z*13,s+17,5);
  const ridges=ridged3(wx*21,wy*21,wz*21,s+31,5),cells=worley3(x*68,y*68,z*68,s+47);
- const craterField=worley3(x*9,y*9,z*9,s+71),crater=smooth(.12,.3,craterField)*(1-smooth(.34,.52,craterField));
+ const craterField=worley3(x*9,y*9,z*9,s+71),crater=smooth(.12,.3,craterField)*(1-smooth(.34,.52,craterField))*profile.impactAge;
  const tectonic=ridged3(x*5+regional,y*5,z*5,s+89,4)*profile.tectonicActivity;
  const volcanic=fbm3(x*11,y*11,z*11,s+103,4)*profile.volcanicActivity;
  let height=continent*.28+regional*.12+ridges*.12+tectonic*.16+volcanic*.08-crater*.16;
- height*=1-profile.erosion*.45;
- const latitude=Math.abs(y),polar=smooth(.78,.98,latitude),cold=smooth(170,260,profile.temperatureK);
+ const atmosphericWeathering=clamp(Math.log10(1+profile.pressurePa)/7)*smooth(150,300,profile.temperatureK)*.18;
+ height*=1-clamp(profile.erosion+atmosphericWeathering)*.45;
+ height*=clamp(1.4/Math.sqrt(Math.max(.1,profile.gravityMS2)),.55,1.8);
+ const latitude=Math.abs(y),polar=smooth(.78,.98,latitude),cold=smooth(300,150,profile.temperatureK);
+ const thermalIce=cold*clamp(profile.pressurePa/611)*.65,effectiveIce=Math.max(profile.iceFraction,thermalIce);
  let albedo:[number,number,number]=[.32,.29,.25],roughness=.88,material:SurfaceSample['material']='rock';
  const mineral=fbm3(wx*32,wy*32,wz*32,s+131,4),metal=profile.ironFraction;
  if(profile.class==='gas-giant'||profile.class==='ice-giant'){
   const bands=Math.sin((y+regional*.035)*95+continent*3),storm=fbm3(x*19,y*7,z*19,s+151,5);
   albedo=profile.class==='gas-giant'?[.48+bands*.11,.31+bands*.09,.19+bands*.07]:[.22+bands*.035,.48+bands*.08,.58+bands*.09];
   const vortex=smooth(.72,.91,storm)*.35;albedo=[albedo[0]+vortex,albedo[1]+vortex*.45,albedo[2]+vortex*.2];roughness=.68;material='ash';
- }else if(profile.class==='icy'||profile.iceFraction>.5){
-  const crack=smooth(.76,.94,cells);albedo=[.62+polar*.22-crack*.15,.72+polar*.18-crack*.12,.78+polar*.16-crack*.08];roughness=.34;material='ice';
+ }else if(profile.class==='icy'||effectiveIce>.5){
+  const crack=smooth(.76,.94,cells)*(1-profile.erosion*.5);albedo=[.62+polar*.22-crack*.15,.72+polar*.18-crack*.12,.78+polar*.16-crack*.08];roughness=.34;material='ice';
  }else{
-  const ocean=profile.waterFraction*smooth(-.08,.1,continent+.08);
+  const liquidWater=profile.waterFraction*smooth(250,285,profile.temperatureK)*smooth(611,3000,profile.pressurePa);
+  const ocean=liquidWater*smooth(-.08,.1,continent+.08);
   const ironTint=metal*.18,desert=smooth(.22,.62,mineral+profile.temperatureK/1500);
-  albedo=[.27+mineral*.11+ironTint,.24+mineral*.09-ironTint*.3,.19+mineral*.06-ironTint*.5];
+  const silicateTone=profile.silicateFraction*.07;
+  albedo=[.22+silicateTone+mineral*.11+ironTint,.22+silicateTone*.7+mineral*.09-ironTint*.3,.2+silicateTone*.4+mineral*.06-ironTint*.5];
   albedo=[albedo[0]*(1-desert*.22),albedo[1]*(1-desert*.35),albedo[2]*(1-desert*.45)];
   if(profile.class==='volcanic'||volcanic>.55){albedo=[.12+volcanic*.22,.075+volcanic*.045,.045+volcanic*.02];material='lava';roughness=.55;}
   if(ocean>.35){albedo=[.012,.055,.12];material='water';roughness=.08;}
-  if(profile.iceFraction>0.05&&polar>0.1){albedo=[.72,.79,.83];material='ice';roughness=.28;}
+  if(effectiveIce>0.05&&polar>0.1){albedo=[.72,.79,.83];material='ice';roughness=.28;}
   if(desert>.62&&material==='rock'){material='sand';roughness=.96;}
  }
  return {height,albedo,roughness,material};

@@ -261,7 +261,7 @@ export function surfaceResolutionForProjectedRadius(projectedRadius:number,surfa
  if(!Number.isFinite(projectedRadius)||projectedRadius<0)throw new RangeError('Projected radius must be finite and non-negative.');
  const giant=surfaceClass==='gas-giant'||surfaceClass==='ice-giant';
  const px=projectedRadius*(giant?.85:1);
- return px>700?2048:px>500?1024:px>300?512:px>150?256:px>35?128:64;
+ return px>560?2048:px>280?1024:px>120?512:px>36?256:px>12?128:64;
 }
 const FACE_DIRECTIONS=[
  (u:number,v:number):[number,number,number]=>[1,-v,-u],(u:number,v:number):[number,number,number]=>[-1,-v,u],

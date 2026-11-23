@@ -1,6 +1,6 @@
 /** Screen-space LOD helpers shared by the solar renderer and tests. */
 export function selectMeshLod(projectedRadius:number,maxLevel:number):number {
-  const requested=projectedRadius>420?3:projectedRadius>70?2:projectedRadius>18?1:0;
+  const requested=projectedRadius>700?3:projectedRadius>160?2:projectedRadius>36?1:0;
   return Math.max(0,Math.min(Math.trunc(maxLevel),requested));
 }
 

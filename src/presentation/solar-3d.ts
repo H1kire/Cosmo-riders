@@ -164,13 +164,13 @@ export class Solar3DView{
   g.uniform1f(l.uRayleighScaleHeight,profile.rayleighScaleHeightM/AU);g.uniform1f(l.uMieScaleHeight,profile.mieScaleHeightM/AU);
   g.uniform1i(l.uAtmosphereSamples,this.graphics.atmosphereSamples);
   g.uniform1f(l.uIntensity,(profile.intensity??1)*this.graphics.atmosphereIntensity);
-  g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
+  g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
  }
  drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){
   const g=this.gl,l=this.cloudLoc;
   g.useProgram(this.cloudProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   g.uniform3f(l.uLightColor,...light.color);
-  g.uniform1f(l.uTime,timeSeconds%100000);g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity/22);
+  g.uniform1f(l.uTime,timeSeconds);g.uniform3f(l.uSunPosition,...this.currentSunPosition);g.uniform1f(l.uSunRadius,696340000/AU);g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);g.uniform1f(l.uLightIntensity,light.intensity);
   for(const layer of layers){
    const shellRadius=radius*(1+layer.altitudeM/body.meanRadiusM);
    const model=scaleModelMatrix(baseModel,shellRadius/radius);
@@ -247,7 +247,11 @@ export class Solar3DView{
   c.addEventListener('wheel',e=>{
     e.preventDefault();
     const nextDistance=this.distance*Math.exp(e.deltaY*.001);
-    if(Number.isFinite(nextDistance))this.distance=Math.max(1e-10,Math.min(1e4,nextDistance));
+    if(Number.isFinite(nextDistance)){
+      const focused=this.focusId?this.systemBodyById?.get(this.focusId):null;
+      const minimum=focused?focused.meanRadiusM/AU*1.025:1e-8;
+      this.distance=Math.max(minimum,Math.min(1e4,nextDistance));
+    }
   },{passive:false});
   c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
  }
@@ -269,7 +273,7 @@ export class Solar3DView{
  }
  home(){this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.focusId=null;this.focusTransition=null;}
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
- pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=22;for(const [id,p] of this.projected){const d=Math.hypot(x-p.x,y-p.y);if(d<bd){bd=d;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best);this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,(item?.[1]?.radius??1e-5)*20);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
+ pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bestScore=Infinity;for(const [id,p] of this.projected){const hitRadius=Math.max(8,Math.min(72,p.projectedRadius??8));const d=Math.hypot(x-p.x,y-p.y),score=d/hitRadius;if(d<=hitRadius&&score<bestScore){bestScore=score;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best),radius=item?.[1]?.radius??1e-5;this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,radius*1.08);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
  drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8)return;let path=this.orbitCache.get(body.id);if(!path){path=[];const eccentricity=Math.max(0,Math.min(0.95,body.orbitalElements.eccentricity??0)),segments=Math.max(512,Math.min(1024,Math.ceil(512*(1+eccentricity))));for(let i=0;i<=segments;i++){const e=body.orbitalElements,s=orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/segments},parent.mu);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.34:.2,body.id==='earth'?.62:.32,body.id==='earth'?.94:.48,.68*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);}
  render(world,states,timeSeconds,vesselState=null){
@@ -292,16 +296,17 @@ export class Solar3DView{
   if(!this.effectsConfigured){this.configurePlanetEffects();this.effectsConfigured=true;}
   const focus=this.focusId?world.bodies.get(this.focusId):null,focusState=focus?states.get(focus.id):null;
   const focusSunDistance=focusState?Math.hypot(focusState.position.x-sun.x,focusState.position.y-sun.y,focusState.position.z-sun.z)/AU:1;
-  const targetExposure=this.graphics.exposure*focusedSolarExposureMultiplier(focusSunDistance);
-  const exposureDelta=this.lastExposureUpdateMs?Math.max(0,frameStarted-this.lastExposureUpdateMs):1000;
-  const exposureBlend=1-Math.exp(-exposureDelta/450);
-  this.exposureCompensation+=(targetExposure-this.exposureCompensation)*exposureBlend;
+  // Экспозиция кадра не зависит от фокуса; ослабление света учитывается отдельно на поверхности.
+  this.exposureCompensation=this.graphics.exposure;
   this.lastExposureUpdateMs=frameStarted;
-  this.hdr.settings.exposure=this.exposureCompensation;
+  this.hdr.settings.exposure=this.graphics.exposure;
   if(focusState){this.cameraOrigin=[0,0,0];this.target=this.focusOffset.slice();}
   else{this.cameraOrigin=[0,0,0];this.target=[0,0,0];}
   const eye=[this.target[0]+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target[1]+this.distance*Math.sin(this.pitch),this.target[2]+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)];
-  const far=100,near=Math.max(1e-10,this.distance*.001),vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
+  const focusRadius=focus?.meanRadiusM/AU??0;
+  const near=Math.max(1e-12,Math.min(this.distance*.0005,focusRadius>0?focusRadius*.015:this.distance*.0005));
+  const far=Math.max(near*1e6,Math.min(100,Math.max(this.distance*1e5,focusRadius*1e5)));
+  const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
   const renderOrigin=focusState?focusState.position:sun;
   const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
@@ -392,7 +397,7 @@ export class Solar3DView{
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
    }
    const screen=projectedScreen;
-   if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
+   if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   if(vesselState?.position){

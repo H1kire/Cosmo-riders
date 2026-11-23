@@ -112,10 +112,10 @@ export function sampleSurfaceHeight(direction:[number,number,number],profile:Sur
  const weathering=clamp(profile.erosion+Math.log10(1+profile.pressurePa)/8*.12);
  const gravityScale=clamp(1.25/Math.sqrt(Math.max(.1,profile.gravityMS2)),.55,1.8);
  let height=(broad*.2+regional*.1+ridges*.1+tectonic*.14+volcanic*.1-crater)*(1-weathering*.42)*gravityScale;
- if(profile.class==='icy'||profile.class==='icy-moon'||profile.iceFraction>.62)height+=smooth(.72,.91,worley3(x*68,y*68,z*68,seed+47))*(1-profile.erosion*.55)*.018;
+ if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&profile.iceFraction>.62))height+=smooth(.72,.91,worley3(x*68,y*68,z*68,seed+47))*(1-profile.erosion*.55)*.018;
  if(profile.class==='volcanic'||profile.class==='volcanic-moon')height+=volcanic*.04;
  if(profile.class==='desert')height+=ridged3(x*17,y*17,z*17,seed+281,4)*.025;
- if(profile.class==='dense-atmosphere'&&profile.hydrocarbonFraction>.08&&profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5)
+ if(profile.class==='dense-atmosphere'&&profile.hydrocarbonFraction>.08&&profile.temperatureK>=90&&profile.temperatureK<=95&&profile.pressurePa>=1e5)height+=ridged3(x*18,y*18,z*18,seed+341,4)*.018;
  else if(profile.class==='dense-atmosphere')height+=tectonic*.035;
  if(profile.class==='airless-moon')height-=craterRim*.06;
  return height;
@@ -138,7 +138,7 @@ export function sampleSurface(direction:[number,number,number],profile:SurfaceGe
  const craterRim=smooth(.18,.28,craters)*(1-smooth(.32,.5,craters))*profile.impactAge;
  let albedo:[number,number,number]=[.3,.28,.24],roughness=.88,material:SurfaceMaterial='silicate-rock';
  let height=sampleSurfaceHeight([x,y,z],profile);
- if(profile.class==='icy'||profile.class==='icy-moon'||ice>.62){
+ if(profile.class==='icy'||profile.class==='icy-moon'||(profile.class!=='dense-atmosphere'&&ice>.62)){
   const crack=smooth(.72,.91,cells)*(1-profile.erosion*.55);
   const salt=profile.volatileFraction*.12;
   albedo=[.52+polar*.25+salt-crack*.16,.67+polar*.22+salt-crack*.13,.76+polar*.18+salt-crack*.09];

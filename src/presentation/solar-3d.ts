@@ -364,6 +364,48 @@ export class Solar3DView{
   else this.hdr.setOpticalSource([.5,.5],false);
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
  }
+ requestSurfaceMaps(profile,resolution){
+  const key=profile.seed+':'+resolution;
+  if(this.surfaceGpuTextures.has(key)||this.surfaceMapPending.has(key)||this.disposed)return;
+  this.surfaceMapPending.add(key);
+  this.surfaceMapCache.get(profile,resolution).then(maps=>{
+   this.surfaceMapPending.delete(key);if(this.disposed)return;
+   const g=this.gl,active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
+   const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
+   const upload=(data)=>{
+    const texture=g.createTexture();if(!texture)return null;
+    g.bindTexture(g.TEXTURE_CUBE_MAP,texture);
+    const faceBytes=resolution*resolution*4;
+    for(let face=0;face<6;face++)g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,g.RGBA,resolution,resolution,0,g.RGBA,g.UNSIGNED_BYTE,data.subarray(face*faceBytes,(face+1)*faceBytes));
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
+    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);g.generateMipmap(g.TEXTURE_CUBE_MAP);
+    return texture;
+   };
+   const textures=[upload(maps.albedo),upload(maps.normal),upload(maps.heightRoughness)];
+   g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);
+   if(textures.some(texture=>!texture)){for(const texture of textures)if(texture)g.deleteTexture(texture);return;}
+   const bytes=resolution*resolution*4*6*3;
+   while(this.surfaceGpuBytes+bytes>64*1024*1024&&this.surfaceGpuTextures.size){
+    let oldestKey=null,oldest=Infinity;
+    for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
+    if(oldestKey===null)break;
+    const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
+    this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
+   }
+   if(bytes<=64*1024*1024){this.surfaceGpuTextures.set(key,{textures,bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution});this.surfaceGpuBytes+=bytes;}
+   else for(const texture of textures)g.deleteTexture(texture);
+  }).catch(()=>{this.surfaceMapPending.delete(key);});
+ }
+ bindSurfaceMaps(seed,resolution,loc){
+  const g=this.gl;let entry=this.surfaceGpuTextures.get(seed+':'+resolution);
+  if(!entry){let best=0;for(const [key,value] of this.surfaceGpuTextures){if(key.startsWith(seed+':')&&value.resolution<=resolution&&value.resolution>best){best=value.resolution;entry=value;}}}
+  if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);return;}
+  entry.used=++this.surfaceTextureClock;
+  const blend=Math.max(0,Math.min(1,(performance.now()-entry.created)/450));
+  const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedNormal,loc.uGeneratedHeightRoughness];
+  for(let i=0;i<3;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
+  g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
+ }
  dispose(){
   if(this.disposed)return;
   this.disposed=true;

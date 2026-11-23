@@ -213,7 +213,7 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
  const idx=(face:number,x:number,y:number)=>(face*resolution*resolution+y*resolution+x)*4;
  const eps=1/resolution,gas=profile.class==='gas-giant'||profile.class==='ice-giant';
  for(let face=0;face<6;face++){
-  for(let y=0;y<resolution;y++)for(let x=0;x<resolution;x++){
+  for(let y=0;y<resolution;y++){for(let x=0;x<resolution;x++){
    const u=x/(resolution-1)*2-1,v=y/(resolution-1)*2-1,dir=cubeFaceDirection(face,u,v),sample=sampleSurface(dir,profile),i=idx(face,x,y);
    albedo[i]=Math.round(clamp(sample.albedo[0])*255);albedo[i+1]=Math.round(clamp(sample.albedo[1])*255);albedo[i+2]=Math.round(clamp(sample.albedo[2])*255);albedo[i+3]=255;
    height[i]=Math.round(clamp(sample.height+.5)*255);height[i+1]=0;height[i+2]=0;height[i+3]=255;

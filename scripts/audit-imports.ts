@@ -14,7 +14,7 @@ async function walk(dir:string):Promise<string[]>{
  }
  return found;
 }
-const files=await walk(root),known=new Set(files.map(resolve));
+const files=await walk(root),known=new Set(files.map(path=>resolve(path)));
 const candidates=(target:string)=>extname(target)?[target]:extensions.map(ext=>target+ext).concat(['index.ts','index.tsx','index.js','index.jsx'].map(name=>join(target,name)));
 let failures=0;
 for(const file of files){

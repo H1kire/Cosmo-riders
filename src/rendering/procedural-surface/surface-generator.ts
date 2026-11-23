@@ -220,7 +220,7 @@ export async function generateSurfaceCubeMaps(profile:SurfaceGenerationProfile,r
    roughness[i]=Math.round(clamp(sample.roughness)*255);roughness[i+1]=0;roughness[i+2]=0;roughness[i+3]=255;
    if(gas){normal[i]=Math.round((dir[0]*.5+.5)*255);normal[i+1]=Math.round((dir[1]*.5+.5)*255);normal[i+2]=Math.round((dir[2]*.5+.5)*255);normal[i+3]=255;continue;}
    const up: [number,number,number]=Math.abs(dir[1])<.9?[0,1,0]:[1,0,0];
-   const cross=(a:number[],b:number)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+   const cross=(a:[number,number,number],b:[number,number,number]):[number,number,number]=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
    const t=normalize(cross(dir,up)),b=cross(dir,t);
    const offset=(axis:[number,number,number],sign:number)=>normalize([dir[0]+axis[0]*eps*sign,dir[1]+axis[1]*eps*sign,dir[2]+axis[2]*eps*sign]);
    const du=(sampleSurfaceHeight(offset(t,1),profile)-sampleSurfaceHeight(offset(t,-1),profile))/(2*eps);

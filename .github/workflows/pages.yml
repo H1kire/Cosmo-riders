@@ -44,12 +44,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
       - id: deployment
         uses: actions/deploy-pages@v4
       - name: Check published pages and MIME types
         env:
           PAGES_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          node --version
-          curl --fail --silent --show-error --location "$PAGES_URL" --output /dev/null
-          curl --fail --silent --show-error --location "${PAGES_URL%/}/lab/" --output /dev/null
+        run: node scripts/audit-live.mjs

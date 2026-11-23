@@ -34,7 +34,7 @@ for (const file of sources) {
     if (relative === null) continue;
     const candidate = resolve(dirname(file), relative);
     if (await exists(candidate)) continue;
-    const publicCandidate = resolve(root, 'public', relative.replace(/^[/\\]+/, ''));
+    const publicCandidate = resolve(root, 'public', relative.replace(/^(?:\.\.\/)+/, '').replace(/^[/\\\\]+/, ''));
     if (await exists(publicCandidate)) continue;
     failures++;
     process.stderr.write('FAIL ' + file.slice(root.length + 1) + ' -> ' + raw + '\n');

@@ -12,8 +12,6 @@ import { createGraphicsSettings, type GraphicsSettings } from '../rendering/qual
 import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
-import { createSurfaceProfile,surfaceResolutionForProjectedRadius,surfaceProfileKey } from '../rendering/procedural-surface/surface-generator.ts';
-import { SurfaceMapCache } from '../rendering/procedural-surface/surface-map-cache.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
@@ -82,8 +80,7 @@ export class Solar3DView{
   if(!this.gl)throw Error('WebGL2 недоступен');
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
-  this.surfaceMapCache=new SurfaceMapCache(192*1024*1024);
-  this.surfaceGpuTextures=new Map();this.surfaceGpuBudgetBytes=256*1024*1024;this.anisotropyExt=g.getExtension('EXT_texture_filter_anisotropic')??g.getExtension('WEBKIT_EXT_texture_filter_anisotropic');this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.surfaceMapPending=new Set();this.surfaceUploadQueue=[];this.surfaceLodTransitions=new Map();this.surfaceGpuBytes=0;this.surfaceTextureClock=0;this.lastSurfaceGenerationMs=0;this.lastSurfaceUploadSubmissionMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
+  this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
@@ -278,8 +275,15 @@ export class Solar3DView{
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bestScore=Infinity;for(const [id,p] of this.projected){const hitRadius=Math.max(8,Math.min(72,p.projectedRadius??8));const d=Math.hypot(x-p.x,y-p.y),score=d/hitRadius;if(d<=hitRadius&&score<bestScore){bestScore=score;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best),radius=item?.[1]?.radius??1e-5;this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,radius*1.08);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
- drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.8)return;let path=this.orbitCache.get(body.id);if(!path){path=[];const eccentricity=Math.max(0,Math.min(0.95,body.orbitalElements.eccentricity??0)),segments=Math.max(512,Math.min(1024,Math.ceil(512*(1+eccentricity))));for(let i=0;i<=segments;i++){const e=body.orbitalElements,s=rotateStateToParentEquator(orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/segments},parent.mu+body.mu),body,parent);path.push(s.position);}this.orbitCache.set(body.id,path);}const data=[];for(const p of path){const absolute={x:parentState.position.x+p.x,y:parentState.position.y+p.y,z:parentState.position.z+p.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.34:.2,body.id==='earth'?.62:.32,body.id==='earth'?.94:.48,.68*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);}
- render(world,states,timeSeconds,vesselState=null){
+ drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){
+  if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;
+  const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;
+  let path=this.orbitCache.get(body.id);
+  if(!path){path=[];for(let i=0;i<=192;i++){const e=body.orbitalElements;const state=rotateStateToParentEquator(orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/192},parent.mu+body.mu),body,parent);path.push(state.position);}this.orbitCache.set(body.id,path);}
+  const data=[];for(const position of path){const absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}
+  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);g.drawArrays(g.LINE_STRIP,0,data.length/3);
+ }
+ render(world,states,timeSeconds,vesselState=null){ render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();
   if(this.focusTransition){
    const progress=Math.min(1,(performance.now()-this.focusTransition.started)/this.focusTransition.duration);
@@ -292,7 +296,6 @@ export class Solar3DView{
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
   this.hdr.begin(renderWidth,renderHeight);
-  this.processSurfaceUploads();
   const sunState=states.get('sun')??{position:{x:0,y:0,z:0}};
   const sun=sunState.position,bodies=[...world.bodies.values()];
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
@@ -341,8 +344,8 @@ export class Solar3DView{
   for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  if(focus&&focusState){const focusPosition=mapper(focus,focusState.position),focusRadius=focus.meanRadiusM/AU,focusDistance=Math.hypot(focusPosition[0]-eye[0],focusPosition[1]-eye[1],focusPosition[2]-eye[2]),focusPixels=focusRadius*(renderHeight/2)/(Math.tan(Math.PI/6)*Math.max(focusRadius,focusDistance));if(focusPixels>=8){const focusProfile=createSurfaceProfile(focus),qualityLimit={low:512,medium:1024,high:2048,ultra:2048}[this.graphics.textureQuality]??1024;this.requestSurfaceMaps(focusProfile,Math.min(qualityLimit,surfaceResolutionForProjectedRadius(focusPixels,focusProfile.class)),1000000);}}
   
+  for(const body of bodies){  
   for(const body of bodies){
    g.useProgram(this.bodyProgram);
    const state=states.get(body.id);if(!state)continue;
@@ -362,27 +365,16 @@ export class Solar3DView{
    const isStar=!body.parentId;
     const bodySunDistanceAU=Math.hypot(state.position.x-sun.x,state.position.y-sun.y,state.position.z-sun.z)/AU;
     g.uniform1f(l.uBodyExposure,isStar?1:planetaryDisplayGain(bodySunDistanceAU));
-    const surfaceProfile=isStar?null:createSurfaceProfile(body);
-    const profileKind=surfaceProfile?.class==='gas-giant'?3:surfaceProfile?.class==='ice-giant'?4:surfaceProfile?.class==='dense-atmosphere'?5:surfaceProfile?.class==='oceanic'?1:surfaceProfile?.class==='icy'||surfaceProfile?.class==='icy-moon'?5.3:surfaceProfile?.class==='volcanic'||surfaceProfile?.class==='volcanic-moon'?5.4:surfaceProfile?.class==='desert'?2.4:surfaceProfile?.class==='airless-moon'?2.2:2;
-    g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??profileKind));
-   g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
-    if(isStar){
-     g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uPreviousMapsEnabled,0);g.uniform1f(l.uSeed,0);
-     g.uniform1f(l.uWaterFraction,0);g.uniform1f(l.uIceFraction,0);g.uniform1f(l.uIronFraction,0);
-     g.uniform1f(l.uTectonicActivity,0);g.uniform1f(l.uVolcanicActivity,0);g.uniform1f(l.uErosion,0);
-    }else{
-     const qualityLimit={low:512,medium:1024,high:2048,ultra:2048}[this.graphics.textureQuality]??1024;
-     const surfaceResolution=Math.min(qualityLimit,surfaceResolutionForProjectedRadius(px,surfaceProfile!.class));
-     if(px>=4&&projectedScreen&&projectedScreen.z>=-1&&projectedScreen.z<=1&&projectedScreen.x>=-20&&projectedScreen.x<=w/dpr+20&&projectedScreen.y>=-20&&projectedScreen.y<=h/dpr+20){const centerBias=1-Math.min(1,Math.hypot(projectedScreen.x-w/(2*dpr),projectedScreen.y-h/(2*dpr))/Math.max(1,Math.hypot(w/dpr,h/dpr)*.5));const priority=(body.id===this.focusId?100000:0)+Math.min(px,10000)*10+centerBias*25;this.requestSurfaceMaps(surfaceProfile!,surfaceResolution,priority);}
-     this.bindSurfaceMaps(surfaceProfile!,surfaceResolution,l);
-     g.uniform1f(l.uSeed,surfaceProfile!.seed%16777216);
-     g.uniform1f(l.uWaterFraction,surfaceProfile!.waterFraction);
-     g.uniform1f(l.uIceFraction,surfaceProfile!.iceFraction);
-     g.uniform1f(l.uIronFraction,surfaceProfile!.ironFraction);
-     g.uniform1f(l.uTectonicActivity,surfaceProfile!.tectonicActivity);
-     g.uniform1f(l.uVolcanicActivity,surfaceProfile!.volcanicActivity);
-     g.uniform1f(l.uErosion,surfaceProfile!.erosion);
-    }
+    g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));
+    g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??2));
+    g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
+    g.uniform1f(l.uSeed,body.surfaceSeed??0);
+    g.uniform1f(l.uWaterFraction,isStar?0:(body.surface?.waterFraction??0));
+    g.uniform1f(l.uIceFraction,isStar?0:(body.surface?.iceFraction??0));
+    g.uniform1f(l.uIronFraction,isStar?0:(body.surface?.ironFraction??0));
+    g.uniform1f(l.uTectonicActivity,isStar?0:(body.surface?.tectonicActivity??0));
+    g.uniform1f(l.uVolcanicActivity,isStar?0:(body.surface?.volcanicActivity??0));
+    g.uniform1f(l.uErosion,isStar?0:(body.surface?.erosion??0));
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);
@@ -405,27 +397,14 @@ export class Solar3DView{
    if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
-  if(vesselState?.position){
-   const ship=mapper({id:'vessel',parentId:focus?.id??null},vesselState.position);
-   if(ship){
-    const mesh=this.meshes[0],shipDistance=Math.max(1e-12,Math.hypot(ship[0]-eye[0],ship[1]-eye[1],ship[2]-eye[2]));
-    const shipRadius=shipDistance*8*Math.tan(Math.PI/6)/h;
-    g.uniformMatrix4fv(l.uModel,false,new Float32Array([shipRadius,0,0,0,0,shipRadius,0,0,0,0,shipRadius,0,ship[0],ship[1],ship[2],1]));
-    g.uniform3f(l.uColor,1,.96,.82);g.uniform3f(l.uCameraPosition,...eye);g.uniform3fv(l['uLightPositions[0]'],lightPositions);g.uniform3fv(l['uLightColors[0]'],lightColors);g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
-    g.uniform1f(l.uKind,7);g.uniform1f(l.uDetail,0);g.uniform1f(l.uSeed,99);g.uniform1f(l.uUseGeneratedMaps,0);g.uniform1f(l.uPreviousMapsEnabled,0);
-    g.uniform1i(l.uOccluderCount,0);g.uniform1i(l.uShadows,0);
-    this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
-   }
-  }
-  for(const [id,p] of this.projected){
-   let node=this.labelNodes.get(id);
-   if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}
-   node.textContent=world.bodies.get(id)?.name??NAMES[id]??id;
-   node.style.transform='translate3d('+Math.round(p.x+8)+'px,'+Math.round(p.y-7)+'px,0)';
-   node.style.opacity=String(p.labelOpacity);
-  }
-  for(const [id,node] of this.labelNodes){const projected=this.projected.find(item=>item[0]===id);node.hidden=!projected||projected[1].labelOpacity<=0.005;}
-  const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
+  // Корабль временно исключён из сцены: активна только Солнечная система.
+  for(const [id,p] of this.projected){  const labelCandidates=this.projected.filter(([id,p])=>{const body=world.bodies.get(id);return Boolean(body&&(!body.parentId||(p.projectedRadius??0)>=9));}).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
+  const occupied=[] as {left:number;top:number;right:number;bottom:number}[];
+  const offsets=[[12,-13],[12,5],[-12,-13],[-12,5],[0,-23],[0,15]];
+  const visibleLabels=new Set<string>();
+  for(const [id,p] of labelCandidates){const body=world.bodies.get(id);if(!body)continue;let node=this.labelNodes.get(id);if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}node.textContent=body.name;const width=Math.max(34,body.name.length*6.4),height=14;let chosen=null;for(const [dx,dy] of offsets){const left=p.x+dx-(dx<0?width:0),top=p.y+dy,rect={left:left-4,top:top-3,right:left+width+4,bottom:top+height+3};if(rect.left<4||rect.top<4||rect.right>w/dpr-4||rect.bottom>h/dpr-4)continue;if(occupied.every(other=>rect.right<other.left||rect.left>other.right||rect.bottom<other.top||rect.top>other.bottom)){chosen=[left,top];occupied.push(rect);break;}}if(chosen){node.hidden=false;node.style.opacity='1';node.style.transform='translate3d('+Math.round(chosen[0])+'px,'+Math.round(chosen[1])+'px,0)';visibleLabels.add(id);}else node.hidden=true;}
+  for(const [id,node] of this.labelNodes)if(!visibleLabels.has(id))node.hidden=true;
+  const sunScreen=  const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
   let sunVisible=Boolean(sunScreen&&sunScreen.z>=-1&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);
   if(sunVisible){
    const observerSI={x:renderOrigin.x+eye[0]*AU,y:renderOrigin.y+eye[2]*AU,z:renderOrigin.z+eye[1]*AU};
@@ -447,126 +426,6 @@ export class Solar3DView{
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
  }
- requestSurfaceMaps(profile,resolution,priority=0){
-  const profileKey=surfaceProfileKey(profile),key=profileKey+':'+resolution;
-  if(this.surfaceGpuTextures.has(key)||this.surfaceMapPending.has(key)||this.disposed)return;
-  if(this.surfaceUploadQueue.some(job=>job.key===key))return;
-  // Спочатку показуємо базову карту, а деталізовану генеруємо паралельно з її завантаженням у GPU.
-  if(resolution>64&&!this.surfaceGpuTextures.has(profileKey+':64')){
-   this.surfaceMapPending.add(key);
-   this.surfaceMapCache.get(profile,64,priority+100).then(preview=>{
-    if(this.disposed)return null;
-    if(!this.surfaceGpuTextures.has(profileKey+':64')&&!this.surfaceUploadQueue.some(job=>job.key===profileKey+':64')){
-     this.surfaceUploadQueue.push({key:profileKey+':64',profileKey,resolution:64,maps:preview,textures:[],faceIndex:0,mipIndex:0,created:0,priority:priority+100});
-     this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
-    }
-    return this.surfaceMapCache.get(profile,resolution,priority);
-   }).then(maps=>{
-    this.surfaceMapPending.delete(key);
-    if(!maps||this.disposed||this.surfaceGpuTextures.has(key))return;
-    this.lastSurfaceGenerationMs=maps.generationMs;
-    if(!this.surfaceUploadQueue.some(job=>job.key===key)){
-     this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0,priority});
-     this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
-    }
-   }).catch(()=>this.surfaceMapPending.delete(key));
-   return;
-  }
-  this.surfaceMapPending.add(key);
-  this.surfaceMapCache.get(profile,resolution,priority).then(maps=>{
-   this.surfaceMapPending.delete(key);if(this.disposed||this.surfaceGpuTextures.has(key))return;
-   this.lastSurfaceGenerationMs=maps.generationMs;
-   this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0,priority});
-   this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));
-  }).catch(()=>this.surfaceMapPending.delete(key));
- }
- processSurfaceUploads(){
-  const uploadStarted=performance.now(),g=this.gl,job=this.surfaceUploadQueue[0];if(!job||this.disposed)return;
-  const active=g.getParameter(g.ACTIVE_TEXTURE);g.activeTexture(g.TEXTURE7);
-  const previous=g.getParameter(g.TEXTURE_BINDING_CUBE_MAP);
-  const channels=[{data:job.maps.albedo,resolution:job.maps.resolution,components:4,internalFormat:g.RGBA8,format:g.RGBA},{data:job.maps.height,resolution:job.maps.heightResolution,components:1,internalFormat:g.R8,format:g.RED},{data:job.maps.roughness,resolution:job.maps.roughnessResolution,components:1,internalFormat:g.R8,format:g.RED},{data:job.maps.normal,resolution:job.maps.normalResolution,components:3,internalFormat:g.RGB8,format:g.RGB}];
-  if(job.textures.length===0){
-   const reservedBytes=Math.ceil((job.maps.albedo.byteLength+job.maps.height.byteLength+job.maps.roughness.byteLength+job.maps.normal.byteLength)*4/3);
-   while(this.surfaceGpuBytes+reservedBytes>this.surfaceGpuBudgetBytes&&this.surfaceGpuTextures.size){
-    let oldestKey=null,oldest=Infinity;
-    for(const [candidate,entry] of this.surfaceGpuTextures)if(entry.used<oldest){oldest=entry.used;oldestKey=candidate;}
-    if(oldestKey===null)break;
-    const old=this.surfaceGpuTextures.get(oldestKey);for(const texture of old.textures)g.deleteTexture(texture);
-    this.surfaceGpuBytes-=old.bytes;this.surfaceGpuTextures.delete(oldestKey);
-   }
-   if(reservedBytes>this.surfaceGpuBudgetBytes){this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
-   job.bytes=reservedBytes;this.surfaceGpuBytes+=reservedBytes;
-   for(let i=0;i<4;i++){
-    const texture=g.createTexture();if(!texture){for(const allocated of job.textures)g.deleteTexture(allocated);this.surfaceGpuBytes-=job.bytes;this.surfaceUploadQueue.shift();g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);return;}
-    g.bindTexture(g.TEXTURE_CUBE_MAP,texture);
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_MAG_FILTER,g.LINEAR);
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);
-    g.texParameteri(g.TEXTURE_CUBE_MAP,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
-    if(this.anisotropyExt){const maxAnisotropy=Number(g.getParameter(this.anisotropyExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT))||1;g.texParameterf(g.TEXTURE_CUBE_MAP,this.anisotropyExt.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,maxAnisotropy));}
-    job.textures.push(texture);
-   }
-  }
-  let budget=2;
-  while(budget-->0&&job.faceIndex<24){
-   const textureIndex=Math.floor(job.faceIndex/6),face=job.faceIndex%6,channel=channels[textureIndex];
-   const faceBytes=channel.resolution*channel.resolution*channel.components;
-   g.bindTexture(g.TEXTURE_CUBE_MAP,job.textures[textureIndex]);
-   const data=channel.data.subarray(face*faceBytes,(face+1)*faceBytes);
-   g.texImage2D(g.TEXTURE_CUBE_MAP_POSITIVE_X+face,0,channel.internalFormat,channel.resolution,channel.resolution,0,channel.format,g.UNSIGNED_BYTE,data);
-   job.faceIndex++;
-  }
-  if(job.faceIndex===24&&job.mipIndex<4){
-   g.bindTexture(g.TEXTURE_CUBE_MAP,job.textures[job.mipIndex]);
-   g.generateMipmap(g.TEXTURE_CUBE_MAP);
-   job.mipIndex++;
-  }
-  g.bindTexture(g.TEXTURE_CUBE_MAP,previous);g.activeTexture(active);
-  job.uploadSubmissionMs=(job.uploadSubmissionMs??0)+(performance.now()-uploadStarted);
-  if(job.faceIndex===24&&job.mipIndex===4){
-   this.lastSurfaceUploadSubmissionMs=job.uploadSubmissionMs;
-   this.surfaceGpuTextures.set(job.key,{textures:job.textures,bytes:job.bytes,used:++this.surfaceTextureClock,created:performance.now(),resolution:job.resolution,profileKey:job.profileKey});
-   this.surfaceUploadQueue.shift();
-  }
- }
- bindSurfaceMaps(profile,resolution,loc){
-  const g=this.gl,profileKey=surfaceProfileKey(profile),exact=this.surfaceGpuTextures.get(profileKey+':'+resolution);
-  let entry=exact,previous=null;
-  if(!entry){
-   let bestDistance=Infinity;
-   for(const [key,value] of this.surfaceGpuTextures){
-    if(!key.startsWith(profileKey+':'))continue;
-    const distance=Math.abs(Math.log2(value.resolution/resolution));
-    if(distance<bestDistance){bestDistance=distance;entry=value;}
-   }
-  }else{
-   let bestDistance=Infinity;
-   for(const [key,value] of this.surfaceGpuTextures){
-    if(!key.startsWith(profileKey+':')||value.resolution===resolution)continue;
-    const distance=Math.abs(Math.log2(value.resolution/resolution));
-    if(distance<bestDistance){bestDistance=distance;previous=value;}
-   }
-  }
-  if(!entry){g.uniform1f(loc.uUseGeneratedMaps,0);g.uniform1f(loc.uPreviousMapsEnabled,0);return;}
-  entry.used=++this.surfaceTextureClock;
-  const now=performance.now();let transition=this.surfaceLodTransitions.get(profileKey);
-  if(!transition||transition.resolution!==resolution){transition={resolution,started:0};this.surfaceLodTransitions.set(profileKey,transition);}
-  if(!exact)transition.started=0;
-  else if(transition.started===0)transition.started=now;
-  const blend=exact?Math.max(0,Math.min(1,(now-transition.started)/450)):1;
-  const uniforms=[loc.uGeneratedAlbedo,loc.uGeneratedHeight,loc.uGeneratedRoughness,loc.uGeneratedNormal];
-  for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE4+i);g.bindTexture(g.TEXTURE_CUBE_MAP,entry.textures[i]);g.uniform1i(uniforms[i],4+i);}
-  if(previous){
-   previous.used=++this.surfaceTextureClock;
-   const previousUniforms=[loc.uPreviousAlbedo,loc.uPreviousHeight,loc.uPreviousRoughness,loc.uPreviousNormal];
-   for(let i=0;i<4;i++){g.activeTexture(g.TEXTURE8+i);g.bindTexture(g.TEXTURE_CUBE_MAP,previous.textures[i]);g.uniform1i(previousUniforms[i],8+i);}
-  }
-  g.uniform1f(loc.uPreviousMapsEnabled,previous?1:0);
-  g.uniform1f(loc.uUseGeneratedMaps,blend);g.activeTexture(g.TEXTURE0);
- }
- getSurfaceDiagnostics(){
-  return {workerEnabled:this.surfaceMapCache?.workerEnabled??false,cpuCacheBytes:this.surfaceMapCache?.memoryBytes??0,gpuTextureBytes:this.surfaceGpuBytes??0,cpuCacheEntries:this.surfaceMapCache?.size??0,pendingGenerations:this.surfaceMapPending?.size??0,queuedCpuGenerations:this.surfaceMapCache?.queuedCount??0,queuedGpuUploads:this.surfaceUploadQueue?.length??0,cachedGpuTextures:this.surfaceGpuTextures?.size??0,lodTransitions:this.surfaceLodTransitions?.size??0,lastGenerationMs:this.lastSurfaceGenerationMs??0,lastGpuSubmissionMs:this.lastSurfaceUploadSubmissionMs??0,lastFrameMs:this.lastFrameDurationMs??0,averageFrameMs:this.averageFrameDurationMs??0,cpuFrameFps:this.averageFrameDurationMs>0?1000/this.averageFrameDurationMs:0};
- }
  dispose(){
   if(this.disposed)return;
   this.disposed=true;
@@ -580,9 +439,6 @@ export class Solar3DView{
   this.labels?.remove();
   this.labelNodes?.clear();
   this.orbitCache?.clear();
-  for(const entry of this.surfaceGpuTextures?.values()??[])for(const texture of entry.textures)this.gl.deleteTexture(texture);
-  for(const job of this.surfaceUploadQueue??[])for(const texture of job.textures??[])this.gl.deleteTexture(texture);
-  this.surfaceGpuTextures?.clear();this.surfaceMapPending?.clear();this.surfaceUploadQueue?.splice(0);this.surfaceLodTransitions?.clear();this.surfaceMapCache?.dispose();this.surfaceGpuBytes=0;
   this.stellarSourceDefinitions?.clear();
  }
 }

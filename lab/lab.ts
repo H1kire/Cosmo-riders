@@ -80,7 +80,9 @@ function renderSystemNavigation(){
       button.textContent=item.parentId?item.name:(item.id==='sun'?'☼ '+item.name:'★ '+item.name);
       button.addEventListener('click',()=>{
         selectedPlanetId=item.id;
+        selectedBodyId=item.id;
         solar3D?.focusOn(item.id,world);
+        updatePlanetInformation();
         renderSystemNavigation();
       });
       nav.append(button);
@@ -90,7 +92,7 @@ function renderSystemNavigation(){
 function updatePlanetInformation(){
   const host=$('planet-info');
   if(!host||!vessel||!world)return;
-  const item=(selectedBodyId?world.bodies.get(selectedBodyId):null)??currentPrimary();
+  const item=(selectedBodyId?world.bodies.get(selectedBodyId):null)??world.bodies.get('earth')??currentPrimary();
   if(!item){host.textContent='Нет данных о выбранном небесном теле.';return;}
   const parent=item.parentId?body(item.parentId):null;
   const children=[...world.bodies.values()].filter(candidate=>candidate.parentId===item.id);
@@ -135,6 +137,7 @@ function createScenario(name) {
   // Кеплеровская пропагация аналитическая, поэтому для лабораторной сцены
   // используем шаг 60 с: это резко сокращает число одинаковых пересчётов эфемерид.
   world = createSolarSystemWorld({fixedStepSeconds:60,maxSubSteps:2000});
+  selectedBodyId='earth';selectedPlanetId='earth';
   const earth = getBody('earth'), moon = getBody('moon');
   const earthMu = body('earth').mu, moonMu = body('moon').mu;
   if (name === 'moon-approach') {
@@ -301,7 +304,7 @@ function drawFallbackSolar() {
 function drawSolar(){
   if (solar3D) {
     try {
-      solar3D.render(world, renderedBodyStates ?? world.bodyStates, world.simulationTimeSeconds, getRenderedVessel());
+      solar3D.render(world, renderedBodyStates ?? world.bodyStates, world.simulationTimeSeconds, null);
       return;
     } catch (error) {
       solar3D = null;
@@ -592,7 +595,9 @@ $('scenario').addEventListener('change',event=>{createScenario((event.target as 
 $('time-scale').addEventListener('change',event=>world.setTimeScale(Number((event.target as HTMLInputElement).value)));
 solar3D?.canvas.addEventListener('bodyselect',event=>{
   selectedBodyId=(event as CustomEvent<{id:string}>).detail?.id??null;
+  selectedPlanetId=selectedBodyId;
   updatePlanetInformation();
+  renderSystemNavigation();
 });
 $('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
 $('step-button').addEventListener('click',()=>{if(!paused){paused=true;world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}world.step();updateTelemetry();drawAll();});

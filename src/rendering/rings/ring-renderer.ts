@@ -2,7 +2,7 @@ export class RingRenderer {
  private program:WebGLProgram;
  private buffer:WebGLBuffer;
  private count:number;
- private locations:Record<string,WebGLUniformLocation|null>;
+ private locations:{uViewProjection:WebGLUniformLocation|null;uModel:WebGLUniformLocation|null;uColor:WebGLUniformLocation|null;uInnerRatio:WebGLUniformLocation|null;uOpacity:WebGLUniformLocation|null};
  constructor(private gl:WebGL2RenderingContext,segments=768){
   const vertex=`#version 300 es
   precision highp float;
@@ -33,7 +33,7 @@ export class RingRenderer {
   gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);gl.deleteShader(vs);gl.deleteShader(fs);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS)){const error=gl.getProgramInfoLog(program);gl.deleteProgram(program);throw Error('Ring program link failed: '+error);}
   this.program=program;
-  this.locations={aPosition:gl.getAttribLocation(program,'aPosition') as unknown as WebGLUniformLocation,uViewProjection:gl.getUniformLocation(program,'uViewProjection'),uModel:gl.getUniformLocation(program,'uModel'),uColor:gl.getUniformLocation(program,'uColor'),uInnerRatio:gl.getUniformLocation(program,'uInnerRatio'),uOpacity:gl.getUniformLocation(program,'uOpacity')};
+  this.locations={uViewProjection:gl.getUniformLocation(program,'uViewProjection'),uModel:gl.getUniformLocation(program,'uModel'),uColor:gl.getUniformLocation(program,'uColor'),uInnerRatio:gl.getUniformLocation(program,'uInnerRatio'),uOpacity:gl.getUniformLocation(program,'uOpacity')};
   const vertices=new Float32Array((segments+1)*2*3);let offset=0;
   for(let i=0;i<=segments;i++){const angle=i/segments*Math.PI*2,c=Math.cos(angle),s=Math.sin(angle);vertices[offset++]=c*.55;vertices[offset++]=0;vertices[offset++]=s*.55;vertices[offset++]=c;vertices[offset++]=0;vertices[offset++]=s;}
   const buffer=gl.createBuffer();if(!buffer)throw Error('Ring geometry allocation failed');this.buffer=buffer;this.count=(segments+1)*2;

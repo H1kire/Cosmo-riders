@@ -6,6 +6,7 @@ export * from './orbital-elements.ts';
 export * from './orbital-state.ts';
 export * from './celestial-body.ts';
 export * from './physics-world.ts';
+export * from './orbital-frame.ts';
 export * from './solar-system.ts';
 export * from './propulsion.ts';
 export * from './maneuvers.ts';

@@ -33,7 +33,7 @@ export class Solar3DView{
   const g=this.gl;
   this.graphics=createGraphicsSettings('high');
   this.shaderLibrary=createDefaultShaderLibrary();
-  this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height));
+  this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
   this.graphicsChangeHandler=(event:Event)=>{
     const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{};
@@ -62,6 +62,7 @@ export class Solar3DView{
  }
  applyGraphicsSettings(settings){
   this.hdr.setHDREnabled(settings.hdr);
+  this.hdr.setMultisampleSamples(settings.msaaSamples);
   const h=this.hdr.settings;
   h.bloom=settings.bloom;h.bloomThreshold=settings.bloomThreshold;h.bloomStrength=settings.bloomStrength;
   h.bloomIterations=settings.bloomIterations;h.glare=settings.glare;h.glareStrength=settings.glareStrength;

@@ -398,6 +398,7 @@ export class Solar3DView{
    }).then(maps=>{
     this.surfaceMapPending.delete(key);
     if(!maps||this.disposed||this.surfaceGpuTextures.has(key))return;
+    this.lastSurfaceGenerationMs=maps.generationMs;
     if(!this.surfaceUploadQueue.some(job=>job.key===key)){
      this.surfaceUploadQueue.push({key,profileKey,resolution,maps,textures:[],faceIndex:0,mipIndex:0,created:0,priority});
      this.surfaceUploadQueue.sort((a,b)=>(b.priority??0)-(a.priority??0));

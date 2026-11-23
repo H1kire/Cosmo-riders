@@ -25,7 +25,7 @@ export class SurfaceMapCache {
     else this.fail(task,new Error(event.data.error??'Surface worker failed.'));
    };
    worker.onerror=()=>{
-    this.workerFailed=true;this.worker?.terminate();this.worker=null;
+    this.workerFailed=true;this.worker?.terminate();this.worker=null;this.requests.clear();
     const active=this.activeTask;
     if(active)this.fail(active,new Error('Surface worker crashed.'));
    };

@@ -36,7 +36,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const known = new Set(files.map(file => resolve(file)));
     for (const file of files) {
       const source = await readFile(file, 'utf8');
-      for (const match of source.matchAll(/(?:from\s*|import\s*)["'](\.{1,2}\/[^"']+)["']/g)) {
+      for (const match of source.matchAll(/^\s*import\s+(?:[^;\n]*?\s+from\s*)?["'](\.{1,2}\/[^"']+)["']/gm)) {
         const target = resolve(dirname(file), match[1]);
         const candidates = /\.[cm]?tsx?$/.test(target) ? [target] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
         if (!candidates.some(candidate => known.has(resolve(candidate)))) throw new Error('Unresolved import in ' + file.replace(root.pathname, '') + ': ' + match[1]);
@@ -78,7 +78,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const hdr = await readFile(new URL('../src/rendering/core/hdr-pipeline.ts', import.meta.url), 'utf8');
     if (!hdr.includes('EXT_color_buffer_float') || !hdr.includes('RGBA16F') || !hdr.includes('HALF_FLOAT')) throw new Error('HDR pipeline must allocate floating-point RGBA16F render targets when supported.');
     if (!hdr.includes('const BRIGHT') || !hdr.includes('const BLUR') || !hdr.includes('const COMPOSITE') || !hdr.includes('uBloomStrength') || !hdr.includes('aces(')) throw new Error('HDR pipeline must execute bright extraction, blur and tone-mapped composite passes.');
-    if (!source.includes('mapPosition(p){return[p.x/AU,p.z/AU,p.y/AU];}') || !source.includes('const renderOrigin=focusState?focusState.position:sun;') || !source.includes('x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z') || !source.includes('this.target=this.focusOffset.slice();') || !source.includes('radius=body.meanRadiusM/AU')) throw new Error('Solar renderer must use true AU distances and physical radii with a high-precision camera-relative origin.');
+    if (!source.includes('mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}') || !source.includes('const renderOrigin=focusState?focusState.position:sun;') || !source.includes('x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z') || !source.includes('this.target=this.focusOffset.slice();') || !source.includes('radius=body.meanRadiusM/AU')) throw new Error('Solar renderer must use true AU distances and physical radii with a high-precision camera-relative origin.');
     if (!source.includes('Math.max(radius,viewDistance)')) throw new Error('Projected LOD radius must use physical camera distance without a fixed-distance clamp.');
     if (!source.includes('far=100,near=Math.max(1e-10,this.distance*.001)')) throw new Error('Focused planetary views must retain the full 100 AU scene range while keeping the near plane proportional to camera distance.');
     if (source.includes('r=.045') || !source.includes('shipDistance*8*Math.tan(Math.PI/6)/h')) throw new Error('Vessel marker must use a camera-distance-scaled screen-space radius, never a fixed AU-sized sphere.');

@@ -37,6 +37,8 @@ test('known bodies receive distinct physical surface classes and chemistry',()=>
  assert.ok(profiles.mercury.metalFraction>profiles.moon.metalFraction);
  assert.ok(profiles.io.sulfurFraction>profiles.mars.sulfurFraction);
  assert.ok(profiles.titan.hydrocarbonFraction>0);
+ assert.equal(profiles.earth.mineralFlags.ironOxides,true);assert.equal(profiles.io.mineralFlags.sulfides,true);
+ assert.equal(profiles.titan.mineralFlags.organics,true);assert.equal(profiles.mercury.mineralFlags.carbon,true);
  const gasExoplanet=createSurfaceProfile({id:'exoplanet-gas',massKg:1e27,meanRadiusM:7e7});
  const iceExoplanet=createSurfaceProfile({id:'exoplanet-ice',massKg:1e26,meanRadiusM:2.5e7});
  assert.equal(gasExoplanet.class,'gas-giant');assert.equal(iceExoplanet.class,'ice-giant');

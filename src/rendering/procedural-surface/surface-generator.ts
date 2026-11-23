@@ -70,7 +70,7 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
  const broad=fbm3(flow[0]*2,flow[1],flow[2]*2,seed+211,6);
  const cloud=fbm3(x*14,y*36,z*14,seed+307,5);
  const turbulence=ridged3(x*11,y*22,z*11,seed+401,5);
- const rotation=p.rotationFactor;
+ const rotation=p.rotationFactor,thermal=smooth(70,350,p.temperatureK);
  const bandWave=Math.sin((y* (p.class==='ice-giant'?34:58+rotation*28) + broad*.09)*Math.PI*2);
  const belt=smooth(-.28,.38,bandWave+ (broad-.5)*.5);
  const jet=fbm3(x*22,y*8,z*22,seed+503,4);
@@ -93,16 +93,16 @@ function atmosphereSample(x:number,y:number,z:number,p:SurfaceGenerationProfile)
   base=[.035+belt*.08+cloud*.04,.12+belt*.2+cloud*.08,.36+belt*.32+cloud*.1];
   base=[base[0]+storm*.28,base[1]+storm*.26,base[2]+storm*.22];
  } else if(p.class==='ice-giant') {
-  const methaneHaze=clamp(p.hydrocarbonFraction*.8+p.volatileFraction*.12);
-  base=[.12+belt*.12+cloud*.07,.36+belt*.22+cloud*.09,.52+belt*.22+cloud*.1];
+  const methaneHaze=clamp(p.hydrocarbonFraction*.8+p.volatileFraction*.12+smooth(70,140,p.temperatureK)*.12);
+  base=[.12+belt*.12+cloud*.07+thermal*.025,.36+belt*.22+cloud*.09+thermal*.02,.52+belt*.22+cloud*.1+thermal*.015];
   base=[base[0]*(1-methaneHaze*.16)+storm*.12,base[1]*(1-methaneHaze*.08)+storm*.16,base[2]+storm*.18];
  } else {
   const methane=p.hydrocarbonFraction;
-  base=[.25+belt*.32+cloud*.18,.2+belt*.24+cloud*.13,.12+belt*.12+cloud*.08];
+  base=[.25+belt*.32+cloud*.18+thermal*.08,.2+belt*.24+cloud*.13+thermal*.045,.12+belt*.12+cloud*.08+thermal*.025];
   base=[base[0]*(1-methane*.25),base[1]*(1-methane*.2),base[2]*(1-methane*.1)];
  }
  const polar=smooth(.72,.98,Math.abs(lat));
- const haze=clamp(p.volatileFraction*.25+p.pressurePa/1e7*.15);
+ const haze=clamp(p.volatileFraction*.25+p.pressurePa/1e7*.15+thermal*.08);
  base=base.map((v,i)=>v*(1-haze*.12)+polar*(i===0?.12:.16)) as [number,number,number];
  return {height:0,albedo:base,roughness:clamp(.72-cloud*.18,.35,.9),material:'cloud'};
 }

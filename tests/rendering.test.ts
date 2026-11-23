@@ -145,7 +145,7 @@ test('solar lighting system preserves the primary star and supports additional p
  assert.equal(lighting.getSources().length,2);
 });
 
-import { selectMeshLod, planetaryOrbitOpacity } from '../src/rendering/quality/render-lod.ts';
+import { selectMeshLod, planetaryOrbitOpacity, projectedOrbitRadius } from '../src/rendering/quality/render-lod.ts';
 
 test('screen-space mesh LOD increases detail only when projected size requires it',()=>{
  assert.equal(selectMeshLod(8,3),0);
@@ -162,4 +162,12 @@ test('heliocentric orbit fade is smooth and leaves satellite orbit policy indepe
  assert.ok(planetaryOrbitOpacity(radius*1000,radius)>0);
  assert.equal(planetaryOrbitOpacity(radius*2400,radius),1);
  assert.equal(planetaryOrbitOpacity(1,0),1);
+});
+
+test('sub-pixel orbit paths can be culled before GPU buffer upload',()=>{
+ const distant=projectedOrbitRadius(0.0026,1080,38);
+ const local=projectedOrbitRadius(0.0026,1080,0.00001);
+ assert.ok(distant<0.8);
+ assert.ok(local>100);
+ assert.equal(projectedOrbitRadius(0,1080,1),0);
 });

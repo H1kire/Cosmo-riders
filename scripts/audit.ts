@@ -164,7 +164,7 @@ const checks: Array<[string, () => Promise<void>]> = [
       if(!page.includes('class="loading-screen is-hidden"')||!page.includes('id="loading-progress"'))throw new Error(name+' page must keep the existing loading screen hidden until entry.');
       if(!page.includes('id="graphics-diagnostics"'))throw new Error(name+' page is missing live graphics diagnostics.');
     }
-    if(!main.includes("startButton.addEventListener('click'")||!main.includes("loading.show()")||!main.includes("await import('./lab.ts')"))throw new Error('Start action must reveal LoadingScreen before the existing dynamic application import.');
+    if(!/startButton\.addEventListener\('click',\(\)=>\{[\s\S]*?loading\.show\(\);[\s\S]*?void startApplication\(\);/.test(main)||!/async function startApplication\(\):Promise<void>\{[\s\S]*?await loading\.nextFrame\(\);[\s\S]*?await import\('\.\/lab\.ts'\)/.test(main))throw new Error('Start action must reveal LoadingScreen before invoking the bootstrap that dynamically imports the application.');
     if(!loader.includes("this.root?.classList.remove('is-hidden','is-ready')")||!loader.includes("this.root?.classList.add('is-hidden')"))throw new Error('LoadingScreen must retain explicit show and ready transitions.');
     if(!rootPage.includes('src="./lab/main.ts"')||!labPage.includes('src="./main.ts"'))throw new Error('Published entry-point module paths are inconsistent.');
   }],

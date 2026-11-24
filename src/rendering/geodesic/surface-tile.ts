@@ -157,8 +157,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const slopeV=(sampleDirection(plusV).height-sampleDirection(minusV).height)/(2*angularStep);
    const surfaceNormal=normalize3([
     direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
-    direction[1]-tangentU[1]*(slopeU/radiusScale)-tangentV[1]*(slopeV/radiusScale),
-    direction[2]-tangentU[2]*(slopeU/radiusScale)-tangentV[2]*(slopeV/radiusScale)
+    direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,
+    direction[2]-tangentU[2]*slopeU-tangentV[2]*slopeV
    ]);
    albedo.set([Math.round(clamp(sample.color[0])*255),Math.round(clamp(sample.color[1])*255),Math.round(clamp(sample.color[2])*255),255],index*4);
    normal.set(surfaceNormal.map(value=>Math.round((value*.5+.5)*255)),index*3);

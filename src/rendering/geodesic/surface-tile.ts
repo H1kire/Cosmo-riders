@@ -98,7 +98,23 @@ function atmosphereSample(d:Vec3,p:SurfaceProfile):{color:[number,number,number]
 }
 export function surfaceTileKey(request:SurfaceTileRequest):string{
  const p=request.profile,t=request.tile;
- return [request.planetId,request.seed,p.algorithmVersion,t.face,t.path||'root',request.resolution,request.gutter??2].join('|');
+ // Канонічний порядок полів робить ключ стабільним і враховує всі параметри генерації.
+ // JSON-структура використовується без lossy-хешування: різні профілі не зливаються в один ключ.
+ return JSON.stringify({
+  planetId:request.planetId,
+  requestSeed:request.seed,
+  profile:{
+   bodyId:p.bodyId,seed:p.seed,kind:p.kind,massKg:p.massKg,meanRadiusM:p.meanRadiusM,
+   gravityMS2:p.gravityMS2,temperatureK:p.temperatureK,pressurePa:p.pressurePa,
+   waterFraction:p.waterFraction,iceFraction:p.iceFraction,ironFraction:p.ironFraction,
+   silicateFraction:p.silicateFraction,volatileFraction:p.volatileFraction,sulfurFraction:p.sulfurFraction,
+   tectonicActivity:p.tectonicActivity,volcanicActivity:p.volcanicActivity,erosion:p.erosion,
+   age:p.age,rotationPeriodSeconds:p.rotationPeriodSeconds,algorithmVersion:p.algorithmVersion
+  },
+  tile:{face:t.face,path:t.path,level:t.level},
+  resolution:request.resolution,
+  gutter:request.gutter??2
+ });
 }
 export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const started=performanceNow(),{tile,resolution,profile}=request,gutter=request.gutter??2;

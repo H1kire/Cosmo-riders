@@ -359,7 +359,7 @@ export class Solar3DView{
    this.gl.bufferData(this.gl.ARRAY_BUFFER,path,this.gl.STATIC_DRAW);
   }
   const model=this.orbitModelMatrix;model.fill(0);
-  model[0]=1;model[6]=1;model[9]=1;
+  model[0]=1;model[5]=1;model[10]=1;
   model[12]=(parentState.position.x-renderOrigin.x)/AU;
   model[13]=(parentState.position.z-renderOrigin.z)/AU;
   model[14]=(parentState.position.y-renderOrigin.y)/AU;model[15]=1;

@@ -29,6 +29,8 @@ test('loading progress is driven by completed named stages, not a timer counter'
   readFile(file('..','docs','LOADING_SYSTEM.md'),'utf8')
  ]);
  assert.ok(loader.includes('this.completed.add(id)'));
+  assert.ok(loader.includes("this.completed.add('first-frame')"));
+  assert.ok(!loader.includes('new Set(STAGES.map'));
  assert.ok(loader.includes('STAGES.reduce'));
  assert.ok(loader.includes("id==='application'||id==='surface'||id==='gpu'"));
  for(const stage of ['webgl','solar-system','renderer','surface','gpu'])assert.ok(loader.includes("id:'"+stage+"'"));

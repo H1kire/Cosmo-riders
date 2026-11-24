@@ -367,7 +367,7 @@ test('GPU page cache accounts thirteen bytes per texel and checks uploads before
  const cache=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
  const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
  assert.ok(cache.includes('this.pageSize*this.pageSize*13'));
- for(const format of ['gl.RGBA8','gl.RGB8','gl.R32F','gl.R8'])assert.ok(cache.includes(format));
+ for(const format of ['g.RGBA8','g.RGB8','g.R32F','g.R8'])assert.ok(cache.includes(format));
  assert.ok(cache.includes('g.UNPACK_ALIGNMENT,1'));
  assert.ok(cache.includes('g.getError()'));
  assert.ok(renderer.indexOf('this.gpu.upload(page.data)')<renderer.indexOf('this.manager.markGpuReady(key)'));

@@ -8,7 +8,7 @@ interface CpuEntry { tile:SurfaceTileData; bytes:number; used:number; }
 /** Керує станами тайлів та обмеженим CPU LRU-кешем. */
 export class VirtualSurfaceManager {
  private readonly pool:SurfaceTileWorkerPool;
- private readonly ownsPool:boolean;
+ private ownsPool:boolean;
  private readonly abortController=new AbortController();
  private disposed=false;
  private readonly cpu=new Map<string,CpuEntry>();
@@ -67,6 +67,7 @@ export class VirtualSurfaceManager {
  getCached(key:string):SurfaceTileData|undefined{const entry=this.cpu.get(key);if(entry)entry.used=++this.clock;return entry?.tile;}
  evict(key:string):void{const entry=this.cpu.get(key);if(entry){this.bytes-=entry.bytes;this.cpu.delete(key);}const state=this.statuses.get(key);if(state&&state.state!=='Visible')state.state='Evicted';}
  dispose():void{if(this.disposed)return;this.disposed=true;this.abortController.abort();if(this.ownsPool)this.pool.dispose();this.cpu.clear();this.statuses.clear();this.bytes=0;}
+ releasePoolOwnership():void{this.ownsPool=false;}
  get workerPool():SurfaceTileWorkerPool{return this.pool;}
  get memoryBytes():number{return this.bytes;}
  get cacheSize():number{return this.cpu.size;}

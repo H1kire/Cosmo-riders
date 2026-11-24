@@ -108,14 +108,10 @@ export class GeodesicPlanetRenderer {
     const page:Page={request,mesh:gpuMesh,pending:true};
     this.pages.set(tile.id.key,page);
     const accept=(data:SurfaceTileData)=>{if(this.disposed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
-    const reject=(error:unknown)=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;if(!this.disposed&&(page.retryCount??0)<1){page.retryCount=(page.retryCount??0)+1;page.pending=true;void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.lastError=page.error;this.generationErrors++;});}};
+    const reject=(error:unknown)=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;if(!this.disposed&&!this.failed&&(page.retryCount??0)<1){page.retryCount=(page.retryCount??0)+1;page.pending=true;void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.generationErrors++;this.failRenderer(retryError);});}else if(!this.disposed&&!this.failed)this.failRenderer(error);};
     void this.manager.request(request,100).then(accept,reject);
    }
-  }catch(error){
-   this.failed=true;this.generationErrors++;this.manager.dispose();
-   for(const page of this.pages.values())for(const buffer of [page.mesh.position,page.mesh.uv,page.mesh.index])this.gl.deleteBuffer(buffer);
-   this.pages.clear();throw error;
-  }
+  }catch(error){this.generationErrors++;this.failRenderer(error);throw error;}
  }
 
  private createMesh(directions:Float32Array,uv:Float32Array,indices:Uint32Array):GpuMesh{
@@ -123,6 +119,11 @@ export class GeodesicPlanetRenderer {
   const buffer=(target:number,data:BufferSource):WebGLBuffer=>{const value=gl.createBuffer();if(!value)throw new Error('Unable to allocate geodesic mesh buffer.');created.push(value);gl.bindBuffer(target,value);gl.bufferData(target,data,gl.STATIC_DRAW);return value;};
   try{return{position:buffer(gl.ARRAY_BUFFER,directions),uv:buffer(gl.ARRAY_BUFFER,uv),index:buffer(gl.ELEMENT_ARRAY_BUFFER,indices),count:indices.length};}
   catch(error){for(const item of created)gl.deleteBuffer(item);throw error;}
+ }
+
+ private failRenderer(error:unknown):void{
+  this.failed=true;this.lastError=error instanceof Error?error.message:String(error);
+  this.manager.dispose();this.disposeGpuOnly();
  }
 
  private upload(page:Page):boolean{
@@ -145,7 +146,7 @@ export class GeodesicPlanetRenderer {
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
   const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0;this.lastPinnedPages=0;
   for(const page of this.pages.values()){
-   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){this.upload(page);uploadsThisFrame++;}
+   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){uploadsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
    const layer=this.gpu.getLayer(page.data?.key??'');
    if(layer!==undefined){page.layer=layer;visible.push(page);}
   }
@@ -186,7 +187,7 @@ export class GeodesicPlanetRenderer {
    gl.disable(gl.CULL_FACE);
    return true;
   }catch(error){this.generationErrors++;this.failed=true;this.lastError=error instanceof Error?error.message:String(error);return false;}
-  finally{this.lastPinnedPages=pinned.length;for(const key of pinned){this.gpu?.unpin(key);this.manager.markVisible(key,false);}gl.disable(gl.CULL_FACE);}
+  finally{this.lastPinnedPages=pinned.length;for(const key of pinned){this.gpu?.unpin(key);if(!this.failed)this.manager.markVisible(key,false);}if(this.failed){this.manager.dispose();this.disposeGpuOnly();}gl.disable(gl.CULL_FACE);}
  }
 
  private disposeGpuOnly():void{

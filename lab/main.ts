@@ -18,9 +18,14 @@ async function startApplication():Promise<void>{
     await import('./lab.ts');
     loading.complete('application');
     loading.stage('first-frame');
-    // RAF симуляції був зареєстрований під час ініціалізації lab.ts.
-    await loading.nextFrame();
-    loading.complete('first-frame');
+    // Чекаємо саме на перший успішно відмальований кадр, а не просто на таймер RAF.
+    await new Promise<void>(resolve=>{
+      const onFirstFrame=(event:Event)=>{
+        const detail=(event as CustomEvent<{id?:string;complete?:boolean}>).detail;
+        if(detail?.id==='first-frame'&&detail.complete){window.removeEventListener('cosmo-loading-stage',onFirstFrame);resolve();}
+      };
+      window.addEventListener('cosmo-loading-stage',onFirstFrame);
+    });
     loading.ready();
   }catch(error){
     console.error('Cosmo-riders bootstrap failed:',error);

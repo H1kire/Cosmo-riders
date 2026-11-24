@@ -35,7 +35,7 @@ test('triangular direction grid allocates every generated vertex including its g
  const tile=baseGeoTiles()[0],resolution=32,gutter=3;
  const directions=buildTileDirections(tile,resolution,gutter);
  const side=resolution+2*gutter;
- const expected=(side+1)*(side+2)/2*3;
+ const expected=tileDirectionVertexCount(resolution,gutter)*3;
  assert.equal(directions.length,expected);
  for(let i=0;i<directions.length;i+=3){
   const length=Math.hypot(directions[i],directions[i+1],directions[i+2]);

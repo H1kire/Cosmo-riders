@@ -1,7 +1,8 @@
 import { LoadingScreen } from './loading-screen.ts';
 
 const loading = new LoadingScreen();
-loading.show();
+const startScreen = document.getElementById('start-screen');
+const startButton = document.getElementById('start-simulation') as HTMLButtonElement|null;
 
 async function startApplication():Promise<void>{
   // Даємо браузеру намалювати екран до імпорту великих модулів симуляції.
@@ -21,4 +22,16 @@ async function startApplication():Promise<void>{
     loading.fail(error);
   }
 }
-void startApplication();
+
+if(startScreen&&startButton){
+  startButton.addEventListener('click',()=>{
+    if(startButton.disabled)return;
+    startButton.disabled=true;
+    startScreen.classList.add('is-hidden');
+    startScreen.setAttribute('aria-hidden','true');
+    loading.show();
+    void startApplication();
+  });
+}else{
+  console.error('Cosmo-riders start screen is incomplete: expected #start-screen and #start-simulation.');
+}

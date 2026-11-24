@@ -140,7 +140,7 @@ export class SurfaceTileWorkerPool {
   if(existing){
    existing.priority=Math.max(existing.priority,priority);
    this.pump();
-   return this.subscribe(existing,signal);
+   return this.subscribe(existing,signal) as Promise<SurfaceTileData>;
   }
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
   const task:Task={id:++this.sequence,key,payload:{kind:'tile',request},priority,order:this.sequence,subscribers:new Set(),cancelled:false};

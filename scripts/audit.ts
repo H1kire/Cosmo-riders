@@ -188,7 +188,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const qualitySettings=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
     if(!qualitySettings.includes('ultra:{pageResolution:160,meshResolution:64')||qualitySettings.includes('meshResolution:96'))throw new Error('Every graphics preset must stay within the stitcher resolution contract.');
     if(planetaryLabelOpacity(1000,10)!==planetaryOrbitOpacity(1000,10)||!solar.includes('node.style.opacity=String(labelOpacity)')||solar.includes('projectedFade'))throw new Error('Planet labels and orbit lines must share one smooth fade without a projected-radius cutoff.');
-    if(!renderer.includes('private failRenderer(error:unknown)')||!renderer.includes('this.lastPinnedPages=pinned.length')||!renderer.includes('retryCount')||!workers.includes('rejectQueuedWithoutWorkers'))throw new Error('Geodesic failures must retry a worker once, release GPU resources, and preserve accurate pin diagnostics.');
+    if(!renderer.includes('private failRenderer(error:unknown,taskKind=')||!renderer.includes('firstFailureValue')||!renderer.includes('failureTaskKindValue')||!renderer.includes('this.lastPinnedPages=pinned.length')||!renderer.includes('scheduleWorkerTasks()')||!workers.includes('rejectQueuedWithoutWorkers')||!workers.includes("reply?.type==='ready'")||workers.includes('this.spawn();this.pump()'))throw new Error('Geodesic failures must preserve the first task error, throttle startup work and avoid worker respawn loops.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

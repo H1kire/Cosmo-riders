@@ -1,5 +1,5 @@
 import { baseGeoTiles } from './icosphere.ts';
-import { buildGeodesicTileMesh } from './tile-mesh.ts';
+import type { GeodesicTileMesh } from './tile-mesh.ts';
 import { VirtualSurfaceManager, SurfaceGpuPageCache } from './virtual-surface-manager.ts';
 import type { SurfaceProfile, SurfaceTileRequest, SurfaceTileData } from './surface-tile.ts';
 import { GEODESIC_VERTEX_SHADER, GEODESIC_FRAGMENT_SHADER } from '../shaders/geodesic-planet.ts';
@@ -22,7 +22,7 @@ export interface GeodesicPlanetFrame {
  readonly shadowsEnabled:boolean;
 }
 interface GpuMesh { readonly position:WebGLBuffer; readonly uv:WebGLBuffer; readonly index:WebGLBuffer; readonly count:number; }
-interface Page { readonly request:SurfaceTileRequest; readonly mesh:GpuMesh; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; retryCount?:number; }
+interface Page { readonly request:SurfaceTileRequest; mesh:GpuMesh|null; meshData?:GeodesicTileMesh; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; retryCount?:number; }
 
 /** GPU renderer for the twenty root faces of one procedural geodesic planet. */
 export class GeodesicPlanetRenderer {
@@ -100,18 +100,24 @@ export class GeodesicPlanetRenderer {
   if(this.profile){if(JSON.stringify(this.profile)===JSON.stringify(profile))return;throw new Error('Geodesic renderer profile is immutable after page requests begin.');}
   this.profile=Object.freeze({...profile});
   this.ready=false;
-  try{
-   for(const tile of baseGeoTiles()){
-    const request:SurfaceTileRequest={planetId:profile.bodyId,seed:profile.seed,tile:tile.id,resolution:this.resolution,gutter:this.gutter,profile:this.profile};
-    const mesh=buildGeodesicTileMesh(tile,this.meshResolution,profile.meanRadiusM);
-    const gpuMesh=this.createMesh(mesh.directions,mesh.textureCoordinates,mesh.indices);
-    const page:Page={request,mesh:gpuMesh,pending:true};
-    this.pages.set(tile.id.key,page);
-    const accept=(data:SurfaceTileData)=>{if(this.disposed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
-    const reject=(error:unknown)=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;if(!this.disposed&&!this.failed&&(page.retryCount??0)<1){page.retryCount=(page.retryCount??0)+1;page.pending=true;void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.generationErrors++;this.failRenderer(retryError);});}else if(!this.disposed&&!this.failed)this.failRenderer(error);};
-    void this.manager.request(request,100).then(accept,reject);
-   }
-  }catch(error){this.generationErrors++;this.failRenderer(error);}
+  for(const tile of baseGeoTiles()){
+   const request:SurfaceTileRequest={planetId:profile.bodyId,seed:profile.seed,tile:tile.id,resolution:this.resolution,gutter:this.gutter,profile:this.profile};
+   const page:Page={request,mesh:null,pending:true};
+   this.pages.set(tile.id.key,page);
+   void this.manager.requestMesh(tile,this.meshResolution,profile.meanRadiusM,120).then(mesh=>{
+    if(this.disposed||this.failed)return;
+    page.meshData=mesh;
+   },error=>{if(!this.disposed)this.failRenderer(error);});
+   const accept=(data:SurfaceTileData)=>{if(this.disposed||this.failed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
+   const reject=(error:unknown)=>{
+    page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;
+    if(!this.disposed&&!this.failed&&(page.retryCount??0)<1){
+     page.retryCount=(page.retryCount??0)+1;page.pending=true;
+     void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.generationErrors++;this.failRenderer(retryError);});
+    }else if(!this.disposed&&!this.failed)this.failRenderer(error);
+   };
+   void this.manager.request(request,100).then(accept,reject);
+  }
  }
 
  private createMesh(directions:Float32Array,uv:Float32Array,indices:Uint32Array):GpuMesh{
@@ -144,11 +150,13 @@ export class GeodesicPlanetRenderer {
 
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
-  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0;this.lastPinnedPages=0;
+  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0,meshBuildsThisFrame=0;this.lastPinnedPages=0;
   for(const page of this.pages.values()){
+   if(!page.mesh&&page.meshData&&meshBuildsThisFrame<this.maxUploadsPerFrame){meshBuildsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
+   if(!page.mesh)continue;
    if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){uploadsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
    const layer=this.gpu.getLayer(page.data?.key??'');
-   if(layer!==undefined){page.layer=layer;visible.push(page);}
+   if(layer!==undefined&&page.mesh){page.layer=layer;visible.push(page);}
   }
   this.ready=visible.length===20&&[...this.pages.values()].every(page=>page.layer!==undefined&&!page.error);
   if(!this.ready)return false;
@@ -191,7 +199,7 @@ export class GeodesicPlanetRenderer {
  }
 
  private disposeGpuOnly():void{
-  for(const page of this.pages.values())for(const buffer of [page.mesh.position,page.mesh.uv,page.mesh.index])this.gl.deleteBuffer(buffer);
+  for(const page of this.pages.values())if(page.mesh)for(const buffer of [page.mesh.position,page.mesh.uv,page.mesh.index])this.gl.deleteBuffer(buffer);
   this.pages.clear();this.gpu?.dispose();this.gpu=null;this.lastPinnedPages=0;
   if(this.program)this.gl.deleteProgram(this.program);this.program=null;
  }

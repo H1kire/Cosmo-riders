@@ -151,13 +151,14 @@ test('screen-space mesh LOD increases detail only when projected size requires i
  assert.equal(selectMeshLod(900,1),1);
 });
 
-test('heliocentric orbit fade is smooth and leaves satellite orbit policy independent',()=>{
+test('each planetary and satellite orbit can use the same smooth body-distance fade as its label',()=>{
  const radius=6371000/149597870700;
  assert.equal(planetaryOrbitOpacity(radius*20,radius),0);
  assert.equal(planetaryOrbitOpacity(radius*120,radius),0);
  assert.ok(planetaryOrbitOpacity(radius*1000,radius)>0);
  assert.equal(planetaryOrbitOpacity(radius*2400,radius),1);
  assert.equal(planetaryOrbitOpacity(1,0),1);
+ assert.equal(planetaryLabelOpacity(radius*1000,radius),planetaryOrbitOpacity(radius*1000,radius));
 });
 
 test('projected orbit radius provides a continuous sub-pixel fade input',()=>{

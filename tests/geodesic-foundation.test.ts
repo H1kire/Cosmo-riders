@@ -7,6 +7,7 @@ import { findTileNeighbors } from '../src/rendering/geodesic/tile-neighbors.ts';
 import { balanceGeodesicTiles } from '../src/rendering/geodesic/quadtree-balancer.ts';
 import { selectGeodesicLod } from '../src/rendering/geodesic/quadtree-selector.ts';
 import { buildStitchIndexTemplate, triangleGridVertexIndex } from '../src/rendering/geodesic/tile-stitching.ts';
+import { buildGeodesicTileMesh } from '../src/rendering/geodesic/tile-mesh.ts';
 
 const profile:SurfaceProfile={
  bodyId:'earth',seed:12345,kind:'oceanic',massKg:5.9722e24,meanRadiusM:6371000,gravityMS2:9.81,
@@ -161,6 +162,27 @@ test('all eight stitching masks produce valid positively wound triangles without
    if(mask&bit)assert.equal(value%2,0);
   }
   assert.ok([...edgeCounts.values()].every(count=>count===1||count===2));
+ }
+});
+
+test('stitched index templates build outward-wound SI sphere meshes for all masks',()=>{
+ const tile=baseGeoTiles()[0],radius=6_371_000,resolution=8;
+ for(let mask=0;mask<8;mask++){
+  const mesh=buildGeodesicTileMesh(tile,resolution,radius,mask);
+  assert.equal(mesh.positionsM.length,mesh.directions.length);
+  assert.equal(mesh.positionsM.length/3,(resolution+1)*(resolution+2)/2);
+  assert.ok(mesh.indices.length>0);
+  for(let i=0;i<mesh.positionsM.length;i+=3){
+   const length=Math.hypot(mesh.positionsM[i],mesh.positionsM[i+1],mesh.positionsM[i+2]);
+   assert.ok(Math.abs(length-radius)<1);
+  }
+  for(let i=0;i<mesh.indices.length;i+=3){
+   const ia=mesh.indices[i]*3,ib=mesh.indices[i+1]*3,ic=mesh.indices[i+2]*3;
+   const a=[mesh.positionsM[ia],mesh.positionsM[ia+1],mesh.positionsM[ia+2]],b=[mesh.positionsM[ib],mesh.positionsM[ib+1],mesh.positionsM[ib+2]],d=[mesh.positionsM[ic],mesh.positionsM[ic+1],mesh.positionsM[ic+2]];
+   const ab=b.map((value,j)=>value-a[j]),ac=d.map((value,j)=>value-a[j]);
+   const cross=[ab[1]*ac[2]-ab[2]*ac[1],ab[2]*ac[0]-ab[0]*ac[2],ab[0]*ac[1]-ab[1]*ac[0]];
+   assert.ok(cross[0]*(a[0]+b[0]+d[0])+cross[1]*(a[1]+b[1]+d[1])+cross[2]*(a[2]+b[2]+d[2])>0);
+  }
  }
 });
 

@@ -11,7 +11,6 @@ export class VirtualSurfaceManager {
  private readonly cpu=new Map<string,CpuEntry>();
  private readonly statuses=new Map<string,SurfaceTileStatus>();
  private clock=0; private bytes=0;
- private readonly pins=new Map<string,number>();
  constructor(options:{cpuBudgetBytes?:number;workerCount?:number;pool?:SurfaceTileWorkerPool}={}){
   this.cpuBudgetBytes=Math.max(1,options.cpuBudgetBytes??96*1024*1024);
   this.pool=options.pool??new SurfaceTileWorkerPool({concurrency:options.workerCount});
@@ -72,6 +71,7 @@ export class SurfaceGpuPageCache {
  readonly roughness:WebGLTexture; readonly material:WebGLTexture;
  readonly pageSize:number; readonly capacity:number;
  private readonly slots:{key:string|null;used:number}[]=[];
+ private readonly pins=new Map<string,number>();
  private clock=0; private readonly pages=new Map<string,number>();
  constructor(private readonly gl:WebGL2RenderingContext,resolution:number,gutter=2,budgetBytes=32*1024*1024){
   this.pageSize=resolution+gutter*2;

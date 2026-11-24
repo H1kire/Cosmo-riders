@@ -70,8 +70,14 @@ export class VirtualSurfaceManager {
 
 /** GPU texture-array сторінки з LRU-витісненням; кожен шар є одним трикутним VT-тайлом. */
 export class SurfaceGpuPageCache {
- readonly albedo!:WebGLTexture; readonly normal!:WebGLTexture; readonly height!:WebGLTexture;
- readonly roughness!:WebGLTexture; readonly material!:WebGLTexture;
+ private readonly textures:WebGLTexture[]=[];
+ get albedo():WebGLTexture{return this.textures[0]!;}
+ get normal():WebGLTexture{return this.textures[1]!;}
+ get height():WebGLTexture{return this.textures[2]!;}
+ get roughness():WebGLTexture{return this.textures[3]!;}
+ get material():WebGLTexture{return this.textures[4]!;}
+ get ready():boolean{return this.textures.length===5;}
+ get allocatedBytes():number{return this.pageSize*this.pageSize*this.capacity*[4,3,4,1,1].slice(0,this.textures.length).reduce((sum,value)=>sum+value,0);}
  readonly pageSize:number; readonly capacity:number;
  private readonly slots:{key:string|null;used:number}[]=[];
  private readonly pins=new Map<string,number>();
@@ -82,25 +88,36 @@ export class SurfaceGpuPageCache {
   const bytesPerPage=this.pageSize*this.pageSize*13;
   this.capacity=Math.min(maxLayers,Math.floor(budgetBytes/bytesPerPage));
   if(!Number.isFinite(this.capacity)||this.capacity<1)throw new Error('GPU texture-array budget or layer limit cannot hold one surface page.');
-  const allocated:WebGLTexture[]=[];
-  const create=(internal:number,format:number,type:number,requestedFilter:number=gl.LINEAR):WebGLTexture=>{
-   const texture=gl.createTexture();if(!texture)throw new Error('Не вдалося виділити GPU texture array.');
-   allocated.push(texture);
-   gl.bindTexture(gl.TEXTURE_2D_ARRAY,texture);gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,internal,this.pageSize,this.pageSize,this.capacity);
-   const allocationError=gl.getError();if(allocationError!==gl.NO_ERROR)throw new Error('GPU texture-array allocation failed with WebGL error '+allocationError+'.');
-   const filter=internal===gl.R32F?gl.NEAREST:requestedFilter;
-   gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,filter);gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,filter);
-   gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-   void format;void type;return texture;
-  };
-  try{
-   this.albedo=create(gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE);
-   this.normal=create(gl.RGB8,gl.RGB,gl.UNSIGNED_BYTE);
-   this.height=create(gl.R32F,gl.RED,gl.FLOAT);
-   this.roughness=create(gl.R8,gl.RED,gl.UNSIGNED_BYTE);
-   this.material=create(gl.R8,gl.RED,gl.UNSIGNED_BYTE,gl.NEAREST);
-  }catch(error){for(const texture of allocated)gl.deleteTexture(texture);throw error;}
   for(let i=0;i<this.capacity;i++)this.slots.push({key:null,used:0});
+ }
+ /** Allocate one of the five texture arrays per frame to bound GPU allocation stalls. */
+ initializeStep():boolean{
+  if(this.ready)return true;
+  const g=this.gl,index=this.textures.length;
+  const definitions=[
+   {internal:g.RGBA8,format:g.RGBA,type:g.UNSIGNED_BYTE,filter:g.LINEAR,bytes:4},
+   {internal:g.RGB8,format:g.RGB,type:g.UNSIGNED_BYTE,filter:g.LINEAR,bytes:3},
+   {internal:g.R32F,format:g.RED,type:g.FLOAT,filter:g.NEAREST,bytes:4},
+   {internal:g.R8,format:g.RED,type:g.UNSIGNED_BYTE,filter:g.LINEAR,bytes:1},
+   {internal:g.R8,format:g.RED,type:g.UNSIGNED_BYTE,filter:g.NEAREST,bytes:1}
+  ];
+  const definition=definitions[index];if(!definition)return this.ready;
+  const texture=g.createTexture();if(!texture)throw new Error('Не вдалося виділити GPU texture array.');
+  try{
+   g.bindTexture(g.TEXTURE_2D_ARRAY,texture);
+   g.texStorage3D(g.TEXTURE_2D_ARRAY,1,definition.internal,this.pageSize,this.pageSize,this.capacity);
+   const allocationError=g.getError();if(allocationError!==g.NO_ERROR)throw new Error('GPU texture-array allocation failed with WebGL error '+allocationError+'.');
+   g.texParameteri(g.TEXTURE_2D_ARRAY,g.TEXTURE_MIN_FILTER,definition.filter);
+   g.texParameteri(g.TEXTURE_2D_ARRAY,g.TEXTURE_MAG_FILTER,definition.filter);
+   g.texParameteri(g.TEXTURE_2D_ARRAY,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE);
+   g.texParameteri(g.TEXTURE_2D_ARRAY,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
+   this.textures.push(texture);
+   return this.ready;
+  }catch(error){
+   g.deleteTexture(texture);
+   this.dispose();
+   throw error;
+  }
  }
  upload(tile:SurfaceTileData):number{
   const g=this.gl;
@@ -143,6 +160,6 @@ export class SurfaceGpuPageCache {
  unpin(key:string):void{const count=this.pins.get(key)??0;if(count<=1)this.pins.delete(key);else this.pins.set(key,count-1);}
  isPinned(key:string):boolean{return(this.pins.get(key)??0)>0;}
  get pinnedPages():number{return this.pins.size;}
- dispose():void{const g=this.gl;for(const texture of [this.albedo,this.normal,this.height,this.roughness,this.material])g.deleteTexture(texture);this.pages.clear();this.pins.clear();for(const slot of this.slots)slot.key=null;}
+ dispose():void{const g=this.gl;for(const texture of this.textures)g.deleteTexture(texture);this.textures.length=0;this.pages.clear();this.pins.clear();for(const slot of this.slots)slot.key=null;}
  get residentPages():number{return this.pages.size;}
 }

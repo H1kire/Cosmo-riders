@@ -320,10 +320,11 @@ export class Solar3DView{
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bestScore=Infinity;for(const [id,p] of this.projected){const hitRadius=Math.max(8,Math.min(72,p.projectedRadius??8));const d=Math.hypot(x-p.x,y-p.y),score=d/hitRadius;if(d<=hitRadius&&score<bestScore){bestScore=score;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best),radius=item?.[1]?.radius??1e-5;this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,radius*1.08);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
- drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){
+ drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight,bodyDistance){
   if(!body.parentId||!body.orbitalElements)return;
   const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;
   const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);
+  opacity*=planetaryOrbitOpacity(bodyDistance,body.meanRadiusM/AU);
   const projected=projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance);
   const visibility=Math.max(0,Math.min(1,(projected-.035)/.36));
   const smoothVisibility=visibility*visibility*(3-2*visibility);
@@ -408,21 +409,12 @@ export class Solar3DView{
   const lightSources=this.lighting.getLights().sort((a,b)=>a.id==='sun'?-1:b.id==='sun'?1:0).slice(0,4);
   const lightPositions=new Float32Array(12),lightColors=new Float32Array(12),lightIntensities=new Float32Array(4);
   lightSources.forEach((source,index)=>{lightPositions.set(source.position,index*3);lightColors.set(source.color,index*3);lightIntensities[index]=source.intensity;});
-  let planetOrbitFade=1,orbitAnchor=focus,orbitCameraDistance=this.distance;
-  if(orbitAnchor){
-   while(orbitAnchor.parentId&&orbitAnchor.parentId!=='sun')orbitAnchor=world.bodies.get(orbitAnchor.parentId)??orbitAnchor;
-  }else{
-   let nearestDistance=Infinity;
-   for(const candidate of bodies){
-    if(candidate.parentId!=='sun')continue;
-    const candidateState=states.get(candidate.id);if(!candidateState)continue;
-    const candidatePosition=mapper(candidate,candidateState.position);
-    const candidateDistance=Math.hypot(candidatePosition[0]-eye[0],candidatePosition[1]-eye[1],candidatePosition[2]-eye[2]);
-    if(candidateDistance<nearestDistance){nearestDistance=candidateDistance;orbitAnchor=candidate;orbitCameraDistance=candidateDistance;}
-   }
-  }
-  if(orbitAnchor?.parentId==='sun')planetOrbitFade=planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU);
-  for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h);
+  for(const body of bodies){
+  const bodyState=states.get(body.id);if(!bodyState)continue;
+  const bodyPosition=mapper(body,bodyState.position);
+  const bodyDistance=Math.hypot(bodyPosition[0]-eye[0],bodyPosition[1]-eye[1],bodyPosition[2]-eye[2]);
+  this.drawOrbit(world,body,states,sun,vp,mapper,1,eye,h,bodyDistance);
+ }
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   

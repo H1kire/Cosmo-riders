@@ -11,9 +11,9 @@ export function triangleGridVertexIndex(resolution:number,row:number,column:numb
 function remapBoundaryVertex(resolution:number,row:number,column:number,mask:StitchEdgeMask):readonly [number,number]{
  let r=row,c=column;
  // Odd boundary samples are collapsed onto the first interior row, so the coarse edge has no T-junction vertices.
- if((mask&1)!==0&&r===0&&c%2===1){r=1;}
- if((mask&2)!==0&&r+c===resolution&&r%2===1){c-=1;}
- if((mask&4)!==0&&c===0&&r%2===1){c=1;}
+ if((mask&1)!==0&&r===0&&c%2===1){r=1;if((mask&2)!==0&&r+c===resolution)c-=1;}
+ if((mask&2)!==0&&r+c===resolution&&r%2===1){if(c===1)r-=1;else c-=1;}
+ if((mask&4)!==0&&c===0&&r%2===1){c=1;if((mask&2)!==0&&r+c===resolution)r-=1;}
  return[r,c];
 }
 

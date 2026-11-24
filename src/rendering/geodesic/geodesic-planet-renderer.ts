@@ -59,7 +59,7 @@ export class GeodesicPlanetRenderer {
   this.cpuBudgetBytes=options.cpuBudgetBytes??96*1024*1024;this.gpuBudgetBytes=options.gpuBudgetBytes??32*1024*1024;
   this.maxUploadsPerFrame=Math.max(1,Math.floor(options.maxUploadsPerFrame??2));
   if(!Number.isInteger(this.resolution)||this.resolution<8||this.resolution>1024)throw new RangeError('Geodesic page resolution must be in [8, 1024].');
-  if(!Number.isInteger(this.meshResolution)||this.meshResolution<2||this.meshResolution%2!==0)throw new RangeError('Geodesic mesh resolution must be an even integer >= 2.');
+  if(!Number.isInteger(this.meshResolution)||this.meshResolution<2||this.meshResolution%2!==0||this.meshResolution>64)throw new RangeError('Geodesic mesh resolution must be an even integer in [2, 64].');
   const pageSize=this.resolution+this.gutter*2;
   const maxLayers=Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize=Number(gl.getParameter(gl.MAX_TEXTURE_SIZE));
   const vertexTextureUnits=Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),fragmentTextureUnits=Number(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)),combinedTextureUnits=Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS));

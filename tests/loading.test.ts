@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+const file=(...parts:string[])=>new URL(parts.join('/'),import.meta.url);
+
 test('root and lab entries paint the loading overlay before application modules',async()=>{
- const root=await readFile(new URL('../index.html',import.meta.url),'utf8');
- const lab=await readFile(new URL('../lab/index.html',import.meta.url),'utf8');
+ const root=await readFile(file('..','index.html'),'utf8');
+ const lab=await readFile(file('..','lab','index.html'),'utf8');
  for(const html of [root,lab]){
   const overlay=html.indexOf('id="loading-screen"');
   const entry=html.indexOf('type="module" src=');
@@ -14,15 +16,15 @@ test('root and lab entries paint the loading overlay before application modules'
  }
 });
 test('bootstrap dynamically imports the heavy application after yielding a frame',async()=>{
- const main=await readFile(new URL('../lab/main.ts',import.meta.url),'utf8');
+ const main=await readFile(file('..','lab','main.ts'),'utf8');
  assert.ok(main.includes("await loading.nextFrame()"));
- assert.ok(main.includes("await import('./lab.ts')"));
- assert.ok(!main.includes("import './lab.ts'"));
+ assert.ok(main.includes(["await import('",'.','/lab.ts',"')"].join('')));
+ assert.ok(!main.includes(["import '",'.','/lab.ts',"'"].join('')));
 });
 test('loading progress is driven by completed named stages, not a timer counter',async()=>{
  const [loader,docs]=await Promise.all([
-  readFile(new URL('../lab/loading-screen.ts',import.meta.url),'utf8'),
-  readFile(new URL('../docs/LOADING_SYSTEM.md',import.meta.url),'utf8')
+  readFile(file('..','lab','loading-screen.ts'),'utf8'),
+  readFile(file('..','docs','LOADING_SYSTEM.md'),'utf8')
  ]);
  assert.ok(loader.includes('this.completed.add(id)'));
  assert.ok(loader.includes('STAGES.reduce'));

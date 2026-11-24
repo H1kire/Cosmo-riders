@@ -32,17 +32,19 @@ Each tile produces independent typed-array channels: RGBA8 albedo, RGB8 normal, 
 
 ## Worker pool and caches
 
-surface-worker-pool.ts runs generation only in module Workers. Concurrency defaults to a conservative cap derived from navigator.hardwareConcurrency and is limited to four. Requests are deduplicated by planet seed, algorithm version, face/path, resolution and gutter. Higher-priority queued work is scheduled first. An unavailable Worker produces a controlled error; it does not run the full generator synchronously on the UI thread.
+surface-worker-pool.ts runs generation only in module Workers. Concurrency defaults to a conservative cap derived from navigator.hardwareConcurrency and is limited to four. Requests are keyed by a stable JSON serialization of the body identity, request seed, every physical/profile field, algorithm version, tile face/path/level, resolution and gutter. This avoids reusing a page after physical profile changes under the same seed. The serialized identity is intentionally retained rather than relying on a lossy short hash. Higher-priority queued work is scheduled first. An unavailable Worker produces a controlled error; it does not run the full generator synchronously on the UI thread.
 
 virtual-surface-manager.ts tracks request states and maintains a bounded CPU LRU cache. Its GPU page cache uses WebGL2 TEXTURE_2D_ARRAY resources and LRU layer reuse for albedo, normal, height, roughness and material ID. Memory is bounded by the requested budget and MAX_ARRAY_TEXTURE_LAYERS.
 
 ## Current limitations / migration gates
 
+The current maintenance pass also fixed two independent issues: cache identity now includes the complete physical profile, and the body-label renderer now applies the already-computed distance opacity instead of forcing opacity to 1. These changes do not constitute geodesic renderer integration.
+
 1. The tile generator, Worker pool and caches are not yet wired into Solar3DView.
 2. The renderer still uses the old procedural surface fragment shader and UV sphere geometry.
 3. There is not yet a camera-frustum patch selector, quadtree balancing, GPU page-table shader lookup, parent-page fallback, or parent/child crossfade.
 4. Stitch index buffers for mixed-resolution patch boundaries are not yet connected to the renderer.
-5. The current normal estimate is an initial implementation and requires visual seam and tangent-frame validation.
+5. The current normal estimate is an initial implementation and requires visual seam and tangent-frame validation. The square-page gutter still clamps samples to the triangle domain; cross-page gutter sampling is not implemented.
 6. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
 
 These are explicit remaining work items, not claimed features.

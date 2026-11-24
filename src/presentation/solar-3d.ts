@@ -79,7 +79,7 @@ function makeSphere(gl,lat,lon){const p=[],n=[],idx=[];for(let y=0;y<=lat;y++){c
 function earthSurfaceProfile(body):SurfaceProfile{
  const surface=body.surface??{},radius=body.meanRadiusM,mu=body.mu??3.986004418e14;
  return{
-  bodyId:'earth',seed:body.surfaceSeed??surface.seed??surfaceSeedForId(body.id),kind:'oceanic',
+  bodyId:'earth',seed:body.surfaceSeed??surfaceSeedForId(body.id),kind:'oceanic',
   massKg:body.massKg??mu/6.67430e-11,meanRadiusM:radius,gravityMS2:surface.gravityMS2??mu/(radius*radius),
   temperatureK:surface.temperatureK??288,pressurePa:surface.pressurePa??101325,
   waterFraction:surface.waterFraction??.71,iceFraction:surface.iceFraction??.025,

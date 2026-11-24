@@ -160,7 +160,7 @@ test('heliocentric orbit fade is smooth and leaves satellite orbit policy indepe
  assert.equal(planetaryOrbitOpacity(1,0),1);
 });
 
-test('sub-pixel orbit paths can be culled before GPU buffer upload',()=>{
+test('projected orbit radius provides a continuous sub-pixel fade input',()=>{
  const distant=projectedOrbitRadius(0.0026,1080,38);
  const local=projectedOrbitRadius(0.0026,1080,0.00001);
  assert.ok(distant<0.8);
@@ -168,12 +168,12 @@ test('sub-pixel orbit paths can be culled before GPU buffer upload',()=>{
  assert.equal(projectedOrbitRadius(0,1080,1),0);
 });
 
-test('body labels fade smoothly with the inverse of the existing orbit distance curve',()=>{
+test('body labels use the same smooth distance curve as orbit lines',()=>{
  const radius=6371000/149597870700;
- assert.equal(planetaryLabelOpacity(radius*20,radius),1);
- assert.equal(planetaryLabelOpacity(radius*120,radius),1);
+ assert.equal(planetaryLabelOpacity(radius*20,radius),0);
+ assert.equal(planetaryLabelOpacity(radius*120,radius),0);
  assert.ok(planetaryLabelOpacity(radius*1000,radius)>0&&planetaryLabelOpacity(radius*1000,radius)<1);
- assert.equal(planetaryLabelOpacity(radius*2400,radius),0);
+ assert.equal(planetaryLabelOpacity(radius*2400,radius),1);
  assert.equal(planetaryLabelOpacity(1,0),1);
 });
 test('planet surfaces are generated directly from continuous spherical shader fields',()=>{

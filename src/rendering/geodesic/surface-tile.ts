@@ -18,6 +18,19 @@ export interface SurfaceTileData {
  readonly roughness:Uint8Array; readonly materialId:Uint8Array; readonly generationMs:number;
 }
 const clamp=(x:number,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const signedSqrt=(x:number)=>Math.sign(x)*Math.sqrt(Math.abs(x));
+
+/** Відображає квадратну сторінку на трикутник без обрізання великої частини текстури. */
+export function squareToTriangleBarycentric(x:number,y:number):readonly [number,number]{
+ const q=signedSqrt(x);
+ return [q*(1-y),q*y];
+}
+
+/** Обернене відображення барицентричної точки всередині трикутника у UV сторінки. */
+export function triangleToSquareUv(u:number,v:number):readonly [number,number]{
+ const q=u+v;
+ return [q*q,q>1e-12?v/q:.5];
+}
 const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 function hash(x:number,y:number,z:number,seed:number):number{
  let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(z|0,2147483647)+Math.imul(seed|0,1274126177))|0;
@@ -119,28 +132,43 @@ export function surfaceTileKey(request:SurfaceTileRequest):string{
 export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const started=performanceNow(),{tile,resolution,profile}=request,gutter=request.gutter??2;
  if(!Number.isInteger(resolution)||resolution<8||resolution>1024)throw new RangeError('Surface tile resolution must be in [8, 1024].');
+ if(!Number.isInteger(gutter)||gutter<0||gutter>16)throw new RangeError('Surface tile gutter must be in [0, 16].');
  const width=resolution+2*gutter,count=width*width;
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
+ const sampleDirection=(direction:Vec3)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet);
+ const angularStep=1/(resolution*Math.pow(2,tile.level));
  let index=0;
- const sample=(u:number,v:number)=>{const d=barycentricDirection(resolved.triangle,u,v);return profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(d,profile):geologicalSample(d,profile,plateSet);};
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){
-   const u=col/resolution,v=row/resolution;
-   const cu=clamp(u,0,1),cv=clamp(v,0,1),sum=cu+cv;
-   const safeU=sum>1?cu/sum:cu,safeV=sum>1?cv/sum:cv;
-   const s=sample(safeU,safeV),d=barycentricDirection(resolved.triangle,safeU,safeV);
-   const eps=1/resolution,du=sample(clamp(safeU+eps,0,1),safeV).height-sample(clamp(safeU-eps,0,1),safeV).height,dv=sample(safeU,clamp(safeV+eps,0,1)).height-sample(safeU,clamp(safeV-eps,0,1)).height;
-   const tangentU:[number,number,number]=[resolved.triangle.b[0]-resolved.triangle.a[0],resolved.triangle.b[1]-resolved.triangle.a[1],resolved.triangle.b[2]-resolved.triangle.a[2]];
-   const tangentV:[number,number,number]=[resolved.triangle.c[0]-resolved.triangle.a[0],resolved.triangle.c[1]-resolved.triangle.a[1],resolved.triangle.c[2]-resolved.triangle.a[2]];
-   const n:[number,number,number]=[d[0]-tangentU[0]*du*.7-tangentV[0]*dv*.7,d[1]-tangentU[1]*du*.7-tangentV[1]*dv*.7,d[2]-tangentU[2]*du*.7-tangentV[2]*dv*.7];
-   const nm=Math.hypot(...n)||1;
-   albedo.set([Math.round(clamp(s.color[0])*255),Math.round(clamp(s.color[1])*255),Math.round(clamp(s.color[2])*255),255],index*4);
-   normal.set(n.map(value=>Math.round((value/nm*.5+.5)*255)),index*3);
-   height[index]=s.height;roughness[index]=Math.round(clamp(s.rough)*255);materialId[index]=s.material;
+   // Gutter продовжує параметризацію за межі сторінки; значення береться з того самого глобального поля.
+   const pageX=(col+.5)/resolution,pageY=(row+.5)/resolution;
+   const [u,v]=squareToTriangleBarycentric(pageX,pageY);
+   const direction=barycentricDirection(resolved.triangle,u,v);
+   const sample=sampleDirection(direction);
+   const reference:Vec3=Math.abs(direction[1])<.85?[0,1,0]:[1,0,0];
+   const tangentU=normalize3(cross3(reference,direction));
+   const tangentV=normalize3(cross3(direction,tangentU));
+   const plusU=normalize3([direction[0]+tangentU[0]*angularStep,direction[1]+tangentU[1]*angularStep,direction[2]+tangentU[2]*angularStep]);
+   const minusU=normalize3([direction[0]-tangentU[0]*angularStep,direction[1]-tangentU[1]*angularStep,direction[2]-tangentU[2]*angularStep]);
+   const plusV=normalize3([direction[0]+tangentV[0]*angularStep,direction[1]+tangentV[1]*angularStep,direction[2]+tangentV[2]*angularStep]);
+   const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
+   const slopeU=(sampleDirection(plusU).height-sampleDirection(minusU).height)/(2*angularStep);
+   const slopeV=(sampleDirection(plusV).height-sampleDirection(minusV).height)/(2*angularStep);
+   const surfaceNormal=normalize3([
+    direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
+    direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,
+    direction[2]-tangentU[2]*slopeU-tangentV[2]*slopeV
+   ]);
+   albedo.set([Math.round(clamp(sample.color[0])*255),Math.round(clamp(sample.color[1])*255),Math.round(clamp(sample.color[2])*255),255],index*4);
+   normal.set(surfaceNormal.map(value=>Math.round((value*.5+.5)*255)),index*3);
+   height[index]=sample.height;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
    index++;
   }
  }
  return{key:surfaceTileKey(request),resolution,gutter,albedo,normal,height,roughness,materialId,generationMs:Math.max(0,performanceNow()-started)};
 }
+function normalize3(v:Vec3):[number,number,number]{const length=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/length,v[1]/length,v[2]/length];}
+function cross3(a:Vec3,b:Vec3):[number,number,number]{return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+
 function performanceNow():number{return typeof performance!=='undefined'?performance.now():Date.now();}

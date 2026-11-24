@@ -20,6 +20,8 @@ test('bootstrap dynamically imports the heavy application after yielding a frame
  assert.ok(main.includes("await loading.nextFrame()"));
  assert.ok(main.includes(["await import('",'.','/lab.ts',"')"].join('')));
  assert.ok(!main.includes(["import '",'.','/lab.ts',"'"].join('')));
+ const lab=await readFile(file('..','lab','lab.ts'),'utf8');
+ assert.ok(lab.indexOf('await new Promise<void>(resolve=>requestAnimationFrame')<lab.indexOf('new Solar3DView('));
 });
 test('loading progress is driven by completed named stages, not a timer counter',async()=>{
  const [loader,docs]=await Promise.all([
@@ -28,7 +30,8 @@ test('loading progress is driven by completed named stages, not a timer counter'
  ]);
  assert.ok(loader.includes('this.completed.add(id)'));
  assert.ok(loader.includes('STAGES.reduce'));
- assert.ok(loader.includes("id==='application'"));
+ assert.ok(loader.includes("id==='application'||id==='surface'||id==='gpu'"));
+ for(const stage of ['webgl','solar-system','renderer','surface','gpu'])assert.ok(loader.includes("id:'"+stage+"'"));
  assert.ok(!loader.includes('setInterval'));
  assert.ok(docs.includes('does not by itself prove that long main-thread stalls have been eliminated'));
 });

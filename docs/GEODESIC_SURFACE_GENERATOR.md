@@ -16,6 +16,37 @@ For triangle vertices A, B, C and barycentric coordinates (u, v), the spherical 
 
 There is no global equirectangular UV map and no cube-face projection. Shared edge directions are evaluated from the same endpoint pair and agree geometrically.
 
+
+## Geodesic topology and edge neighbors
+
+The base icosahedron now exposes its twelve indexed vertices, twenty indexed faces and a reciprocal face-edge adjacency table. An edge is identified by the unordered pair of original vertex indices; the table records the neighboring face, its local edge index (AB, BC or CA), and edge orientation. Construction validates that every one of the thirty undirected edges has exactly two incident faces.
+
+For active patches, `tile-neighbors.ts` compares only tiles belonging to the same base face or to topologically adjacent base faces. It detects coincident great-circle edge intervals, including a fine edge contained in a coarser neighbor edge. Neighbor links are returned in both directions and preserve the local edge indices. This is a geometric interval query over the active leaf set, not a persistent O(1) edge-addressing structure; the current implementation still performs pairwise candidate comparisons within each adjacent face group.
+
+## Extended triangular grid and gutter allocation
+
+`buildTileDirections()` visits rows from `-g` through `n+g` and columns from `-g` through `n+g-row`. The exact vertex count is therefore:
+
+```text
+(n + 2g + 1) * (n/2 + 2g + 1)
+```
+
+The output allocation uses this derived count and verifies the final write offset. This is deliberately not the ordinary triangular-lattice count: the gutter loop includes rows and columns outside the original triangle. Tests exercise gutter widths 0, 1, 2, 3 and 8 and validate every written direction.
+
+## Adaptive geodesic LOD
+
+`quadtree-selector.ts` evaluates each candidate patch in body-local coordinates. It estimates angular patch radius from the normalized triangle centroid, computes spherical sagitta error, projects that error using the viewport focal length and camera-to-patch distance, and applies a pixel-error threshold. It also performs conservative view-frustum and planetary-horizon rejection. A previous split-key set provides split/merge hysteresis; when the camera moves away, the recursive selection naturally returns parent leaves. Maximum depth and active leaf budget are explicit limits.
+
+`quadtree-balancer.ts` checks actual neighboring edge intervals and splits the coarse side until adjacent active leaves differ by at most one level, subject to maximum depth and tile budget. Diagnostics report checked neighbor pairs, split operations, maximum remaining level difference, violations, iterations and budget limitation. The present balancer recomputes the active neighbor map after each refinement pass; it is correct for the current bounded patch sets but is not yet an incremental per-edge update queue.
+
+## Stitching and indexed mesh construction
+
+`tile-stitching.ts` defines three edge bits (AB=1, BC=2, CA=4) and caches all eight coarse-neighbor masks per even mesh resolution. For each mask it omits odd boundary samples on coarse-neighbor edges, then incrementally inserts every retained triangular-grid point into a planar triangulation. Points lying on an existing edge split all incident triangles, avoiding T-junctions. The algorithm preserves the complete triangular domain rather than collapsing boundary vertices into the interior.
+
+`tile-mesh.ts` uses the resulting index template with normalized geodesic directions and physical positions `direction * radiusM`. Radius and positions are expressed in SI metres. Stitch templates are currently limited to even resolutions from 2 through 64 to bound one-time CPU work and are cached by resolution and mask.
+
+Automated tests validate all eight masks for in-range indices, positive winding, non-degenerate triangles, boundary parity, edge incidence counts and preservation of the full triangular area. They also validate outward winding and physical radius for generated sphere meshes.
+
 ## Geological profiles
 
 surface-profile.ts converts CelestialBody physical inputs into an immutable generation profile. It uses surfaceSeed when present and otherwise derives a deterministic seed from body ID. The profile carries mass, radius, calculated gravity, temperature, pressure, water/ice/iron/silicate/volatile fractions, tectonic and volcanic activity, erosion, age and rotation period.
@@ -42,9 +73,10 @@ The current maintenance pass also fixed two independent issues: cache identity n
 
 1. The tile generator, Worker pool and caches are not yet wired into Solar3DView.
 2. The renderer still uses the old procedural surface fragment shader and UV sphere geometry.
-3. There is not yet a camera-frustum patch selector, quadtree balancing, GPU page-table shader lookup, parent-page fallback, or parent/child crossfade.
-4. Stitch index buffers for mixed-resolution patch boundaries are not yet connected to the renderer.
-5. The direction-space gutter and normal calculation now have deterministic unit tests, but cross-face GPU filtering and rendered seam behavior still require WebGL/browser validation.
-6. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
+3. The new selector, neighbor search, 2:1 balancer and stitched mesh templates are CPU-side foundations only; they are not yet connected to Solar3DView or used to draw planets.
+4. Neighbor lookup still uses pairwise edge-interval comparisons within adjacent base-face groups, and balancing rebuilds the neighbor map after refinement passes. A persistent hierarchical edge index and incremental update queue remain future optimizations.
+5. Stitching is validated as indexed CPU geometry for all eight masks, but cross-face GPU upload, displacement-height continuity and rendered seam behavior still require WebGL/browser validation.
+6. The gutter direction grid is tested for full writes and normalized directions. Cross-page texture filtering continuity for neighboring LOD pages has not yet been proven in the GPU sampler.
+7. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
 
 These are explicit remaining work items, not claimed features.

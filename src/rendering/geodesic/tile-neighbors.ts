@@ -40,7 +40,7 @@ export function findTileNeighbors(tiles:readonly GeoTile[]):TileNeighborMap{
  const compareFaces=(faceA:number,faceB:number)=>{
   const a=byFace.get(faceA)??[],b=byFace.get(faceB)??[];
   for(const ta of a)for(const tb of b){
-   if(ta.id.key===tb.id.key)continue;
+   if(ta.id.key===tb.id.key||(faceA===faceB&&ta.id.key>tb.id.key))continue;
    const ea=edges(ta),eb=edges(tb);
    for(let ia=0;ia<3;ia++)for(let ib=0;ib<3;ib++){
     comparisons++;

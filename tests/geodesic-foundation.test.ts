@@ -256,6 +256,7 @@ test('one subscriber abort does not cancel another subscriber to the same worker
  class FakeWorker{
   onmessage:((event:MessageEvent)=>void)|null=null;
   onerror:((event:ErrorEvent)=>void)|null=null;
+  constructor(){queueMicrotask(()=>this.onmessage?.({data:{type:'ready'}} as MessageEvent));}
   postMessage(message:{id:number;request:SurfaceTileRequest}){
    setTimeout(()=>{
     try{this.onmessage?.({data:{id:message.id,tile:generateSurfaceTile(message.request)}} as MessageEvent);}
@@ -272,6 +273,23 @@ test('one subscriber abort does not cancel another subscriber to the same worker
  const result=await b;
  assert.equal(result.key,surfaceTileKey(input));
  pool.dispose();
+});
+
+
+test('worker startup failure is reported once without an automatic respawn loop',async()=>{
+ let creations=0;
+ class StartupFailWorker{
+  onmessage:((event:MessageEvent)=>void)|null=null;onerror:((event:ErrorEvent)=>void)|null=null;
+  constructor(){queueMicrotask(()=>this.onerror?.({message:'module startup rejected',preventDefault(){}} as ErrorEvent));}
+  postMessage(){}terminate(){}
+ }
+ const pool=new SurfaceTileWorkerPool({concurrency:1,workerFactory:()=>{creations++;return new StartupFailWorker() as unknown as Worker;}});
+ await assert.rejects(pool.request(request({resolution:8}),1),/Surface worker startup failed/);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(creations,1);assert.equal(pool.workerStartupErrors,1);pool.dispose();
+});
+test('regular unstitched templates use the exact quadratic triangular-grid index count',()=>{
+ for(const resolution of [32,48,64]){const indices=buildStitchIndexTemplate(resolution,0);assert.equal(indices.length,resolution*resolution*3);}
 });
 
 test('atmospheric giant tiles keep solid height at exactly zero metres',()=>{
@@ -377,11 +395,12 @@ test('worker failures reject the active generation request and release the faile
  class BrokenWorker{
   onmessage:((event:MessageEvent)=>void)|null=null;
   onerror:((event:ErrorEvent)=>void)|null=null;
+  constructor(){queueMicrotask(()=>this.onmessage?.({data:{type:'ready'}} as MessageEvent));}
   postMessage(){queueMicrotask(()=>this.onerror?.({message:'intentional worker failure',preventDefault(){}} as ErrorEvent));}
   terminate(){}
  }
  const pool=new SurfaceTileWorkerPool({concurrency:1,workerFactory:()=>new BrokenWorker() as unknown as Worker});
- await assert.rejects(pool.request(request({resolution:8}),1),/Surface worker failed/);
+ await assert.rejects(pool.request(request({resolution:8}),1),/Surface worker runtime failure/);
  pool.dispose();
 });
 
@@ -443,6 +462,7 @@ test('Solar3DView preserves UV fallback and scopes geodesic rendering to Earth',
  assert.ok(source.includes("this.earthRenderMode='auto'"));
  assert.ok(source.includes("body.id==='earth'"));
  assert.ok(source.includes("if(!renderedGeodesicEarth)"));
+ assert.ok(source.includes('g.bindTexture(g.TEXTURE_2D_ARRAY,null)'));
  assert.ok(source.includes("this.geodesicEarthRenderer?.dispose()"));
  assert.ok(source.includes("this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0)"));
 });
@@ -474,9 +494,16 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
   readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8')
  ]);
  assert.ok(pool.includes('requestMesh(tile:GeoTile'));
+ assert.ok(pool.includes("reply?.type==='ready'"));
+ assert.ok(pool.includes('workerStartupErrorsValue++'));
+ assert.ok(pool.includes('maxPendingTasks=Math.max(this.concurrency,Math.min(8'));
+ assert.ok(!pool.includes('this.spawn();this.pump()'));
  assert.ok(worker.includes("kind:'mesh'"));
  assert.ok(worker.includes('mesh.indices.buffer'));
  assert.ok(renderer.includes('this.manager.requestMesh('));
+ assert.ok(renderer.includes('scheduleWorkerTasks()'));
+ assert.ok(renderer.includes('this.manager.pendingCount<2'));
+ assert.ok(renderer.includes('firstFailureValue'));
  assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution'));
 });
 

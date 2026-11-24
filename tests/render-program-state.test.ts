@@ -27,7 +27,7 @@ test('planet render loop isolates WebGL programs and keeps the UV fallback condi
  const loop=extractBlock(source,'for(const body of bodies){\n   g.useProgram(this.bodyProgram);');
  assert.match(loop,/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/);
  assert.match(loop,/if\(body\.id==='earth'&&this\.geodesicEarthRenderer&&this\.earthRenderMode!=='uv'\)/);
- assert.match(loop,/this\.geodesicEarthRenderer\.render\(\{/);
+ assert.match(loop,/(?:pendingRenderer|activeRenderer)\.render\(frame\)/);
  assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{\s*(?:\/\/[^\n]*\s*)?g\.disable\(g\.CULL_FACE\);g\.disable\(g\.BLEND\);g\.depthMask\(true\);g\.activeTexture\(g\.TEXTURE0\);g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);\s*g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/);
  const atmosphere=extractBlock(source,' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
  const clouds=extractBlock(source,' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');
@@ -54,6 +54,17 @@ test('both published entry points gate application import behind the start scree
  assert.match(main,/startButton\.addEventListener\('click',\(\)=>\{[\s\S]*?loading\.show\(\);[\s\S]*?void startApplication\(\);/);
  assert.match(main,/async function startApplication\(\):Promise<void>\{[\s\S]*?await loading\.nextFrame\(\);[\s\S]*?await import\('\.\/lab\.ts'\)/);
  assert.match(main,/startButton\.addEventListener\('click'/);
+});
+
+
+test('quality replacement keeps the ready Earth renderer visible while sharing its worker pool',async()=>{
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ const manager=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
+ assert.match(source,/if\(active\?\.isReady\)this\.geodesicPendingRenderer=replacement/);
+ assert.match(source,/if\(pendingRenderer\.isReady\)[\s\S]*?activeRenderer\.dispose\(\)/);
+ assert.match(source,/workerPool:this\.geodesicWorkerPool/);
+ assert.match(manager,/this\.ownsPool=!options\.pool/);
+ assert.match(manager,/this\.abortController\.abort\(\)/);
 });
 
 test('all geodesic quality presets can hold twenty pages within both cache budgets',()=>{

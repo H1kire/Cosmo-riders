@@ -49,6 +49,10 @@ export class GeodesicPlanetRenderer {
  private uploadedPages=0;
  private lastPinnedPages=0;
  private lastError:string|null=null;
+ private lastGeneratedPages=0;
+ private failedGpuResidentPages=0;
+ private failedGpuLayerCapacity=0;
+ private failedGpuCacheBytes=0;
 
  constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number}={}){
   this.gl=gl;this.resolution=options.resolution??128;this.meshResolution=options.meshResolution??64;
@@ -128,6 +132,11 @@ export class GeodesicPlanetRenderer {
  }
 
  private failRenderer(error:unknown):void{
+  if(this.failed)return;
+  this.lastGeneratedPages=this.loadedTileCount;
+  this.failedGpuResidentPages=this.gpu?.residentPages??0;
+  this.failedGpuLayerCapacity=this.gpu?.capacity??0;
+  this.failedGpuCacheBytes=this.gpuCacheBytes;
   this.failed=true;this.lastError=error instanceof Error?error.message:String(error);
   this.manager.dispose();this.disposeGpuOnly();
  }
@@ -185,6 +194,7 @@ export class GeodesicPlanetRenderer {
    gl.uniform1i(this.locations.uHeight,2);
    gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
    for(const page of visible){
+    if(!page.mesh)continue;
     const layer=this.gpu.getLayer(page.data?.key??'');if(layer===undefined)continue;
     gl.uniform1f(this.locations.uLayer,layer);
     gl.bindBuffer(gl.ARRAY_BUFFER,page.mesh.position);gl.enableVertexAttribArray(this.attribs.direction);gl.vertexAttribPointer(this.attribs.direction,3,gl.FLOAT,false,0,0);
@@ -206,7 +216,7 @@ export class GeodesicPlanetRenderer {
  dispose():void{if(this.disposed)return;this.disposed=true;this.manager.dispose();this.disposeGpuOnly();}
  get isReady():boolean{return this.ready;}
  get isFailed():boolean{return this.failed;}
- get loadedTileCount():number{return [...this.pages.values()].filter(page=>Boolean(page.data)).length;}
+ get loadedTileCount():number{return Math.max(this.lastGeneratedPages,[...this.pages.values()].filter(page=>Boolean(page.data)).length);}
  get visibleTileCount():number{return this.ready?20:0;}
  get gpuResidentTileCount():number{return this.gpu?.residentPages??0;}
  get workerCount():number{return this.manager.workerCount;}
@@ -219,6 +229,10 @@ export class GeodesicPlanetRenderer {
  get activeWorkerCount():number{return this.manager.activeWorkers;}
  get cpuCacheSize():number{return this.manager.cacheSize;}
  get gpuCacheBytes():number{return(this.gpu?.capacity??0)*(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
+ get failedGpuCacheBytes():number{return this.failedGpuCacheBytes;}
+ get failedGpuLayerCapacity():number{return this.failedGpuLayerCapacity;}
+ get failedGpuResidentPages():number{return this.failedGpuResidentPages;}
+ get rendererState():'failed'|'ready'|'preparing'|'idle'{return this.failed?'failed':this.ready?'ready':this.profile?'preparing':'idle';}
  get gpuPageBytes():number{return(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
  get gpuPageSize():number{return this.gpu?.pageSize??0;}
  get gpuLayerCapacity():number{return this.gpu?.capacity??0;}

@@ -409,3 +409,34 @@ test('geodesic shader performs metric height displacement and manual filtering f
  assert.ok(cache.includes('internal===gl.R32F?gl.NEAREST'));
  assert.ok(cache.includes('this.material=create(gl.R8,gl.RED,gl.UNSIGNED_BYTE,gl.NEAREST)'));
 });
+
+test('Earth procedural height output is physically bounded in metres',()=>{
+ const earth=generateSurfaceTile(request({tile:tileId(0,''),resolution:8}));
+ assert.ok(earth.height.every(value=>value>=-11000&&value<=9000));
+ assert.ok(earth.height.some(value=>value!==0));
+});
+
+test('geodesic renderer source connects Worker, CPU cache, GPU arrays and indexed draw',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
+ const manager=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
+ const worker=await readFile(new URL('../src/rendering/geodesic/surface-tile-worker.ts',import.meta.url),'utf8');
+ assert.ok(renderer.includes('VirtualSurfaceManager'));
+ assert.ok(renderer.includes('SurfaceGpuPageCache'));
+ assert.ok(manager.includes('SurfaceTileWorkerPool'));
+ assert.ok(worker.includes('generateSurfaceTile'));
+ assert.ok(renderer.includes('this.pages.size!==20'));
+ assert.ok(renderer.includes('gl.drawElements(gl.TRIANGLES,page.mesh.count,gl.UNSIGNED_INT,0)'));
+ assert.ok(renderer.includes('markUploadPending'));
+ assert.ok(renderer.includes('markGpuReady'));
+});
+
+test('Solar3DView preserves UV fallback and scopes geodesic rendering to Earth',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.ok(source.includes("this.earthRenderMode='auto'"));
+ assert.ok(source.includes("body.id==='earth'"));
+ assert.ok(source.includes("if(!renderedGeodesicEarth)"));
+ assert.ok(source.includes("this.geodesicEarthRenderer?.dispose()"));
+ assert.ok(source.includes("this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0)"));
+});

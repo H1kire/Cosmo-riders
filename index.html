@@ -80,11 +80,20 @@
    <label><input id="gfx-lens-flare" type="checkbox"> Lens flare</label>
    <label><input id="gfx-hdr" type="checkbox" checked> HDR и Tone Mapping</label>
   </div>
+  <pre id="graphics-diagnostics" class="graphics-diagnostics">Ожидание данных WebGL2 и геодезического renderer…</pre>
   <p id="graphics-status" class="footnote">Настройки графики.</p>
   </div>
  </div>
 </section>
-<div id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-hidden="false"><div class="loading-card"><div class="loading-brand"><span class="loading-mark">C</span><div><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></div></div><div class="loading-orbit"><span></span><i></i></div><div class="loading-meta"><span>INITIALIZING SOLAR SYSTEM</span><b id="loading-percent">0%</b></div><div id="loading-progress" class="loading-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="loading-progress-fill"></i></div><strong id="loading-stage" class="loading-stage">Application bootstrap</strong><p id="loading-description" class="loading-description">Подготовка загрузчика и графического интерфейса</p><p id="loading-error" class="loading-error" hidden></p><button id="loading-retry" class="loading-retry" type="button" hidden>Повторить запуск</button></div></div>\n<script type="module" src="./lab/main.ts"></script>
+<section id="start-screen" class="start-screen" aria-labelledby="start-title" aria-hidden="false">
+ <div class="start-content"><div class="start-emblem" aria-hidden="true"><span>C</span><i></i></div>
+  <div class="start-kicker">SPACE SIMULATION</div><h1 id="start-title">COSMO-RIDERS</h1>
+  <p class="start-description">Исследуйте Солнечную систему. Наблюдайте за планетами, орбитами и небесными явлениями.</p>
+  <button id="start-simulation" class="start-button" type="button">Войти в симуляцию <span aria-hidden="true">→</span></button>
+  <div class="start-footnote">PHYSICS · ORBITS · DEEP SPACE</div>
+ </div>
+</section>
+<div id="loading-screen" class="loading-screen is-hidden" role="status" aria-live="polite" aria-hidden="true"><div class="loading-card"><div class="loading-brand"><span class="loading-mark">C</span><div><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></div></div><div class="loading-orbit"><span></span><i></i></div><div class="loading-meta"><span>INITIALIZING SOLAR SYSTEM</span><b id="loading-percent">0%</b></div><div id="loading-progress" class="loading-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="loading-progress-fill"></i></div><strong id="loading-stage" class="loading-stage">Application bootstrap</strong><p id="loading-description" class="loading-description">Подготовка загрузчика и графического интерфейса</p><p id="loading-error" class="loading-error" hidden></p><button id="loading-retry" class="loading-retry" type="button" hidden>Повторить запуск</button></div></div>\n<script type="module" src="./lab/main.ts"></script>
 <script type="module" src="./lab/graphics-settings.ts"></script>
 <script type="module" src="./lab/menu.ts"></script>
 </body></html>

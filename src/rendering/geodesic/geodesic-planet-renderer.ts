@@ -128,7 +128,7 @@ export class GeodesicPlanetRenderer {
 
  private createMesh(directions:Float32Array,uv:Float32Array,indices:Uint32Array):GpuMesh{
   const gl=this.gl,created:WebGLBuffer[]=[];
-  const buffer=(target:number,data:Float32Array|Uint32Array):WebGLBuffer=>{const value=gl.createBuffer();if(!value)throw new Error('Unable to allocate geodesic mesh buffer.');created.push(value);gl.bindBuffer(target,value);const ownedBuffer=new ArrayBuffer(data.byteLength);new Uint8Array(ownedBuffer).set(new Uint8Array(data.buffer,data.byteOffset,data.byteLength));gl.bufferData(target,ownedBuffer,gl.STATIC_DRAW);return value;};
+  const buffer=(target:number,data:Float32Array|Uint32Array):WebGLBuffer=>{const value=gl.createBuffer();if(!value)throw new Error('Unable to allocate geodesic mesh buffer.');created.push(value);gl.bindBuffer(target,value);const sourceBuffer=data.buffer;const ownedBuffer=sourceBuffer instanceof ArrayBuffer&&data.byteOffset===0&&data.byteLength===sourceBuffer.byteLength?sourceBuffer:(()=>{const copy=new ArrayBuffer(data.byteLength);new Uint8Array(copy).set(new Uint8Array(sourceBuffer,data.byteOffset,data.byteLength));return copy;})();gl.bufferData(target,ownedBuffer,gl.STATIC_DRAW);return value;};
   try{return{position:buffer(gl.ARRAY_BUFFER,directions),uv:buffer(gl.ARRAY_BUFFER,uv),index:buffer(gl.ELEMENT_ARRAY_BUFFER,indices),count:indices.length};}
   catch(error){for(const item of created)gl.deleteBuffer(item);throw error;}
  }

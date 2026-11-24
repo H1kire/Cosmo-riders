@@ -103,15 +103,18 @@ export function surfaceTileKey(request:SurfaceTileRequest):string{
 export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const started=performanceNow(),{tile,resolution,profile}=request,gutter=request.gutter??2;
  if(!Number.isInteger(resolution)||resolution<8||resolution>1024)throw new RangeError('Surface tile resolution must be in [8, 1024].');
- const count=(resolution+2*gutter+1)*(resolution+2*gutter+2)/2;
+ const width=resolution+2*gutter,count=width*width;
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
  const width=resolution+2*gutter;let index=0;
  const sample=(u:number,v:number)=>{const d=barycentricDirection(resolved.triangle,u,v);return profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(d,profile):geologicalSample(d,profile,plateSet);};
  for(let row=-gutter;row<=resolution+gutter;row++){
   for(let col=-gutter;col<=resolution+gutter-row;col++){
-   const u=col/resolution,v=row/resolution,s=sample(u,v),d=barycentricDirection(resolved.triangle,u,v);
-   const eps=1/resolution,du=sample(u+eps,v).height-sample(u-eps,v).height,dv=sample(u,v+eps).height-sample(u,v-eps).height;
+   const u=col/resolution,v=row/resolution;
+   const cu=clamp(u,0,1),cv=clamp(v,0,1),sum=cu+cv;
+   const safeU=sum>1?cu/sum:cu,safeV=sum>1?cv/sum:cv;
+   const s=sample(safeU,safeV),d=barycentricDirection(resolved.triangle,safeU,safeV);
+   const eps=1/resolution,du=sample(clamp(safeU+eps,0,1),safeV).height-sample(clamp(safeU-eps,0,1),safeV).height,dv=sample(safeU,clamp(safeV+eps,0,1)).height-sample(safeU,clamp(safeV-eps,0,1)).height;
    const tangentU:[number,number,number]=[resolved.triangle.b[0]-resolved.triangle.a[0],resolved.triangle.b[1]-resolved.triangle.a[1],resolved.triangle.b[2]-resolved.triangle.a[2]];
    const tangentV:[number,number,number]=[resolved.triangle.c[0]-resolved.triangle.a[0],resolved.triangle.c[1]-resolved.triangle.a[1],resolved.triangle.c[2]-resolved.triangle.a[2]];
    const n:[number,number,number]=[d[0]-tangentU[0]*du*.7-tangentV[0]*dv*.7,d[1]-tangentU[1]*du*.7-tangentV[1]*dv*.7,d[2]-tangentU[2]*du*.7-tangentV[2]*dv*.7];

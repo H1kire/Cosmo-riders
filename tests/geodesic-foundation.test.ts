@@ -469,7 +469,7 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
   readFile(new URL('../src/rendering/geodesic/surface-tile-worker.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8')
  ]);
- assert.ok(pool.includes('requestMesh(tile:GeoTile')));
+ assert.ok(pool.includes('requestMesh(tile:GeoTile'));
  assert.ok(worker.includes("kind:'mesh'"));
  assert.ok(worker.includes('mesh.indices.buffer'));
  assert.ok(renderer.includes('this.manager.requestMesh('));

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
+import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
 
 const profile:SurfaceProfile={
  bodyId:'earth',seed:12345,kind:'oceanic',massKg:5.9722e24,meanRadiusM:6371000,gravityMS2:9.81,
@@ -95,4 +96,26 @@ test('geodesic tile generation fills every square page texel and produces finite
   const length=Math.hypot(nx,ny,nz);
   assert.ok(Number.isFinite(length)&&length>.97&&length<1.03);
  }
+});
+
+test('one subscriber abort does not cancel another subscriber to the same worker request',async()=>{
+ class FakeWorker{
+  onmessage:((event:MessageEvent)=>void)|null=null;
+  onerror:((event:ErrorEvent)=>void)|null=null;
+  postMessage(message:{id:number;request:SurfaceTileRequest}){
+   setTimeout(()=>{
+    try{this.onmessage?.({data:{id:message.id,tile:generateSurfaceTile(message.request)}} as MessageEvent);}
+    catch(error){this.onmessage?.({data:{id:message.id,error:String(error)}} as MessageEvent);}
+   },0);
+  }
+  terminate(){}
+ }
+ const pool=new SurfaceTileWorkerPool({concurrency:1,workerFactory:()=>new FakeWorker() as unknown as Worker});
+ const first=new AbortController(),second=new AbortController(),input=request({resolution:8});
+ const a=pool.request(input,1,first.signal),b=pool.request(input,5,second.signal);
+ first.abort();
+ await assert.rejects(a,{name:'AbortError'});
+ const result=await b;
+ assert.equal(result.key,surfaceTileKey(input));
+ pool.dispose();
 });

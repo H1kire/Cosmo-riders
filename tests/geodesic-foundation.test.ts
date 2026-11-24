@@ -409,8 +409,11 @@ test('geodesic shader performs metric height displacement and manual filtering f
  assert.ok(shader.includes('texture(uNormal'));
  assert.ok(shader.includes('texture(uRoughness'));
  assert.ok(shader.includes('texture(uMaterial'));
- assert.ok(cache.includes('internal===gl.R32F?gl.NEAREST'));
- assert.ok(cache.includes('this.material=create(gl.R8,gl.RED,gl.UNSIGNED_BYTE,gl.NEAREST)'));
+ assert.ok(cache.includes('internal:g.R32F,format:g.RED,type:g.FLOAT,filter:g.NEAREST'));
+ assert.ok(cache.includes('internal:g.R8,format:g.RED,type:g.UNSIGNED_BYTE,filter:g.NEAREST'));
+ assert.ok(cache.includes('initializeStep():boolean'));
+ assert.ok(cache.includes('this.textures.push(texture)'));
+ assert.ok(cache.includes('get allocatedBytes():number'));
 });
 
 test('Earth procedural height output is physically bounded in metres',()=>{

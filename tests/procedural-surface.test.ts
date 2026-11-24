@@ -156,3 +156,12 @@ test('planet shader keeps world-space noise frequencies independent of camera de
  assert.ok(!shader.includes('n*(7.0+uDetail*6.0)'));
  assert.ok(!shader.includes('n*(8.0+uDetail*42.0)'));
 });
+
+test('UV fallback and geodesic pages resolve the same deterministic body seed',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ const profile=await readFile(new URL('../src/rendering/geodesic/surface-profile.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('body.surfaceSeed??surfaceSeedForId(body.id)'));
+ assert.ok(source.includes('seed:body.surfaceSeed??surface.seed??surfaceSeedForId(body.id)'));
+ assert.ok(profile.includes('seed=body.surfaceSeed??stableSeed(body.id)'));
+});

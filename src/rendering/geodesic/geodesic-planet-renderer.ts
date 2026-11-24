@@ -113,7 +113,7 @@ export class GeodesicPlanetRenderer {
    void this.manager.requestMesh(tile,this.meshResolution,profile.meanRadiusM,100).then(mesh=>{
     if(this.disposed||this.failed)return;
     page.meshData=mesh;
-   },error=>{if(!this.disposed)this.failRenderer(error);});
+   },error=>{if(!this.disposed){this.generationErrors++;this.failRenderer(error);}});
    const accept=(data:SurfaceTileData)=>{if(this.disposed||this.failed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
    const reject=(error:unknown)=>{
     page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;
@@ -162,9 +162,9 @@ export class GeodesicPlanetRenderer {
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
   const gl=this.gl,visible:Page[]=[];let gpuOperationsThisFrame=0;this.lastPinnedPages=0;
-  if(!this.gpu.ready){try{this.gpu.initializeStep();if(this.gpu.ready)reportLoadingStage('gpu');}catch(error){this.failRenderer(error);}return false;}
+  if(!this.gpu.ready){try{this.gpu.initializeStep();if(this.gpu.ready)reportLoadingStage('gpu');}catch(error){this.generationErrors++;this.failRenderer(error);}return false;}
   for(const page of this.pages.values()){
-   if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
+   if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.generationErrors++;this.failRenderer(error);return false;}}
    if(!page.mesh)continue;
    if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
    const layer=this.gpu.getLayer(page.data?.key??'');

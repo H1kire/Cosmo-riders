@@ -62,7 +62,8 @@ test('quality replacement keeps the ready Earth renderer visible while sharing i
  const manager=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
  assert.match(source,/if\(active\?\.isReady\)this\.geodesicPendingRenderer=replacement/);
  assert.match(source,/if\(pendingRenderer\.isReady\)[\s\S]*?activeRenderer\.dispose\(\)/);
- assert.match(source,/workerPool:this\.geodesicWorkerPool/);
+ assert.match(source,/const sharedPool=candidatePool&&candidatePool\.workerCount>0\?candidatePool:undefined/);
+ assert.match(source,/workerPool:sharedPool/);
  assert.match(manager,/this\.ownsPool=!options\.pool/);
  assert.match(manager,/this\.abortController\.abort\(\)/);
 });

@@ -177,7 +177,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     }
     if(!renderer.includes('page.data&&uploadsThisFrame<this.maxUploadsPerFrame')||!renderer.includes('this.gpuBudgetBytes')||!renderer.includes('this.cpuBudgetBytes'))throw new Error('Geodesic uploads and cache budgets must be explicitly bounded.');
     if(!solar.includes('this.rebuildGeodesicRenderer(this.graphics)')||!solar.includes("window.dispatchEvent(new CustomEvent('graphics-diagnostics'"))throw new Error('Preset changes must rebuild one renderer and publish live diagnostics.');
-    if(!renderer.includes('MAX_VERTEX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_ARRAY_TEXTURE_LAYERS')||!renderer.includes('MAX_TEXTURE_SIZE'))throw new Error('Geodesic renderer must validate the WebGL2 limits it depends on.');
+    if(!renderer.includes('MAX_VERTEX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_ARRAY_TEXTURE_LAYERS')||!renderer.includes('MAX_TEXTURE_SIZE'))throw new Error('Geodesic renderer must validate the WebGL2 limits it depends on.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

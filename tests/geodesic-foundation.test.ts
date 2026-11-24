@@ -20,7 +20,7 @@ test('icosphere starts with twenty faces and recursively creates four stable chi
   const children=childrenOf(root);
   assert.equal(children.length,4);
   for(let i=0;i<4;i++){
-   assert.equal(children[i].id.key,root.id.key==='0:root'?'0:'+i:root.id.key+String(i));
+   assert.equal(children[i].id.key,root.id.face.toString(36)+':'+(root.id.path+String(i)));
    assert.deepEqual(resolveGeoTile(children[i].id).triangle,children[i].triangle);
   }
  }

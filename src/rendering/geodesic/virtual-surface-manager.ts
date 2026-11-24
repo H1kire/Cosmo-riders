@@ -80,7 +80,7 @@ export class SurfaceGpuPageCache {
   this.capacity=Math.min(maxLayers,Math.floor(budgetBytes/bytesPerPage));
   if(!Number.isFinite(this.capacity)||this.capacity<1)throw new Error('GPU texture-array budget or layer limit cannot hold one surface page.');
   const allocated:WebGLTexture[]=[];
-  const create=(internal:number,format:number,type:number,requestedFilter=gl.LINEAR):WebGLTexture=>{
+  const create=(internal:number,format:number,type:number,requestedFilter:number=gl.LINEAR):WebGLTexture=>{
    const texture=gl.createTexture();if(!texture)throw new Error('Не вдалося виділити GPU texture array.');
    allocated.push(texture);
    gl.bindTexture(gl.TEXTURE_2D_ARRAY,texture);gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,internal,this.pageSize,this.pageSize,this.capacity);

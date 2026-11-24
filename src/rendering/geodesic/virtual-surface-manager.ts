@@ -94,7 +94,7 @@ export class SurfaceGpuPageCache {
   this.pageSize=resolution+gutter*2;
   const maxLayers=gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
   const bytesPerPage=this.pageSize*this.pageSize*13;
-  this.capacity=Math.min(maxLayers,Math.floor(budgetBytes/bytesPerPage));
+  this.capacity=Math.min(maxLayers,20,Math.floor(budgetBytes/bytesPerPage));
   if(!Number.isFinite(this.capacity)||this.capacity<1)throw new Error('GPU texture-array budget or layer limit cannot hold one surface page.');
   for(let i=0;i<this.capacity;i++)this.slots.push({key:null,used:0});
  }

@@ -1,16 +1,20 @@
 import { surfaceTileKey, type SurfaceTileData, type SurfaceTileRequest } from './surface-tile.ts';
+import type { GeoTile } from './icosphere.ts';
+import type { GeodesicTileMesh } from './tile-mesh.ts';
+type WorkerValue=SurfaceTileData|GeodesicTileMesh;
+type TaskPayload={kind:'tile';request:SurfaceTileRequest}|{kind:'mesh';tile:GeoTile;resolution:number;radiusM:number};
 interface Subscriber {
- resolve:(tile:SurfaceTileData)=>void;
+ resolve:(value:WorkerValue)=>void;
  reject:(error:Error)=>void;
  signal?:AbortSignal;
  abort?:()=>void;
 }
 interface WorkerSlot { worker:Worker; task:Task|null; }
 interface Task {
- id:number; key:string; request:SurfaceTileRequest; priority:number; order:number;
+ id:number; key:string; payload:TaskPayload; priority:number; order:number;
  subscribers:Set<Subscriber>; cancelled:boolean;
 }
-type WorkerReply={id:number;tile?:SurfaceTileData;error?:string};
+type WorkerReply={id:number;tile?:SurfaceTileData;mesh?:GeodesicTileMesh;error?:string};
 
 /** Обмежений пул воркерів; головний потік ніколи не виконує генерацію тайлів. */
 export class SurfaceTileWorkerPool {
@@ -70,10 +74,10 @@ export class SurfaceTileWorkerPool {
   }
   task.subscribers.clear();
  }
- private resolveSubscribers(task:Task,tile:SurfaceTileData):void{
+ private resolveSubscribers(task:Task,value:WorkerValue):void{
   for(const subscriber of task.subscribers){
    subscriber.signal?.removeEventListener('abort',subscriber.abort!);
-   subscriber.resolve(tile);
+   subscriber.resolve(value);
   }
   task.subscribers.clear();
  }
@@ -83,7 +87,7 @@ export class SurfaceTileWorkerPool {
   if(this.pending.get(task.key)===task)this.pending.delete(task.key);
   if(!task.cancelled){
    if(task.subscribers.size===0)task.cancelled=true;
-   else if(reply.tile)this.resolveSubscribers(task,reply.tile);
+   else if(reply.tile||reply.mesh)this.resolveSubscribers(task,(reply.tile??reply.mesh)!);
    else this.rejectSubscribers(task,new Error(reply.error??'Surface tile worker returned no data.'));
   }
   this.pump();
@@ -101,7 +105,7 @@ export class SurfaceTileWorkerPool {
    }
    if(!task)continue;
    slot.task=task;this.ids.set(task.id,task);
-   try{slot.worker.postMessage({id:task.id,request:task.request});}
+   try{slot.worker.postMessage({id:task.id,...task.payload});}
    catch(error){
     slot.task=null;this.ids.delete(task.id);
     if(this.pending.get(task.key)===task)this.pending.delete(task.key);
@@ -111,7 +115,7 @@ export class SurfaceTileWorkerPool {
  }
  private subscribe(task:Task,signal?:AbortSignal):Promise<SurfaceTileData>{
   if(signal?.aborted)return Promise.reject(new DOMException('Surface request aborted.','AbortError'));
-  return new Promise<SurfaceTileData>((resolve,reject)=>{
+  return new Promise<WorkerValue>((resolve,reject)=>{
    const subscriber:Subscriber={resolve,reject,signal};
    if(signal){
     subscriber.abort=()=>{
@@ -139,8 +143,17 @@ export class SurfaceTileWorkerPool {
    return this.subscribe(existing,signal);
   }
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
-  const task:Task={id:++this.sequence,key,request,priority,order:this.sequence,subscribers:new Set(),cancelled:false};
-  const promise=this.subscribe(task,signal);
+  const task:Task={id:++this.sequence,key,payload:{kind:'tile',request},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
+  const promise=this.subscribe(task,signal) as Promise<SurfaceTileData>;
+  this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
+ }
+ requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0):Promise<GeodesicTileMesh>{
+  if(this.disposed)return Promise.reject(new Error('Surface worker pool is disposed.'));
+  const key='mesh:'+tile.id.key+':'+resolution+':'+radiusM,existing=this.pending.get(key);
+  if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe(existing) as Promise<GeodesicTileMesh>;}
+  if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
+  const task:Task={id:++this.sequence,key,payload:{kind:'mesh',tile,resolution,radiusM},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
+  const promise=this.subscribe(task) as Promise<GeodesicTileMesh>;
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
  }
  reprioritize(key:string,priority:number):void{

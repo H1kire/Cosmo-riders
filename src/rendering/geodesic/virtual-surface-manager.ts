@@ -33,6 +33,9 @@ export class VirtualSurfaceManager {
   }
   if(bytes<=this.cpuBudgetBytes){this.cpu.set(tile.key,{tile,bytes,used:++this.clock});this.bytes+=bytes;}
  }
+ requestMesh(tile:import('./icosphere.ts').GeoTile,resolution:number,radiusM:number,priority=0):Promise<import('./tile-mesh.ts').GeodesicTileMesh>{
+  return this.pool.requestMesh(tile,resolution,radiusM,priority);
+ }
  async request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{
   const key=surfaceTileKey(request),state=this.status(key,priority),hit=this.cpu.get(key);
   if(hit){hit.used=++this.clock;state.state='CPU Ready';return hit.tile;}

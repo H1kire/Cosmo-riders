@@ -22,7 +22,7 @@ export interface GeodesicPlanetFrame {
  readonly shadowsEnabled:boolean;
 }
 interface GpuMesh { readonly position:WebGLBuffer; readonly uv:WebGLBuffer; readonly index:WebGLBuffer; readonly count:number; }
-interface Page { readonly request:SurfaceTileRequest; readonly mesh:GpuMesh; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; }
+interface Page { readonly request:SurfaceTileRequest; readonly mesh:GpuMesh; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; retryCount?:number; }
 
 /** GPU renderer for the twenty root faces of one procedural geodesic planet. */
 export class GeodesicPlanetRenderer {
@@ -57,12 +57,12 @@ export class GeodesicPlanetRenderer {
   if(!Number.isInteger(this.meshResolution)||this.meshResolution<2||this.meshResolution%2!==0)throw new RangeError('Geodesic mesh resolution must be an even integer >= 2.');
   const pageSize=this.resolution+this.gutter*2;
   const maxLayers=Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize=Number(gl.getParameter(gl.MAX_TEXTURE_SIZE));
-  const vertexTextureUnits=Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),combinedTextureUnits=Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS));
+  const vertexTextureUnits=Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),fragmentTextureUnits=Number(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)),combinedTextureUnits=Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS));
   const vertexUniformVectors=Number(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)),fragmentUniformVectors=Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),vertexAttributes=Number(gl.getParameter(gl.MAX_VERTEX_ATTRIBS));
   if(maxLayers<20)throw new Error('WebGL2 exposes fewer than 20 texture-array layers required for the Earth surface.');
   if(maxTextureSize<pageSize)throw new Error('WebGL2 MAX_TEXTURE_SIZE is below the configured geodesic page size.');
   if(vertexTextureUnits<1)throw new Error('Vertex texture sampling is unavailable on this WebGL2 device.');
-  if(combinedTextureUnits<5)throw new Error('Fewer than five combined texture units are available for geodesic channels.');
+  if(fragmentTextureUnits<5||combinedTextureUnits<5)throw new Error('Fewer than five fragment/combined texture units are available for geodesic channels.');
   if(vertexAttributes<2||vertexUniformVectors<40||fragmentUniformVectors<96)throw new Error('WebGL2 shader limits are below the geodesic renderer requirements.');
   this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??2});
   try{
@@ -106,7 +106,9 @@ export class GeodesicPlanetRenderer {
     const gpuMesh=this.createMesh(mesh.directions,mesh.textureCoordinates,mesh.indices);
     const page:Page={request,mesh:gpuMesh,pending:true};
     this.pages.set(tile.id.key,page);
-    void this.manager.request(request,100).then(data=>{if(this.disposed)return;page.data=data;page.pending=false;},error=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.generationErrors++;});
+    const accept=(data:SurfaceTileData)=>{if(this.disposed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
+    const reject=(error:unknown)=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;if(!this.disposed&&(page.retryCount??0)<1){page.retryCount=(page.retryCount??0)+1;page.pending=true;void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.lastError=page.error;this.generationErrors++;});}};
+    void this.manager.request(request,100).then(accept,reject);
    }
   }catch(error){
    this.failed=true;this.generationErrors++;this.manager.dispose();

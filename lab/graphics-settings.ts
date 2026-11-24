@@ -35,7 +35,13 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'CPU cache: '+bytes(value.cpuCacheBytes)+' · '+value.cpuCachePages+' страниц',
   'Страницы: создано '+value.generatedPages+'/20 · загружено '+value.uploadedPages,
   'Worker: '+value.workerActive+'/'+value.workerCount+' активно · очередь '+value.workerQueued,
-  'Ошибки renderer/upload: '+value.rendererErrors+'/'+value.uploadErrors,
+  'Ошибки Worker startup/runtime/task: '+value.workerStartupErrors+'/'+value.workerRuntimeErrors+'/'+value.workerTaskErrors,
+  'Задачи отменены/dispose: '+value.cancelledTasks+'/'+value.disposedTasks,
+  'Генерация mesh/surface: '+value.meshGenerationMs+' / '+value.surfaceGenerationMs+' ms',
+  'Ошибки renderer/upload: '+value.rendererErrors+'/'+value.uploadErrors+' · отказов renderer '+value.rendererFailureCount,
+  'Первичная ошибка: '+(value.firstFailure??'нет'),
+  'Тип/ключ ошибки: '+(value.failureTaskKind??'—')+' / '+(value.failureTaskKey??'—'),
+  'Время ошибки: '+(typeof value.failureTimestamp==='number'?new Date(value.failureTimestamp).toLocaleString():'—'),
   'Причина UV fallback: '+value.fallbackReason
  ];
  diagnostics.textContent=lines.join('\n');

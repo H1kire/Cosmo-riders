@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId } from '../src/rendering/geodesic/icosphere.ts';
-import { surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
+import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
 
 const profile:SurfaceProfile={
  bodyId:'earth',seed:12345,kind:'oceanic',massKg:5.9722e24,meanRadiusM:6371000,gravityMS2:9.81,
@@ -64,4 +64,35 @@ test('label renderer uses the computed distance opacity instead of forcing full 
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
  assert.ok(source.includes("node.style.opacity=String(p.labelOpacity??1)"));
  assert.ok(!source.includes("node.style.opacity='1'"));
+});
+
+test('square-to-triangle parameterization round-trips the full triangular domain',()=>{
+ for(let row=0;row<=20;row++){
+  for(let col=0;col<=20-row;col++){
+   const u=col/20,v=row/20,[x,y]=triangleToSquareUv(u,v),[mappedU,mappedV]=squareToTriangleBarycentric(x,y);
+   assert.ok(Math.abs(mappedU-u)<1e-10);
+   assert.ok(Math.abs(mappedV-v)<1e-10);
+  }
+ }
+ const corners=[[0,0],[1,0],[0,1]] as const;
+ for(const [u,v] of corners){
+  const [x,y]=triangleToSquareUv(u,v),[mappedU,mappedV]=squareToTriangleBarycentric(x,y);
+  assert.ok(Math.abs(mappedU-u)<1e-10&&Math.abs(mappedV-v)<1e-10);
+ }
+});
+
+test('geodesic tile generation fills every square page texel and produces finite global-field normals',()=>{
+ const tile=generateSurfaceTile(request({tile:tileId(0,'')} as Partial<SurfaceTileRequest>));
+ const count=(tile.resolution+tile.gutter*2)**2;
+ assert.equal(tile.albedo.length,count*4);
+ assert.equal(tile.normal.length,count*3);
+ assert.equal(tile.height.length,count);
+ assert.equal(tile.roughness.length,count);
+ assert.equal(tile.materialId.length,count);
+ assert.ok(tile.height.every(Number.isFinite));
+ for(let i=0;i<tile.normal.length;i+=3){
+  const nx=tile.normal[i]/255*2-1,ny=tile.normal[i+1]/255*2-1,nz=tile.normal[i+2]/255*2-1;
+  const length=Math.hypot(nx,ny,nz);
+  assert.ok(Number.isFinite(length)&&length>.97&&length<1.03);
+ }
 });

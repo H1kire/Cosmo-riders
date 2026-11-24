@@ -477,7 +477,7 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
  assert.ok(worker.includes("kind:'mesh'"));
  assert.ok(worker.includes('mesh.indices.buffer'));
  assert.ok(renderer.includes('this.manager.requestMesh('));
- assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution')));
+ assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution'));
 });
 
 test('every preset mesh resolution builds all eight stitching templates',()=>{

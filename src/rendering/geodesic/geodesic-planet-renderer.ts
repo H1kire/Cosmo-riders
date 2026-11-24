@@ -47,6 +47,7 @@ export class GeodesicPlanetRenderer {
  private generationErrors=0;
  private uploadErrors=0;
  private uploadedPages=0;
+ private lastPinnedPages=0;
  private lastError:string|null=null;
 
  constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number}={}){
@@ -142,7 +143,7 @@ export class GeodesicPlanetRenderer {
 
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
-  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0;
+  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0;this.lastPinnedPages=0;
   for(const page of this.pages.values()){
    if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){this.upload(page);uploadsThisFrame++;}
    const layer=this.gpu.getLayer(page.data?.key??'');
@@ -185,12 +186,12 @@ export class GeodesicPlanetRenderer {
    gl.disable(gl.CULL_FACE);
    return true;
   }catch(error){this.generationErrors++;this.failed=true;this.lastError=error instanceof Error?error.message:String(error);return false;}
-  finally{for(const key of pinned){this.gpu?.unpin(key);this.manager.markVisible(key,false);}gl.disable(gl.CULL_FACE);}
+  finally{this.lastPinnedPages=pinned.length;for(const key of pinned){this.gpu?.unpin(key);this.manager.markVisible(key,false);}gl.disable(gl.CULL_FACE);}
  }
 
  private disposeGpuOnly():void{
   for(const page of this.pages.values())for(const buffer of [page.mesh.position,page.mesh.uv,page.mesh.index])this.gl.deleteBuffer(buffer);
-  this.pages.clear();this.gpu?.dispose();this.gpu=null;
+  this.pages.clear();this.gpu?.dispose();this.gpu=null;this.lastPinnedPages=0;
   if(this.program)this.gl.deleteProgram(this.program);this.program=null;
  }
  dispose():void{if(this.disposed)return;this.disposed=true;this.manager.dispose();this.disposeGpuOnly();}
@@ -202,7 +203,7 @@ export class GeodesicPlanetRenderer {
  get workerCount():number{return this.manager.workerCount;}
  get queuedCount():number{return this.manager.queuedCount;}
  get cpuCacheBytes():number{return this.manager.memoryBytes;}
- get gpuPinnedPages():number{return this.gpu?.pinnedPages??0;}
+ get gpuPinnedPages():number{return this.lastPinnedPages;}
  get errorCount():number{return this.generationErrors;}
  get uploadErrorCount():number{return this.uploadErrors;}
  get uploadedPageCount():number{return this.uploadedPages;}

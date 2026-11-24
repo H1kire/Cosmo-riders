@@ -141,12 +141,14 @@ test('all eight stitching masks produce valid positively wound triangles without
   assert.ok(indices.length>0&&indices.length%3===0);
   const boundary=new Map<string,number>();
   const edgeCounts=new Map<string,number>();
+  let totalDoubleArea=0;
   for(let i=0;i<indices.length;i+=3){
    const ids=[indices[i],indices[i+1],indices[i+2]];
    assert.ok(ids.every(index=>index<vertexCount));
    assert.equal(new Set(ids).size,3);
    const points=ids.map(coordinate),area=(points[1][1]-points[0][1])*(points[2][0]-points[0][0])-(points[1][0]-points[0][0])*(points[2][1]-points[0][1]);
    assert.ok(area>0);
+   totalDoubleArea+=area;
    for(let e=0;e<3;e++){
     const a=points[e],b=points[(e+1)%3],key=ids[e]<ids[(e+1)%3]?ids[e]+':'+ids[(e+1)%3]:ids[(e+1)%3]+':'+ids[e];
     edgeCounts.set(key,(edgeCounts.get(key)??0)+1);
@@ -162,6 +164,7 @@ test('all eight stitching masks produce valid positively wound triangles without
    if(mask&bit)assert.equal(value%2,0);
   }
   assert.ok([...edgeCounts.values()].every(count=>count===1||count===2));
+  assert.equal(totalDoubleArea,resolution*resolution,'stitching must preserve the complete triangle area without holes or overlaps');
  }
 });
 

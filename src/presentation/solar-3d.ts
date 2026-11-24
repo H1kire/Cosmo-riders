@@ -137,11 +137,13 @@ export class Solar3DView{
 
  setEarthRenderMode(mode:PlanetSurfaceMode):void{this.earthRenderMode=mode;}
  rebuildGeodesicRenderer(settings:GraphicsSettings):void{
+  if(this.disposed)return;
   this.pendingGeodesicSettings=settings;this.geodesicPreset=settings.preset;
   if(this.geodesicInitScheduled)return;
   this.geodesicInitScheduled=true;
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
    this.geodesicInitScheduled=false;
+   if(this.disposed)return;
    const pending=this.pendingGeodesicSettings;if(!pending)return;
    this.geodesicEarthRenderer?.dispose();this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;
    const quality=pending.geodesic;

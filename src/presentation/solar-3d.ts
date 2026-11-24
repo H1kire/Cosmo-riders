@@ -119,7 +119,7 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.lineBuffer=g.createBuffer();
+  this.lineBuffer=g.createBuffer();this.orbitBuffers=new Map();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
@@ -136,10 +136,17 @@ export class Solar3DView{
 
  setEarthRenderMode(mode:PlanetSurfaceMode):void{this.earthRenderMode=mode;}
  rebuildGeodesicRenderer(settings:GraphicsSettings):void{
-  this.geodesicEarthRenderer?.dispose();this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=settings.preset;
-  const quality=settings.geodesic;
-  try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame});}
-  catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
+  this.pendingGeodesicSettings=settings;this.geodesicPreset=settings.preset;
+  if(this.geodesicInitScheduled)return;
+  this.geodesicInitScheduled=true;
+  requestAnimationFrame(()=>{
+   this.geodesicInitScheduled=false;
+   const pending=this.pendingGeodesicSettings;if(!pending)return;
+   this.geodesicEarthRenderer?.dispose();this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;
+   const quality=pending.geodesic;
+   try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame});}
+   catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
+  });
  }
  getGraphicsDiagnostics(){
   const gl=this.gl,renderer=this.geodesicEarthRenderer,supported=gl.getSupportedExtensions()??[],mode=this.earthRenderMode??'auto';
@@ -313,14 +320,46 @@ export class Solar3DView{
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bestScore=Infinity;for(const [id,p] of this.projected){const hitRadius=Math.max(8,Math.min(72,p.projectedRadius??8));const d=Math.hypot(x-p.x,y-p.y),score=d/hitRadius;if(d<=hitRadius&&score<bestScore){bestScore=score;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best),radius=item?.[1]?.radius??1e-5;this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,radius*1.08);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
  drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight){
-  if(!body.parentId||!body.orbitalElements||opacity<=0.005)return;
+  if(!body.parentId||!body.orbitalElements)return;
   const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;
   const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);
-  if(projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12)return;
+  const projected=projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance);
+  const visibility=Math.max(0,Math.min(1,(projected-.035)/.36));
+  const smoothVisibility=visibility*visibility*(3-2*visibility);
+  opacity*=smoothVisibility;if(opacity<=0.001)return;
+  const elements=body.orbitalElements;
+  const targetSegments=Math.max(128,Math.min(1024,Math.ceil(128+projected*.8+elements.eccentricity*320)));
+  const segments=Math.ceil(targetSegments/32)*32;
   let path=this.orbitCache.get(body.id);
-  if(!path){path=[];for(let i=0;i<=192;i++){const e=body.orbitalElements;const state=rotateStateToParentEquator(orbitalElementsToState({...e,meanAnomaly:e.meanAnomaly+Math.PI*2*i/192},parent.mu+body.mu),body,parent);path.push(state.position);}this.orbitCache.set(body.id,path);}
-  const data=[];for(const position of path){const absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};const mapped=mapper(body,absolute);if(!mapped)return;data.push(...mapped);}
-  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,this.lineBuffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array(data),g.DYNAMIC_DRAW);g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);g.drawArrays(g.LINE_STRIP,0,data.length/3);g.depthMask(true);g.disable(g.BLEND);
+  if(!path||path.length!==segments+1){
+   path=[];
+   for(let i=0;i<=segments;i++){
+    const state=rotateStateToParentEquator(orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+Math.PI*2*i/segments},parent.mu+body.mu),body,parent);
+    path.push(state.position);
+   }
+   this.orbitCache.set(body.id,path);
+  }
+  let cached=this.orbitBuffers.get(body.id);
+  if(!cached||cached.vertices.length!==(segments+1)*3){
+   const buffer=this.gl.createBuffer();if(!buffer)return;
+   cached={buffer,vertices:new Float32Array((segments+1)*3),count:segments+1};
+   this.orbitBuffers.set(body.id,cached);
+   this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);
+   this.gl.bufferData(this.gl.ARRAY_BUFFER,cached.vertices.byteLength,this.gl.DYNAMIC_DRAW);
+  }
+  const vertices=cached.vertices;
+  for(let i=0;i<path.length;i++){
+   const position=path[i],absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};
+   const mapped=mapper(body,absolute);if(!mapped)return;
+   vertices[i*3]=mapped[0];vertices[i*3+1]=mapped[1];vertices[i*3+2]=mapped[2];
+  }
+  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
+  g.bufferSubData(g.ARRAY_BUFFER,0,vertices);
+  g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);
+  g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
+  g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);
+  g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
+  g.drawArrays(g.LINE_STRIP,0,cached.count);g.depthMask(true);g.disable(g.BLEND);
  }
  render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();
@@ -447,11 +486,11 @@ export class Solar3DView{
   }
   g.useProgram(this.bodyProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   // Корабль временно исключён из сцены: активна только Солнечная система.
-  const labelCandidates=this.projected.filter(([id,p])=>{const body=world.bodies.get(id);return Boolean(body&&(!body.parentId||(p.projectedRadius??0)>=9));}).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
+  const labelCandidates=this.projected.filter(([id])=>Boolean(world.bodies.get(id))).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
   const occupied=[] as {left:number;top:number;right:number;bottom:number}[];
   const offsets=[[12,-13],[12,5],[-12,-13],[-12,5],[0,-23],[0,15]];
   const visibleLabels=new Set<string>();
-  for(const [id,p] of labelCandidates){const body=world.bodies.get(id);if(!body)continue;let node=this.labelNodes.get(id);if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}node.textContent=body.name;const width=Math.max(34,body.name.length*6.4),height=14;let chosen=null;for(const [dx,dy] of offsets){const left=p.x+dx-(dx<0?width:0),top=p.y+dy,rect={left:left-4,top:top-3,right:left+width+4,bottom:top+height+3};if(rect.left<4||rect.top<4||rect.right>w/dpr-4||rect.bottom>h/dpr-4)continue;if(occupied.every(other=>rect.right<other.left||rect.left>other.right||rect.bottom<other.top||rect.top>other.bottom)){chosen=[left,top];occupied.push(rect);break;}}if(chosen){node.hidden=false;node.style.opacity=String(p.labelOpacity??1);node.style.transform='translate3d('+Math.round(chosen[0])+'px,'+Math.round(chosen[1])+'px,0)';visibleLabels.add(id);}else node.hidden=true;}
+  for(const [id,p] of labelCandidates){const body=world.bodies.get(id);if(!body)continue;let node=this.labelNodes.get(id);if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}node.textContent=body.name;const width=Math.max(34,body.name.length*6.4),height=14;let chosen=null;for(const [dx,dy] of offsets){const left=p.x+dx-(dx<0?width:0),top=p.y+dy,rect={left:left-4,top:top-3,right:left+width+4,bottom:top+height+3};if(rect.left<4||rect.top<4||rect.right>w/dpr-4||rect.bottom>h/dpr-4)continue;if(occupied.every(other=>rect.right<other.left||rect.left>other.right||rect.bottom<other.top||rect.top>other.bottom)){chosen=[left,top];occupied.push(rect);break;}}const projectedFade=Math.max(0,Math.min(1,((p.projectedRadius??0)-1.5)/5.5));const labelOpacity=(p.labelOpacity??1)*projectedFade;if(chosen&&labelOpacity>0.005){node.hidden=false;node.style.opacity=String(labelOpacity);node.style.transform='translate3d('+Math.round(chosen[0])+'px,'+Math.round(chosen[1])+'px,0)';visibleLabels.add(id);}else node.hidden=true;}
   for(const [id,node] of this.labelNodes)if(!visibleLabels.has(id))node.hidden=true;
   const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
   let sunVisible=Boolean(sunScreen&&sunScreen.z>=-1&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);

@@ -90,12 +90,12 @@ export class SurfaceTileWorkerPool {
   if(signal?.aborted)return Promise.reject(new DOMException('Surface request aborted.','AbortError'));
   const existing=this.pending.get(key);if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe<T>(existing,signal);}
   if(this.slots.length===0)return Promise.reject(new SurfaceWorkerTaskError('worker-startup',key,'startup',this.startupError?.message??'No healthy surface workers remain.'));
-  if(this.pending.size>=this.maxPendingTasks)return Promise.reject(new SurfaceWorkerTaskError(payload.kind,key,'task','Surface worker queue reached its configured task limit.'));
+  if(this.pendingCount>=this.maxPendingTasks)return Promise.reject(new SurfaceWorkerTaskError(payload.kind,key,'task','Surface worker queue reached its configured task limit.'));
   const task:Task={id:++this.sequence,key,payload,priority,order:this.sequence,subscribers:new Set(),cancelled:false};
   const promise=this.subscribe<T>(task,signal);this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
  }
  request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{return this.enqueue<SurfaceTileData>(surfaceTileKey(request),{kind:'tile',request},priority,signal);}
- requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0):Promise<GeodesicTileMesh>{return this.enqueue<GeodesicTileMesh>('mesh:'+tile.id.key+':'+resolution+':'+radiusM,{kind:'mesh',tile,resolution,radiusM},priority);}
+ requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0,signal?:AbortSignal):Promise<GeodesicTileMesh>{return this.enqueue<GeodesicTileMesh>('mesh:'+tile.id.key+':'+resolution+':'+radiusM,{kind:'mesh',tile,resolution,radiusM},priority,signal);}
  reprioritize(key:string,priority:number):void{const task=this.pending.get(key);if(task){task.priority=Math.max(task.priority,priority);this.pump();}}
  dispose():void{
   if(this.disposed)return;this.disposed=true;const error=new DOMException('Surface worker task cancelled because its pool was disposed.','AbortError');
@@ -103,7 +103,7 @@ export class SurfaceTileWorkerPool {
   for(const slot of this.slots)slot.worker.terminate();this.queue=[];this.slots=[];this.ids.clear();this.pending.clear();
  }
  get queuedCount():number{return this.queue.length;}get activeCount():number{return this.slots.filter(s=>s.task!==null).length;}
- get pendingCount():number{return this.pending.size;}get workerCount():number{return this.slots.length;}
+ get pendingCount():number{return this.ids.size+this.queue.length;}get workerCount():number{return this.slots.length;}
  get workerStartupErrors():number{return this.workerStartupErrorsValue;}get workerRuntimeErrors():number{return this.workerRuntimeErrorsValue;}
  get workerTaskErrors():number{return this.workerTaskErrorsValue;}get cancelledTasks():number{return this.cancelledTasksValue;}
  get disposedTasks():number{return this.disposedTasksValue;}get startupFailure():string|null{return this.startupError?.message??null;}

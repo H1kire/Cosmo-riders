@@ -27,9 +27,12 @@ interface Page { readonly request:SurfaceTileRequest; readonly mesh:GpuMesh; dat
 /** GPU renderer for the twenty root faces of one procedural geodesic planet. */
 export class GeodesicPlanetRenderer {
  readonly modeDefault:PlanetSurfaceMode='auto';
- readonly resolution=128;
- readonly meshResolution=64;
+ readonly resolution:number;
+ readonly meshResolution:number;
  readonly gutter=2;
+ readonly maxUploadsPerFrame:number;
+ readonly gpuBudgetBytes:number;
+ readonly cpuBudgetBytes:number;
  private readonly gl:WebGL2RenderingContext;
  private readonly manager:VirtualSurfaceManager;
  private gpu:SurfaceGpuPageCache|null=null;
@@ -42,17 +45,33 @@ export class GeodesicPlanetRenderer {
  private readonly locations:Record<string,WebGLUniformLocation|null>={};
  private readonly attribs={direction:-1,uv:-1};
  private generationErrors=0;
+ private uploadErrors=0;
+ private uploadedPages=0;
+ private lastError:string|null=null;
 
- constructor(gl:WebGL2RenderingContext,options:{cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number}={}){
-  this.gl=gl;
-  this.manager=new VirtualSurfaceManager({cpuBudgetBytes:options.cpuBudgetBytes??96*1024*1024,workerCount:options.workerCount??2});
+ constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number}={}){
+  this.gl=gl;this.resolution=options.resolution??128;this.meshResolution=options.meshResolution??64;
+  this.cpuBudgetBytes=options.cpuBudgetBytes??96*1024*1024;this.gpuBudgetBytes=options.gpuBudgetBytes??32*1024*1024;
+  this.maxUploadsPerFrame=Math.max(1,Math.floor(options.maxUploadsPerFrame??2));
+  if(!Number.isInteger(this.resolution)||this.resolution<8||this.resolution>1024)throw new RangeError('Geodesic page resolution must be in [8, 1024].');
+  if(!Number.isInteger(this.meshResolution)||this.meshResolution<2||this.meshResolution%2!==0)throw new RangeError('Geodesic mesh resolution must be an even integer >= 2.');
+  const pageSize=this.resolution+this.gutter*2;
+  const maxLayers=Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize=Number(gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  const vertexTextureUnits=Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),combinedTextureUnits=Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS));
+  const vertexUniformVectors=Number(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)),fragmentUniformVectors=Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),vertexAttributes=Number(gl.getParameter(gl.MAX_VERTEX_ATTRIBS));
+  if(maxLayers<20)throw new Error('WebGL2 exposes fewer than 20 texture-array layers required for the Earth surface.');
+  if(maxTextureSize<pageSize)throw new Error('WebGL2 MAX_TEXTURE_SIZE is below the configured geodesic page size.');
+  if(vertexTextureUnits<1)throw new Error('Vertex texture sampling is unavailable on this WebGL2 device.');
+  if(combinedTextureUnits<5)throw new Error('Fewer than five combined texture units are available for geodesic channels.');
+  if(vertexAttributes<2||vertexUniformVectors<40||fragmentUniformVectors<96)throw new Error('WebGL2 shader limits are below the geodesic renderer requirements.');
+  this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??2});
   try{
-   this.gpu=new SurfaceGpuPageCache(gl,this.resolution,this.gutter,options.gpuBudgetBytes??32*1024*1024);
+   this.gpu=new SurfaceGpuPageCache(gl,this.resolution,this.gutter,this.gpuBudgetBytes);
    if(this.gpu.capacity<20)throw new Error('GPU texture-array capacity is below the twenty root pages required for atomic activation.');
    this.program=this.createProgram();
-   this.attribs.direction=gl.getAttribLocation(this.program,'aDirection');
-   this.attribs.uv=gl.getAttribLocation(this.program,'aUv');
-   for(const name of ['uViewProjection','uModel','uCameraPosition','uHeight','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uBodyExposure','uRadiusM','uPageSize','uResolution','uGutter','uLayer','uAlbedo','uNormal','uHeight','uRoughness','uMaterial'])this.locations[name]=gl.getUniformLocation(this.program,name);
+   this.attribs.direction=gl.getAttribLocation(this.program,'aDirection');this.attribs.uv=gl.getAttribLocation(this.program,'aUv');
+   if(this.attribs.direction<0||this.attribs.uv<0)throw new Error('Required geodesic shader attributes are unavailable.');
+   for(const name of ['uViewProjection','uModel','uCameraPosition','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uBodyExposure','uRadiusM','uPageSize','uResolution','uGutter','uLayer','uAlbedo','uNormal','uHeight','uRoughness','uMaterial']){const location=gl.getUniformLocation(this.program,name);if(location===null)throw new Error('Required geodesic shader uniform is unavailable: '+name);this.locations[name]=location;}
   }catch(error){
    this.failed=true;
    this.generationErrors++;
@@ -111,19 +130,19 @@ export class GeodesicPlanetRenderer {
    this.manager.markUploadPending(key);
    const layer=this.gpu.upload(page.data);
    this.manager.markGpuReady(key);
-   page.layer=layer;page.error=undefined;
+   page.layer=layer;page.error=undefined;this.lastError=null;this.uploadedPages++;
    return true;
   }catch(error){
-   page.error=error instanceof Error?error.message:String(error);this.generationErrors++;
+   page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;this.uploadErrors++;
    return false;
   }
  }
 
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
-  const gl=this.gl,visible:Page[]=[];
+  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0;
   for(const page of this.pages.values()){
-   if(page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)this.upload(page);
+   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){this.upload(page);uploadsThisFrame++;}
    const layer=this.gpu.getLayer(page.data?.key??'');
    if(layer!==undefined){page.layer=layer;visible.push(page);}
   }
@@ -131,7 +150,7 @@ export class GeodesicPlanetRenderer {
   if(!this.ready)return false;
   const pinned:string[]=[];
   try{
-   for(const page of visible){const key=page.data?.key??'';if(!this.gpu.pin(key))return false;pinned.push(key);this.manager.markVisible(key,true);}
+   for(const page of visible){const key=page.data?.key??'';if(!this.gpu.pin(key))throw new Error('GPU page disappeared before it could be pinned: '+key);pinned.push(key);this.manager.markVisible(key,true);}
    gl.useProgram(this.program);
    gl.uniformMatrix4fv(this.locations.uViewProjection,false,new Float32Array(frame.viewProjection));
    gl.uniformMatrix4fv(this.locations.uModel,false,new Float32Array(frame.model));
@@ -163,7 +182,7 @@ export class GeodesicPlanetRenderer {
    }
    gl.disable(gl.CULL_FACE);
    return true;
-  }catch(error){this.generationErrors++;this.failed=true;return false;}
+  }catch(error){this.generationErrors++;this.failed=true;this.lastError=error instanceof Error?error.message:String(error);return false;}
   finally{for(const key of pinned){this.gpu?.unpin(key);this.manager.markVisible(key,false);}gl.disable(gl.CULL_FACE);}
  }
 
@@ -183,5 +202,14 @@ export class GeodesicPlanetRenderer {
  get cpuCacheBytes():number{return this.manager.memoryBytes;}
  get gpuPinnedPages():number{return this.gpu?.pinnedPages??0;}
  get errorCount():number{return this.generationErrors;}
+ get uploadErrorCount():number{return this.uploadErrors;}
+ get uploadedPageCount():number{return this.uploadedPages;}
+ get activeWorkerCount():number{return this.manager.activeWorkers;}
+ get cpuCacheSize():number{return this.manager.cacheSize;}
+ get gpuCacheBytes():number{return(this.gpu?.capacity??0)*(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
+ get gpuPageBytes():number{return(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
+ get gpuPageSize():number{return this.gpu?.pageSize??0;}
+ get gpuLayerCapacity():number{return this.gpu?.capacity??0;}
+ get fallbackReason():string|null{if(this.failed)return this.lastError??'Geodesic renderer failed.';if(this.lastError)return this.lastError;if(!this.profile)return 'Earth surface profile has not been requested yet.';if(!this.ready)return 'Preparing geodesic pages: '+this.loadedTileCount+'/20 generated, '+this.gpuResidentTileCount+'/20 uploaded.';return null;}
 }
 

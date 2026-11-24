@@ -120,7 +120,7 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();
+  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitViewProjection=new Float32Array(16);
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
@@ -200,7 +200,7 @@ export class Solar3DView{
  drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){
   const g=this.gl,l=this.atmosphereLoc,shellRadius=radius*(1+profile.atmosphereHeightM/profile.groundRadiusM);
   const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
-  g.useProgram(this.atmosphereProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
+  g.useProgram(this.atmosphereProgram);this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
   g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
   g.uniform3f(l.uLightColor,...light.color);g.uniform3f(l.uCameraPosition,...eye);
   g.uniform3f(l.uAtmosphereColor,...profile.rayleigh);g.uniform1f(l.uMie,profile.mie);g.uniform1f(l.uMieAnisotropy,profile.mieAnisotropy);
@@ -350,10 +350,10 @@ export class Solar3DView{
    this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);
    this.gl.bufferData(this.gl.ARRAY_BUFFER,cached.vertices.byteLength,this.gl.DYNAMIC_DRAW);
   }
-  const vertices=cached.vertices;
+  const vertices=cached.vertices,absolute={x:0,y:0,z:0},mapped=[0,0,0] as [number,number,number];
   for(let i=0;i<path.length;i++){
-   const position=path[i],absolute={x:parentState.position.x+position.x,y:parentState.position.y+position.y,z:parentState.position.z+position.z};
-   const mapped=mapper(body,absolute);if(!mapped)return;
+   const position=path[i];absolute.x=parentState.position.x+position.x;absolute.y=parentState.position.y+position.y;absolute.z=parentState.position.z+position.z;
+   mapper(body,absolute,mapped);
    vertices[i*3]=mapped[0];vertices[i*3+1]=mapped[1];vertices[i*3+2]=mapped[2];
   }
   const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
@@ -395,7 +395,7 @@ export class Solar3DView{
   const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
   const renderOrigin=focusState?focusState.position:sun;
-  const mapper=(body,p)=>this.mapPosition({x:p.x-renderOrigin.x,y:p.y-renderOrigin.y,z:p.z-renderOrigin.z});
+  const mapper=(body,p,out?:[number,number,number])=>{const x=(p.x-renderOrigin.x)/AU,y=(p.z-renderOrigin.z)/AU,z=(p.y-renderOrigin.y)/AU;if(out){out[0]=x;out[1]=y;out[2]=z;return out;}return[x,y,z] as [number,number,number];};
   const sunRenderPosition=mapper(null,sun);this.currentSunPosition=sunRenderPosition;
   if(this.lighting.getSources().some(source=>source.id==='sun'))this.lighting.updateSource('sun',{position:sunRenderPosition});
   else this.lighting.addSource({id:'sun',kind:'point',position:sunRenderPosition,intensity:22,color:[1,.96,.86]});

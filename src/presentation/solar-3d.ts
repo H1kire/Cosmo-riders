@@ -14,6 +14,7 @@ import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
 import { GeodesicPlanetRenderer, type PlanetSurfaceMode } from '../rendering/geodesic/geodesic-planet-renderer.ts';
 import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
+import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
@@ -78,7 +79,7 @@ function makeSphere(gl,lat,lon){const p=[],n=[],idx=[];for(let y=0;y<=lat;y++){c
 function earthSurfaceProfile(body):SurfaceProfile{
  const surface=body.surface??{},radius=body.meanRadiusM,mu=body.mu??3.986004418e14;
  return{
-  bodyId:'earth',seed:body.surfaceSeed??surface.seed??1337,kind:'oceanic',
+  bodyId:'earth',seed:body.surfaceSeed??surface.seed??surfaceSeedForId(body.id),kind:'oceanic',
   massKg:body.massKg??mu/6.67430e-11,meanRadiusM:radius,gravityMS2:surface.gravityMS2??mu/(radius*radius),
   temperatureK:surface.temperatureK??288,pressurePa:surface.pressurePa??101325,
   waterFraction:surface.waterFraction??.71,iceFraction:surface.iceFraction??.025,
@@ -449,7 +450,7 @@ export class Solar3DView{
     g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));
     g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??2));
     g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
-    g.uniform1f(l.uSeed,body.surfaceSeed??0);
+    g.uniform1f(l.uSeed,body.surfaceSeed??surfaceSeedForId(body.id));
     g.uniform1f(l.uWaterFraction,isStar?0:(body.surface?.waterFraction??0));
     g.uniform1f(l.uIceFraction,isStar?0:(body.surface?.iceFraction??0));
     g.uniform1f(l.uIronFraction,isStar?0:(body.surface?.ironFraction??0));

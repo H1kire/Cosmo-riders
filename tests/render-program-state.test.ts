@@ -65,3 +65,19 @@ test('all geodesic quality presets can hold twenty pages within both cache budge
   assert.ok(settings.meshResolution>=2&&settings.meshResolution%2===0,level+' mesh resolution must be even');
  }
 });
+
+
+test('geodesic upload failures release GPU resources and stop retrying the same page every frame',async()=>{
+ const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
+ assert.match(renderer,/if\(!this\.upload\(page\)\)\{this\.failRenderer/);
+ assert.match(renderer,/private failRenderer\(error:unknown\)[\s\S]*?this\.manager\.dispose\(\);this\.disposeGpuOnly\(\)/);
+ assert.match(renderer,/finally\{this\.lastPinnedPages=pinned\.length/);
+});
+
+test('surface worker pool recovers from partial startup and rejects queued tasks if no worker survives',async()=>{
+ const pool=await readFile(new URL('../src/rendering/geodesic/surface-worker-pool.ts',import.meta.url),'utf8');
+ assert.match(pool,/this\.startupError=null;/);
+ assert.match(pool,/if\(this\.slots\.length===0\)this\.rejectQueuedWithoutWorkers\(\)/);
+ assert.match(pool,/if\(this\.slots\.length===0\)return Promise\.reject/);
+ assert.match(pool,/private rejectQueuedWithoutWorkers\(\):void/);
+});

@@ -37,7 +37,7 @@ export class SurfaceTileWorkerPool {
   if(this.disposed)return;
   try{
    const worker=this.workerFactory(),slot:WorkerSlot={id:++this.workerSequence,worker,task:null,ready:false};
-   worker.onmessage=(event:MessageEvent<WorkerReply>)=>{const reply=event.data;if(reply?.type==='ready'){if(slot.ready)return;slot.ready=true;this.pump();return;}this.finish(slot,reply);};
+   worker.onmessage=(event:MessageEvent<WorkerReply>)=>{const reply=event.data;if(reply?.type==='ready'){if(slot.ready)return;slot.ready=true;this.startupError=null;this.pump();return;}this.finish(slot,reply);};
    worker.onerror=event=>{
     event.preventDefault?.();const task=slot.task;
     if(task){this.workerRuntimeErrorsValue++;this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker runtime failure: '+(event.message||'unknown worker error')));}

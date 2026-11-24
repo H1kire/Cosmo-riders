@@ -33,7 +33,7 @@ export function buildStitchIndexTemplate(resolution:number,mask:StitchEdgeMask):
  if(!Number.isInteger(mask)||mask<0||mask>7)throw new RangeError('Stitch edge mask must be in [0, 7].');
  const cacheKey=resolution+':'+mask,cached=indexCache.get(cacheKey);if(cached)return cached;
  const a:GridPoint=[0,0],b:GridPoint=[0,resolution],c:GridPoint=[resolution,0];
- let triangles:Triangle=[[a,b,c]];
+ let triangles:Triangle[]=[[a,b,c]];
  for(let row=0;row<=resolution;row++){
   for(let column=0;column<=resolution-row;column++){
    if(isRemovedBoundaryPoint(row,column,resolution,mask))continue;

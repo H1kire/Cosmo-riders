@@ -172,12 +172,14 @@ const checks: Array<[string, () => Promise<void>]> = [
     const quality=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
     const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
     const solar=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+    const workers=await readFile(new URL('../src/rendering/geodesic/surface-worker-pool.ts',import.meta.url),'utf8');
     for(const level of ['low','medium','high','ultra']){
       if(!quality.includes(level+':{pageResolution:')||!quality.includes('geodesic:GEODESIC_QUALITY_PRESETS.'+level))throw new Error('Missing geodesic quality profile: '+level);
     }
     if(!renderer.includes('page.data&&uploadsThisFrame<this.maxUploadsPerFrame')||!renderer.includes('this.gpuBudgetBytes')||!renderer.includes('this.cpuBudgetBytes'))throw new Error('Geodesic uploads and cache budgets must be explicitly bounded.');
     if(!solar.includes('this.rebuildGeodesicRenderer(this.graphics)')||!solar.includes("window.dispatchEvent(new CustomEvent('graphics-diagnostics'"))throw new Error('Preset changes must rebuild one renderer and publish live diagnostics.');
     if(!renderer.includes('MAX_VERTEX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_ARRAY_TEXTURE_LAYERS')||!renderer.includes('MAX_TEXTURE_SIZE'))throw new Error('Geodesic renderer must validate the WebGL2 limits it depends on.');
+    if(!renderer.includes('private failRenderer(error:unknown)')||!renderer.includes('this.lastPinnedPages=pinned.length')||!renderer.includes('retryCount')||!workers.includes('rejectQueuedWithoutWorkers'))throw new Error('Geodesic failures must retry a worker once, release GPU resources, and preserve accurate pin diagnostics.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

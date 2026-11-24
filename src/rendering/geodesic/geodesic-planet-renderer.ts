@@ -4,6 +4,8 @@ import { VirtualSurfaceManager, SurfaceGpuPageCache } from './virtual-surface-ma
 import type { SurfaceProfile, SurfaceTileRequest, SurfaceTileData } from './surface-tile.ts';
 import { GEODESIC_VERTEX_SHADER, GEODESIC_FRAGMENT_SHADER } from '../shaders/geodesic-planet.ts';
 
+function reportLoadingStage(id:string,complete=false):void{if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('cosmo-loading-stage',{detail:{id,complete}}));}
+
 export type PlanetSurfaceMode='uv'|'geodesic'|'auto';
 export interface GeodesicPlanetFrame {
  readonly model:readonly number[];
@@ -103,7 +105,7 @@ export class GeodesicPlanetRenderer {
   if(this.disposed||this.failed)return;
   if(this.profile){if(JSON.stringify(this.profile)===JSON.stringify(profile))return;throw new Error('Geodesic renderer profile is immutable after page requests begin.');}
   this.profile=Object.freeze({...profile});
-  this.ready=false;
+  this.ready=false;reportLoadingStage('surface');
   for(const tile of baseGeoTiles()){
    const request:SurfaceTileRequest={planetId:profile.bodyId,seed:profile.seed,tile:tile.id,resolution:this.resolution,gutter:this.gutter,profile:this.profile};
    const page:Page={request,mesh:null,pending:true};
@@ -160,7 +162,7 @@ export class GeodesicPlanetRenderer {
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
   const gl=this.gl,visible:Page[]=[];let gpuOperationsThisFrame=0;this.lastPinnedPages=0;
-  if(!this.gpu.ready){try{this.gpu.initializeStep();}catch(error){this.failRenderer(error);}return false;}
+  if(!this.gpu.ready){try{this.gpu.initializeStep();if(this.gpu.ready)reportLoadingStage('gpu');}catch(error){this.failRenderer(error);}return false;}
   for(const page of this.pages.values()){
    if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
    if(!page.mesh)continue;
@@ -170,6 +172,7 @@ export class GeodesicPlanetRenderer {
   }
   this.ready=visible.length===20&&[...this.pages.values()].every(page=>page.layer!==undefined&&!page.error);
   if(!this.ready)return false;
+  reportLoadingStage('surface',true);reportLoadingStage('gpu',true);
   const pinned:string[]=[];
   try{
    for(const page of visible){const key=page.data?.key??'';if(!this.gpu.pin(key))throw new Error('GPU page disappeared before it could be pinned: '+key);pinned.push(key);this.manager.markVisible(key,true);}

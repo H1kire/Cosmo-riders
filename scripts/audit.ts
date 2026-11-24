@@ -186,7 +186,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if(!solar.includes('requestAnimationFrame(()=>requestAnimationFrame(')||!renderer.includes('initializeStep():boolean')||!meshSource.includes('resolution>64'))throw new Error('Geodesic initialization must be deferred, GPU arrays incremental, and stitching-compatible.');
     const qualitySettings=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
     if(!qualitySettings.includes('ultra:{pageResolution:160,meshResolution:64')||qualitySettings.includes('meshResolution:96'))throw new Error('Every graphics preset must stay within the stitcher resolution contract.');
-    if(planetaryLabelOpacity(1000,10)!==planetaryOrbitOpacity(1000,10))throw new Error('Planet labels and orbit lines must share one monotonic fade curve.');
+    if(planetaryLabelOpacity(1000,10)!==planetaryOrbitOpacity(1000,10)||!source.includes('node.style.opacity=String(labelOpacity)')||source.includes('projectedFade'))throw new Error('Planet labels and orbit lines must share one smooth fade without a projected-radius cutoff.');
     if(!renderer.includes('private failRenderer(error:unknown)')||!renderer.includes('this.lastPinnedPages=pinned.length')||!renderer.includes('retryCount')||!workers.includes('rejectQueuedWithoutWorkers'))throw new Error('Geodesic failures must retry a worker once, release GPU resources, and preserve accurate pin diagnostics.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {

@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId, tileDirectionVertexCount, ICOSAHEDRON_ADJACENCY, ICOSAHEDRON_FACE_INDICES } from '../src/rendering/geodesic/icosphere.ts';
 import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
 import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
+import { findTileNeighbors } from '../src/rendering/geodesic/tile-neighbors.ts';
+import { balanceGeodesicTiles } from '../src/rendering/geodesic/quadtree-balancer.ts';
+import { selectGeodesicLod } from '../src/rendering/geodesic/quadtree-selector.ts';
+import { buildStitchIndexTemplate, triangleGridVertexIndex } from '../src/rendering/geodesic/tile-stitching.ts';
 
 const profile:SurfaceProfile={
  bodyId:'earth',seed:12345,kind:'oceanic',massKg:5.9722e24,meanRadiusM:6371000,gravityMS2:9.81,
@@ -76,6 +80,87 @@ test('icosahedron topology has thirty two-owner edges and three reciprocal neigh
    assert.equal(reverse.edge,edge);
    assert.equal(link.reversed,true);
   }
+ }
+});
+
+test('base-face neighbor lookup is reciprocal across all thirty icosahedron edges',()=>{
+ const roots=baseGeoTiles(),map=findTileNeighbors(roots);
+ assert.equal(map.links.length,60);
+ for(const tile of roots){
+  const neighbors=map.byTile.get(tile.id.key)??[];
+  assert.equal(neighbors.length,3);
+  for(const link of neighbors){
+   assert.ok((map.byTile.get(link.neighbor.id.key)??[]).some(reverse=>reverse.neighbor.id.key===tile.id.key&&reverse.edge===link.neighborEdge&&reverse.neighborEdge===link.edge));
+  }
+ }
+});
+
+test('neighbor lookup detects fine children along a coarse edge across base faces',()=>{
+ const roots=baseGeoTiles(),root=roots[0],adjacentFace=ICOSAHEDRON_ADJACENCY[0].edges[0].face;
+ const adjacentRoot=roots[adjacentFace],children=childrenOf(adjacentRoot);
+ const firstMap=findTileNeighbors([root,...children]);
+ const touching=firstMap.links.filter(link=>link.tile.id.key===root.id.key);
+ assert.equal(touching.length,2);
+ const fine=childrenOf(touching[0].neighbor);
+ const mixed=findTileNeighbors([root,...children.filter(child=>child.id.key!==touching[0].neighbor.id.key),...fine]);
+ assert.ok(mixed.links.some(link=>link.tile.id.key===root.id.key&&link.neighbor.id.level===2));
+});
+
+test('2:1 balancer refines coarse leaves and reports remaining constraints',()=>{
+ const roots=baseGeoTiles(),root=roots[0],adjacent=roots[ICOSAHEDRON_ADJACENCY[0].edges[0].face];
+ const adjacentChildren=childrenOf(adjacent),touching=findTileNeighbors([root,...adjacentChildren]).links.find(link=>link.tile.id.key===root.id.key)!.neighbor;
+ const uneven=[...roots.filter(tile=>tile.id.key!==adjacent.id.key),...adjacentChildren.filter(tile=>tile.id.key!==touching.id.key),...childrenOf(touching)];
+ const balanced=balanceGeodesicTiles(uneven,{maxDepth:8,maxTiles:2048});
+ assert.equal(balanced.violations,0);
+ assert.ok(balanced.splitOperations>0);
+ assert.ok(balanced.maxLevelDifference<=1);
+ assert.equal(new Set(balanced.tiles.map(tile=>tile.id.key)).size,balanced.tiles.length);
+});
+
+test('screen-space geodesic LOD splits near the surface and stays coarse at long range',()=>{
+ const radius=6_371_000,base={forward:[0,0,-1] as const,verticalFovRadians:Math.PI/3,viewportHeightPx:1080,viewportWidthPx:1920};
+ const far=selectGeodesicLod({...base,positionM:[0,0,radius*100]},{planetRadiusM:radius,maxDepth:5,maxTiles:1000,targetErrorPx:2});
+ const near=selectGeodesicLod({...base,positionM:[0,0,radius*1.15]},{planetRadiusM:radius,maxDepth:5,maxTiles:1000,targetErrorPx:2});
+ assert.ok(near.stats.split>far.stats.split);
+ assert.ok(near.stats.maxLevel>far.stats.maxLevel);
+ assert.ok(near.tiles.length<=1000);
+});
+
+test('all eight stitching masks produce valid positively wound triangles without odd coarse-edge vertices',()=>{
+ const resolution=8,vertexCount=(resolution+1)*(resolution+2)/2;
+ const coordinate=(index:number)=>{
+  for(let row=0;row<=resolution;row++){
+   const start=triangleGridVertexIndex(resolution,row,0),end=start+resolution-row;
+   if(index>=start&&index<=end)return[row,index-start] as const;
+  }
+  throw new Error('Invalid triangle-grid index.');
+ };
+ for(let mask=0;mask<8;mask++){
+  const indices=buildStitchIndexTemplate(resolution,mask);
+  assert.ok(indices.length>0&&indices.length%3===0);
+  const boundary=new Map<string,number>();
+  const edgeCounts=new Map<string,number>();
+  for(let i=0;i<indices.length;i+=3){
+   const ids=[indices[i],indices[i+1],indices[i+2]];
+   assert.ok(ids.every(index=>index<vertexCount));
+   assert.equal(new Set(ids).size,3);
+   const points=ids.map(coordinate),area=(points[1][1]-points[0][1])*(points[2][0]-points[0][0])-(points[1][0]-points[0][0])*(points[2][1]-points[0][1]);
+   assert.ok(area>0);
+   for(let e=0;e<3;e++){
+    const a=points[e],b=points[(e+1)%3],key=ids[e]<ids[(e+1)%3]?ids[e]+':'+ids[(e+1)%3]:ids[(e+1)%3]+':'+ids[e];
+    edgeCounts.set(key,(edgeCounts.get(key)??0)+1);
+    const onAB=a[0]===0&&b[0]===0,onBC=a[0]+a[1]===resolution&&b[0]+b[1]===resolution,onCA=a[1]===0&&b[1]===0;
+    if(onAB)boundary.set('AB:'+a[1],a[1]),boundary.set('AB:'+b[1],b[1]);
+    if(onBC)boundary.set('BC:'+a[0],a[0]),boundary.set('BC:'+b[0],b[0]);
+    if(onCA)boundary.set('CA:'+a[0],a[0]),boundary.set('CA:'+b[0],b[0]);
+   }
+  }
+  for(const [key] of boundary){
+   const [edge,coordinateText]=key.split(':'),value=Number(coordinateText);
+   const bit=edge==='AB'?1:edge==='BC'?2:4;
+   if(mask&bit)assert.equal(value%2,0);
+  }
+  assert.ok([...edgeCounts.values()].every(count=>count===1||count===2));
  }
 });
 

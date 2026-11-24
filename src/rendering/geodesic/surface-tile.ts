@@ -155,14 +155,14 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
    const slopeU=(sampleDirection(plusU).height-sampleDirection(minusU).height)/(2*angularStep);
    const slopeV=(sampleDirection(plusV).height-sampleDirection(minusV).height)/(2*angularStep);
-   const surfaceNormal=normalize3([
-    direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
-    direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,
-    direction[2]-tangentU[2]*slopeU-tangentV[2]*slopeV
+   const radiusScale=Math.max(profile.meanRadiusM,1);\n   const surfaceNormal=normalize3([
+    direction[0]-tangentU[0]*(slopeU/radiusScale)-tangentV[0]*(slopeV/radiusScale),
+    direction[1]-tangentU[1]*(slopeU/radiusScale)-tangentV[1]*(slopeV/radiusScale),
+    direction[2]-tangentU[2]*(slopeU/radiusScale)-tangentV[2]*(slopeV/radiusScale)
    ]);
    albedo.set([Math.round(clamp(sample.color[0])*255),Math.round(clamp(sample.color[1])*255),Math.round(clamp(sample.color[2])*255),255],index*4);
    normal.set(surfaceNormal.map(value=>Math.round((value*.5+.5)*255)),index*3);
-   height[index]=sample.height;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
+   height[index]=sample.height*profile.meanRadiusM;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
    index++;
   }
  }

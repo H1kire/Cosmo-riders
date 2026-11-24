@@ -55,9 +55,9 @@ export class LoadingScreen {
  }
  async nextFrame():Promise<void>{await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));}
  ready():void{
-  this.completed=new Set(STAGES.map(stage=>stage.id));this.update();
-  if(this.title)this.title.textContent='Система готова';
-  if(this.description)this.description.textContent='Солнечная система загружена';
+  this.completed.add('first-frame');this.update();
+  if(this.title)this.title.textContent='Сцена доступна';
+  if(this.description)this.description.textContent='Солнечная система отображается; геодезическая поверхность продолжает готовиться в фоне';
   this.root?.classList.add('is-ready');
   window.setTimeout(()=>{this.root?.classList.add('is-hidden');this.root?.setAttribute('aria-hidden','true');},320);
  }

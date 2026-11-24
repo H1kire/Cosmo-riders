@@ -475,3 +475,27 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
  assert.ok(renderer.includes('this.manager.requestMesh('));
  assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution')));
 });
+
+test('every preset mesh resolution builds all eight stitching templates',()=>{
+ const resolutions=[...new Set(Object.values(GEODESIC_QUALITY_PRESETS).map(preset=>preset.meshResolution))];
+ for(const resolution of resolutions){
+  for(let mask=0;mask<8;mask++){
+   const indices=buildStitchIndexTemplate(resolution,mask);
+   const vertexCount=(resolution+1)*(resolution+2)/2;
+   assert.ok(indices.length>0&&indices.length%3===0);
+   for(const index of indices)assert.ok(index<vertexCount);
+  }
+  assert.doesNotThrow(()=>buildGeodesicTileMesh(baseGeoTiles()[0],resolution,6_371_000));
+ }
+});
+
+test('orbit rendering uses smooth visibility, adaptive tessellation and persistent GPU buffers',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('smoothVisibility'));
+ assert.ok(source.includes('Math.min(1024'));
+ assert.ok(source.includes('orbitSegmentCounts'));
+ assert.ok(source.includes('bufferSubData'));
+ assert.ok(source.includes('this.gl.deleteBuffer(cached.buffer)'));
+ assert.ok(!source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12'));
+});

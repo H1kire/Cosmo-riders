@@ -1,5 +1,6 @@
 import type { QualityLevel } from '../core/render-types.ts';
 
+// Кожен профіль резервує пам'ять щонайменше для 20 сторінок: (resolution + 2*gutter)^2 * 13 байтів.
 export interface GeodesicQualitySettings {pageResolution:number;meshResolution:number;gpuBudgetBytes:number;cpuBudgetBytes:number;workerCount:number;uploadsPerFrame:number;}
 export const GEODESIC_QUALITY_PRESETS:Readonly<Record<QualityLevel,GeodesicQualitySettings>>=Object.freeze({
  low:{pageResolution:64,meshResolution:32,gpuBudgetBytes:8*1024*1024,cpuBudgetBytes:24*1024*1024,workerCount:1,uploadsPerFrame:1},

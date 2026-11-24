@@ -24,7 +24,7 @@ function extractBlock(source:string,marker:string):string{
 
 test('planet render loop isolates WebGL programs and keeps the UV fallback conditional',async()=>{
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- const loop=extractBlock(source,'for(const body of bodies){');
+ const loop=extractBlock(source,'for(const body of bodies){\n   g.useProgram(this.bodyProgram);');
  assert.match(loop,/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/);
  assert.match(loop,/if\(body\.id==='earth'&&this\.geodesicEarthRenderer&&this\.earthRenderMode!=='uv'\)/);
  assert.match(loop,/this\.geodesicEarthRenderer\.render\(\{/);

@@ -16,7 +16,7 @@ import { GeodesicPlanetRenderer, type PlanetSurfaceMode } from '../rendering/geo
 import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
 import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 
-const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
+const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;uniform mat4 uModel;void main(){gl_Position=uViewProjection*uModel*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
 const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4,titan:5};
@@ -120,11 +120,11 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitViewProjection=new Float32Array(16);
+  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();this.orbitViewProjection=new Float32Array(16);this.orbitModelMatrix=new Float32Array(16);
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
-  this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uColor']);
+  this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uModel','uColor']);
   this.atmosphereSystem=new AtmosphereSystem();
   this.cloudSystem=new CloudSystem();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
@@ -322,7 +322,7 @@ export class Solar3DView{
  mapPosition(p):[number,number,number]{return[p.x/AU,p.z/AU,p.y/AU];}
  pick(e){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bestScore=Infinity;for(const [id,p] of this.projected){const hitRadius=Math.max(8,Math.min(72,p.projectedRadius??8));const d=Math.hypot(x-p.x,y-p.y),score=d/hitRadius;if(d<=hitRadius&&score<bestScore){bestScore=score;best=id;}}if(best){const item=this.projected.find(v=>v[0]===best),radius=item?.[1]?.radius??1e-5;this.focusId=best;this.focusOffset=[0,0,0];this.distance=Math.max(1e-10,radius*1.08);this.canvas.dispatchEvent(new CustomEvent('bodyselect',{detail:{id:best}}));}}
  project(vp,p,w,h){const[x,y,z]=p,cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],cw=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];return cw>0?{x:(cx/cw*.5+.5)*w,y:(1-(cy/cw*.5+.5))*h,z:cz/cw}:null;}
- drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight,bodyDistance){
+ drawOrbit(world,body,states,sunPosition,vp,mapper,opacity=1,eye,viewportHeight,bodyDistance,renderOrigin){
   if(!body.parentId||!body.orbitalElements)return;
   const parent=world.bodies.get(body.parentId),parentState=states.get(body.parentId);if(!parent||!parentState)return;
   const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);
@@ -339,33 +339,34 @@ export class Solar3DView{
   let segments=this.orbitSegmentCounts.get(body.id)??128;
   if(targetSegments>segments*1.2||targetSegments<segments*.55){segments=targetSegments;this.orbitSegmentCounts.set(body.id,segments);}
   let path=this.orbitCache.get(body.id);
-  if(!path||path.length!==segments+1){
-   path=[];
+  const elementsChanged=this.orbitElementRefs.get(body.id)!==elements;
+  if(!path||path.length!==(segments+1)*3||elementsChanged){
+   path=new Float32Array((segments+1)*3);
    for(let i=0;i<=segments;i++){
     const state=rotateStateToParentEquator(orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+Math.PI*2*i/segments},parent.mu+body.mu),body,parent);
-    path.push(state.position);
+    path[i*3]=state.position.x/AU;path[i*3+1]=state.position.z/AU;path[i*3+2]=state.position.y/AU;
    }
-   this.orbitCache.set(body.id,path);
+   this.orbitCache.set(body.id,path);this.orbitElementRefs.set(body.id,elements);
   }
   let cached=this.orbitBuffers.get(body.id);
-  if(!cached||cached.vertices.length!==(segments+1)*3){
-   if(cached)this.gl.deleteBuffer(cached.buffer);
+  if(!cached){
    const buffer=this.gl.createBuffer();if(!buffer)return;
-   cached={buffer,vertices:new Float32Array((segments+1)*3),count:segments+1};
+   cached={buffer,count:segments+1,path:null};
    this.orbitBuffers.set(body.id,cached);
-   this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);
-   this.gl.bufferData(this.gl.ARRAY_BUFFER,cached.vertices.byteLength,this.gl.DYNAMIC_DRAW);
   }
-  const vertices=cached.vertices,absolute={x:0,y:0,z:0},mapped=[0,0,0] as [number,number,number];
-  for(let i=0;i<path.length;i++){
-   const position=path[i];absolute.x=parentState.position.x+position.x;absolute.y=parentState.position.y+position.y;absolute.z=parentState.position.z+position.z;
-   mapper(body,absolute,mapped);
-   vertices[i*3]=mapped[0];vertices[i*3+1]=mapped[1];vertices[i*3+2]=mapped[2];
+  if(cached.path!==path||cached.count!==segments+1){
+   cached.path=path;cached.count=segments+1;this.gl.bindBuffer(this.gl.ARRAY_BUFFER,cached.buffer);
+   this.gl.bufferData(this.gl.ARRAY_BUFFER,path,this.gl.STATIC_DRAW);
   }
+  const model=this.orbitModelMatrix;model.fill(0);
+  model[0]=1;model[6]=1;model[9]=1;
+  model[12]=(parentState.position.x-renderOrigin.x)/AU;
+  model[13]=(parentState.position.z-renderOrigin.z)/AU;
+  model[14]=(parentState.position.y-renderOrigin.y)/AU;model[15]=1;
   const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
-  g.bufferSubData(g.ARRAY_BUFFER,0,vertices);
   g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);
   this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
+  g.uniformMatrix4fv(l.uModel,false,model);
   g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);
   g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
   g.drawArrays(g.LINE_STRIP,0,cached.count);g.depthMask(true);g.disable(g.BLEND);
@@ -418,7 +419,7 @@ export class Solar3DView{
   const bodyState=states.get(body.id);if(!bodyState)continue;
   const bodyPosition=mapper(body,bodyState.position);
   const bodyDistance=Math.hypot(bodyPosition[0]-eye[0],bodyPosition[1]-eye[1],bodyPosition[2]-eye[2]);
-  this.drawOrbit(world,body,states,sun,vp,mapper,1,eye,h,bodyDistance);
+  this.drawOrbit(world,body,states,sun,vp,mapper,1,eye,h,bodyDistance,renderOrigin);
  }
   g.useProgram(this.bodyProgram);
   const l=this.bodyLoc;g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
@@ -522,7 +523,7 @@ export class Solar3DView{
   const g=this.gl;
   for(const mesh of this.meshes??[])for(const buffer of mesh.buffers)g.deleteBuffer(buffer);
   for(const orbit of this.orbitBuffers?.values()??[])g.deleteBuffer(orbit.buffer);
-  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();
+  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitElementRefs?.clear();
   for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram,this.lineProgram])if(program)g.deleteProgram(program);
   this.hdr?.dispose();
   this.ringRenderer?.dispose();

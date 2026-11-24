@@ -21,7 +21,7 @@ let failures=0;
 for(const file of files){
  graph.set(file,new Set());
  const source=await readFile(file,'utf8');
- const patterns=[/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"]([^'"]+)['"]/g,/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,/new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g];
+ const patterns=[/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"]([^'"]+)['"]/g,/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,/\bnew\s+(?:Worker|SharedWorker)\s*\(\s*new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g];
  for(const pattern of patterns)for(const match of source.matchAll(pattern)){
   const spec=match[1];if(!spec.startsWith('.'))continue;
   const target=resolve(dirname(file),spec.split(/[?#]/,1)[0]);

@@ -106,10 +106,10 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const width=resolution+2*gutter,count=width*width;
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
- const width=resolution+2*gutter;let index=0;
+ let index=0;
  const sample=(u:number,v:number)=>{const d=barycentricDirection(resolved.triangle,u,v);return profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(d,profile):geologicalSample(d,profile,plateSet);};
- for(let row=-gutter;row<=resolution+gutter;row++){
-  for(let col=-gutter;col<=resolution+gutter-row;col++){
+ for(let row=-gutter;row<resolution+gutter;row++){
+  for(let col=-gutter;col<resolution+gutter;col++){
    const u=col/resolution,v=row/resolution;
    const cu=clamp(u,0,1),cv=clamp(v,0,1),sum=cu+cv;
    const safeU=sum>1?cu/sum:cu,safeV=sum>1?cv/sum:cv;

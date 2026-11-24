@@ -63,3 +63,20 @@
 .settings-tab{flex:1;border:1px solid #2a405a;border-radius:6px;padding:8px;background:#101d2d;color:#91a9c5;font-size:10px;cursor:pointer}
 .settings-tab.active{background:#1b3856;border-color:#6ba9e8;color:#f0f7ff}
 .settings-section[hidden]{display:none}
+
+/* Стартовий екран малюється до динамічного імпорту важкого застосунку. */
+.loading-screen{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 44%,#142943 0,#091525 46%,#050a13 100%);transition:opacity .32s ease,visibility .32s ease}
+.loading-screen:before,.loading-screen:after{content:"";position:absolute;width:72vmax;height:72vmax;border:1px solid #4b78a522;border-radius:50%;transform:rotate(-24deg) scaleY(.28);pointer-events:none}
+.loading-screen:after{width:52vmax;height:52vmax;border-color:#70d9ed18;transform:rotate(28deg) scaleY(.32)}
+.loading-screen.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
+.loading-card{position:relative;z-index:1;width:min(440px,calc(100vw - 36px));padding:30px 32px;background:#0b1625eF;border:1px solid #34506f;border-radius:12px;box-shadow:0 24px 90px #0009}
+.loading-brand{display:flex;align-items:center;gap:12px}.loading-mark{width:42px;height:42px;display:grid;place-items:center;border:1px solid #5791c7;border-radius:11px;color:#a4e4ff;font-size:25px;font-weight:800;box-shadow:0 0 24px #387fc533}.loading-brand strong,.loading-brand small{display:block}.loading-brand strong{font-size:14px;letter-spacing:.16em}.loading-brand small{margin-top:3px;color:#8198b5;font-size:8px;letter-spacing:.22em}
+.loading-orbit{height:132px;position:relative;display:grid;place-items:center}.loading-orbit:before,.loading-orbit:after{content:"";position:absolute;width:118px;height:48px;border:1px solid #6aa8d977;border-radius:50%;transform:rotate(-28deg)}.loading-orbit:after{width:84px;height:84px;border-color:#70d9ed44;transform:none}.loading-orbit span{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff4c9,#ffc66c 48%,#a95d31);box-shadow:0 0 28px #ffbd6c99}.loading-orbit i{position:absolute;width:7px;height:7px;border-radius:50%;background:#9de8ff;box-shadow:0 0 12px #70d9ed;animation:loading-orbit 2.8s linear infinite}
+@keyframes loading-orbit{from{transform:rotate(0deg) translateX(62px) rotate(0deg)}to{transform:rotate(360deg) translateX(62px) rotate(-360deg)}}
+.loading-meta{display:flex;justify-content:space-between;align-items:center;color:#8198b5;font-size:8px;letter-spacing:.15em}.loading-meta b{color:#d9e9fa;font-size:11px;letter-spacing:0}
+.loading-progress{height:5px;margin:10px 0 17px;overflow:hidden;border-radius:5px;background:#17283d}.loading-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#4d9ce2,#70d9ed);box-shadow:0 0 12px #70d9ed88;transition:width .2s ease}
+.loading-screen.is-indeterminate .loading-progress i{width:34%!important;animation:loading-indeterminate 1.4s ease-in-out infinite}
+@keyframes loading-indeterminate{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}
+.loading-stage{display:block;font-size:12px;color:#e2efff}.loading-description{min-height:20px;margin:5px 0 0;color:#8095af;font-size:10px}
+.loading-error{margin:15px 0 0;padding:10px;border:1px solid #8e4554;border-radius:6px;background:#351b27;color:#ffc4ce;font-size:10px;overflow-wrap:anywhere}.loading-retry{margin-top:14px;padding:9px 14px;border:1px solid #4d8ac1;border-radius:6px;background:#173353;color:#e3f2ff;cursor:pointer}
+@media(max-width:520px){.loading-card{padding:24px 20px}.loading-orbit{height:112px}}

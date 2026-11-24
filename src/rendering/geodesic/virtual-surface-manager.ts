@@ -63,6 +63,13 @@ export class VirtualSurfaceManager {
  get memoryBytes():number{return this.bytes;}
  get cacheSize():number{return this.cpu.size;}
  get queuedCount():number{return this.pool.queuedCount;}
+ get pendingCount():number{return this.pool.pendingCount;}
+ get workerStartupErrors():number{return this.pool.workerStartupErrors;}
+ get workerRuntimeErrors():number{return this.pool.workerRuntimeErrors;}
+ get workerTaskErrors():number{return this.pool.workerTaskErrors;}
+ get cancelledTasks():number{return this.pool.cancelledTasks;}
+ get disposedTasks():number{return this.pool.disposedTasks;}
+ get startupFailure():string|null{return this.pool.startupFailure;}
  get activeWorkers():number{return this.pool.activeCount;}
  get workerCount():number{return this.pool.workerCount;}
  get diagnostics():readonly SurfaceTileStatus[]{return[...this.statuses.values()].map(item=>({...item}));}
@@ -95,6 +102,9 @@ export class SurfaceGpuPageCache {
  initializeStep():boolean{
   if(this.ready)return true;
   const g=this.gl,index=this.textures.length;
+  if(g.isContextLost())throw new Error('WebGL context was lost before surface texture allocation.');
+  const previousActive=g.getParameter(g.ACTIVE_TEXTURE) as number;
+  const previousBinding=g.getParameter(g.TEXTURE_BINDING_2D_ARRAY) as WebGLTexture|null;
   const definitions=[
    {internal:g.RGBA8,format:g.RGBA,type:g.UNSIGNED_BYTE,filter:g.LINEAR,bytes:4},
    {internal:g.RGB8,format:g.RGB,type:g.UNSIGNED_BYTE,filter:g.LINEAR,bytes:3},
@@ -114,17 +124,15 @@ export class SurfaceGpuPageCache {
    g.texParameteri(g.TEXTURE_2D_ARRAY,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
    this.textures.push(texture);
    return this.ready;
-  }catch(error){
-   g.deleteTexture(texture);
-   throw error;
-  }
+  }catch(error){g.deleteTexture(texture);throw error;}
+  finally{g.bindTexture(g.TEXTURE_2D_ARRAY,previousBinding);g.activeTexture(previousActive);}
  }
  upload(tile:SurfaceTileData):number{
   const g=this.gl;
   if(tile.resolution+tile.gutter*2!==this.pageSize)throw new Error('Tile dimensions do not match the GPU page cache.');
   const texels=this.pageSize*this.pageSize;
   if(tile.albedo.length!==texels*4||tile.normal.length!==texels*3||tile.height.length!==texels||tile.roughness.length!==texels||tile.materialId.length!==texels)throw new Error('Surface tile channel lengths do not match the five GPU texture arrays.');
-  let layer=this.pages.get(tile.key),newSlot=layer===undefined,slot=layer,previousKey:string|null=null;
+  let layer=this.pages.get(tile.key),newSlot=layer===undefined,slot=layer;
   if(newSlot){
    slot=this.slots.findIndex(item=>item.key===null);
    if(slot<0){
@@ -135,22 +143,28 @@ export class SurfaceGpuPageCache {
     }
     if(slot<0)throw new Error('All GPU texture-array layers are pinned by visible tiles.');
    }
-   previousKey=this.slots[slot].key;
    layer=slot;
   }
+  if(g.isContextLost())throw new Error('WebGL context was lost before surface page upload.');
   const w=this.pageSize,previousAlignment=g.getParameter(g.UNPACK_ALIGNMENT) as number;
-  g.pixelStorei(g.UNPACK_ALIGNMENT,1);
+  const previousActive=g.getParameter(g.ACTIVE_TEXTURE) as number;
+  const previousBinding=g.getParameter(g.TEXTURE_BINDING_2D_ARRAY) as WebGLTexture|null;
+  g.activeTexture(g.TEXTURE0);const unitZeroBinding=g.getParameter(g.TEXTURE_BINDING_2D_ARRAY) as WebGLTexture|null;
   const put=(texture:WebGLTexture,format:number,type:number,data:ArrayBufferView)=>{g.bindTexture(g.TEXTURE_2D_ARRAY,texture);g.texSubImage3D(g.TEXTURE_2D_ARRAY,0,0,0,layer!,w,w,1,format,type,data);};
   try{
+   g.pixelStorei(g.UNPACK_ALIGNMENT,1);
    put(this.albedo,g.RGBA,g.UNSIGNED_BYTE,tile.albedo);put(this.normal,g.RGB,g.UNSIGNED_BYTE,tile.normal);
    put(this.height,g.RED,g.FLOAT,tile.height);put(this.roughness,g.RED,g.UNSIGNED_BYTE,tile.roughness);put(this.material,g.RED,g.UNSIGNED_BYTE,tile.materialId);
    const uploadError=g.getError();if(uploadError!==g.NO_ERROR)throw new Error('GPU surface page upload failed with WebGL error '+uploadError+'.');
   }catch(error){
-   if(newSlot&&slot!==undefined&&previousKey!==null){this.slots[slot].key=previousKey;this.pages.set(previousKey,slot);}
-   else if(newSlot&&slot!==undefined)this.slots[slot].key=null;
+   if(slot!==undefined){const damagedKey=this.slots[slot].key;if(damagedKey)this.pages.delete(damagedKey);this.slots[slot].key=null;this.slots[slot].used=0;}
    throw error;
-  }finally{g.pixelStorei(g.UNPACK_ALIGNMENT,previousAlignment);}
-  if(newSlot&&slot!==undefined){if(previousKey)this.pages.delete(previousKey);this.slots[slot].key=tile.key;this.pages.set(tile.key,slot);}
+  }finally{
+   g.pixelStorei(g.UNPACK_ALIGNMENT,previousAlignment);
+   g.bindTexture(g.TEXTURE_2D_ARRAY,unitZeroBinding);g.activeTexture(previousActive);
+   if(previousActive!==g.TEXTURE0)g.bindTexture(g.TEXTURE_2D_ARRAY,previousBinding);
+  }
+  if(newSlot&&slot!==undefined){const previous=this.slots[slot].key;if(previous)this.pages.delete(previous);this.slots[slot].key=tile.key;this.pages.set(tile.key,slot);}
   this.slots[layer!].used=++this.clock;return layer!;
  }
  getLayer(key:string):number|undefined{const layer=this.pages.get(key);if(layer!==undefined)this.slots[layer].used=++this.clock;return layer;}

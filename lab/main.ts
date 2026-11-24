@@ -1,6 +1,11 @@
 import { LoadingScreen } from './loading-screen.ts';
 
 const loading = new LoadingScreen();
+window.addEventListener('cosmo-loading-stage',(event:Event)=>{
+  const detail=(event as CustomEvent<{id?:string;complete?:boolean}>).detail;
+  if(!detail?.id)return;
+  if(detail.complete)loading.complete(detail.id);else loading.stage(detail.id);
+});
 const startScreen = document.getElementById('start-screen');
 const startButton = document.getElementById('start-simulation') as HTMLButtonElement|null;
 

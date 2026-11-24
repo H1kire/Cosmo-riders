@@ -1,1 +1,0 @@
-import type{RenderFrameContext,RenderPass}from'../core/render-types.ts';export class GlareEffect implements RenderPass{readonly name='glare';readonly order=520;enabled=true;threshold=1.8;intensity=.35;render(_context:RenderFrameContext){/* Star-shaped glare pass. */}}

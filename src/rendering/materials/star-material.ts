@@ -1,1 +1,0 @@
-import type{Color3}from'../core/render-types.ts';export interface StarMaterialOptions{color:Color3;temperatureK:number;luminosityW:number;coronaIntensity:number;}export class StarMaterial{constructor(public options:StarMaterialOptions){}}

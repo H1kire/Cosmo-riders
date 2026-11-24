@@ -76,7 +76,7 @@ export class SurfaceGpuPageCache {
  constructor(private readonly gl:WebGL2RenderingContext,resolution:number,gutter=2,budgetBytes=32*1024*1024){
   this.pageSize=resolution+gutter*2;
   const maxLayers=gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
-  const bytesPerPage=this.pageSize*this.pageSize*14;
+  const bytesPerPage=this.pageSize*this.pageSize*13;
   this.capacity=Math.max(1,Math.min(maxLayers,Math.floor(budgetBytes/bytesPerPage)));
   const create=(internal:number,format:number,type:number):WebGLTexture=>{
    const texture=gl.createTexture();if(!texture)throw new Error('Не вдалося виділити GPU texture array.');

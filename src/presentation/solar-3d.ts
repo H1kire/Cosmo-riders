@@ -524,7 +524,8 @@ export class Solar3DView{
   window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);
   const g=this.gl;
   for(const mesh of this.meshes??[])for(const buffer of mesh.buffers)g.deleteBuffer(buffer);
-  if(this.lineBuffer)g.deleteBuffer(this.lineBuffer);
+  for(const orbit of this.orbitBuffers?.values()??[])g.deleteBuffer(orbit.buffer);
+  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();
   for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram,this.lineProgram])if(program)g.deleteProgram(program);
   this.hdr?.dispose();
   this.ringRenderer?.dispose();

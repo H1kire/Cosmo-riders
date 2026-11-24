@@ -28,7 +28,7 @@ surface-tile.ts evaluates a direction-space geological field. The current implem
 
 Jupiter, Saturn, Uranus and Neptune use dedicated zonal atmosphere fields. Atmospheric giants return zero solid height and a cloud material ID.
 
-Each tile produces independent typed-array channels: RGBA8 albedo, RGB8 normal, Float32 height, R8 roughness and R8 material ID. Tiles are square GPU pages with a gutter. Samples outside the triangular domain are clamped to the triangle domain for a stable border.
+Each tile produces independent typed-array channels: RGBA8 albedo, RGB8 normal, Float32 height, R8 roughness and R8 material ID. A square page is mapped to the complete triangle with the bijective interior mapping q = sqrt(x), u = q(1-y), v = qy; the inverse is x = (u+v)^2, y = v/(u+v), with the triangle apex handled as a single limiting point. Gutter texels continue the same parameterization outside the page and evaluate the same global direction-space field rather than clamping samples to the nearest point of the triangle. Height-derived normals use central differences in a local spherical tangent basis, so the normal field is evaluated from the same direction-space height function on every tile.
 
 ## Worker pool and caches
 
@@ -44,7 +44,7 @@ The current maintenance pass also fixed two independent issues: cache identity n
 2. The renderer still uses the old procedural surface fragment shader and UV sphere geometry.
 3. There is not yet a camera-frustum patch selector, quadtree balancing, GPU page-table shader lookup, parent-page fallback, or parent/child crossfade.
 4. Stitch index buffers for mixed-resolution patch boundaries are not yet connected to the renderer.
-5. The current normal estimate is an initial implementation and requires visual seam and tangent-frame validation. The square-page gutter still clamps samples to the triangle domain; cross-page gutter sampling is not implemented.
+5. The direction-space gutter and normal calculation now have deterministic unit tests, but cross-face GPU filtering and rendered seam behavior still require WebGL/browser validation.
 6. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
 
 These are explicit remaining work items, not claimed features.

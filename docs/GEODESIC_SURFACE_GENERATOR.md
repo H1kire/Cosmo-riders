@@ -2,7 +2,7 @@
 
 ## Status
 
-The geodesic generator is an implemented CPU/Worker-side foundation. It is not yet the active planetary renderer. Solar3DView still renders the procedural GLSL material on UV sphere meshes. The previous Cube Map generator is retained temporarily because renderer migration and regression tests are not complete.
+The geodesic renderer is integrated into Solar3DView for Earth. It prepares the twenty icosahedron root meshes and their procedural surface pages through the shared module Worker pool, uploads them incrementally into five WebGL2 texture arrays, and draws them with indexed geometry. Until all twenty pages are ready—or whenever initialization fails—the existing UV sphere renderer remains active as a real fallback. HDR, atmosphere, clouds, rings, shadows and body rotation remain in the shared scene.
 
 ## Geodesic hierarchy
 
@@ -63,23 +63,25 @@ Each tile produces independent typed-array channels: RGBA8 albedo, RGB8 normal, 
 
 ## Worker pool and caches
 
-surface-worker-pool.ts runs generation only in module Workers. Concurrency defaults to a conservative cap derived from navigator.hardwareConcurrency and is limited to four. Requests are keyed by a stable JSON serialization of the body identity, request seed, every physical/profile field, algorithm version, tile face/path/level, resolution and gutter. This avoids reusing a page after physical profile changes under the same seed. The serialized identity is intentionally retained rather than relying on a lossy short hash. Higher-priority queued work is scheduled first. An unavailable Worker produces a controlled error; it does not run the full generator synchronously on the UI thread.
+surface-worker-pool.ts runs both triangular mesh construction and surface-page generation in module Workers. Both task kinds share one priority queue and one bounded pool; concurrency defaults to a conservative cap derived from navigator.hardwareConcurrency and is limited to four. Requests are keyed by a stable JSON serialization of the body identity, request seed, every physical/profile field, algorithm version, tile face/path/level, resolution and gutter. This avoids reusing a page after physical profile changes under the same seed. The serialized identity is intentionally retained rather than relying on a lossy short hash. Higher-priority queued work is scheduled first, duplicate pending tasks share one result, and the pending queue has a fixed upper bound. Mesh arrays and all five surface-page channels are returned with Transferable Objects. An unavailable Worker produces a controlled error; it does not run mesh or surface generation synchronously on the UI thread.
 
-virtual-surface-manager.ts tracks request states and maintains a bounded CPU LRU cache. Its GPU page cache uses WebGL2 TEXTURE_2D_ARRAY resources and LRU layer reuse for albedo, normal, height, roughness and material ID. Memory is bounded by the requested budget and MAX_ARRAY_TEXTURE_LAYERS.
+virtual-surface-manager.ts tracks request states and maintains a bounded CPU LRU cache. Its GPU page cache uses WebGL2 TEXTURE_2D_ARRAY resources and LRU layer reuse for albedo, normal, height, roughness and material ID. The five arrays are allocated one per frame; mesh-buffer creation and page uploads share a per-frame operation budget. Memory is bounded by the requested budget and MAX_ARRAY_TEXTURE_LAYERS. Visible layers are pinned for the draw and released afterward.
 
-## Current limitations / migration gates
+## Active renderer integration and remaining limits
 
-The current maintenance pass also fixed two independent issues: cache identity now includes the complete physical profile, and the body-label renderer now applies the already-computed distance opacity instead of forcing opacity to 1. These changes do not constitute geodesic renderer integration.
+The active Earth path now uses `GeodesicPlanetRenderer`. `setPlanetSurface()` only creates root-page records and submits mesh/page jobs; it does not synchronously build twenty meshes. CPU mesh construction runs in the same Worker pool as texture generation. The renderer creates a bounded number of GPU buffers and uploads a bounded number of texture pages per frame. The GPU texture arrays themselves are allocated incrementally, one array per frame.
 
-1. The tile generator, Worker pool and caches are not yet wired into Solar3DView.
-2. The renderer still uses the old procedural surface fragment shader and UV sphere geometry.
-3. The selector, active-leaf runtime, neighbor search, 2:1 balancer and stitch templates are CPU-side components. The runtime computes masks from all neighbor links on each topology rebuild, but it is not yet connected to Solar3DView or used to draw planets.
-4. Neighbor lookup still uses pairwise edge-interval comparisons within adjacent base-face groups. The runtime also rebuilds the complete neighbor map after Split/Merge; a persistent hierarchical edge index and incremental update queue remain future work.
-5. Stitch masks are automatically derived from every neighbor link and cached index templates are requested when a mask changes. Paired cross-face seam tests over actual position/index buffers and displacement-height continuity are still required; rendered seam behavior has not been verified.
-6. The gutter direction grid is tested for full writes and normalized directions. Cross-page texture filtering continuity for neighboring LOD pages has not yet been proven in the GPU sampler.
-7. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
+The UV sphere path remains intact and is used while the geodesic renderer prepares, when the user selects UV, or after a geodesic failure. Failure diagnostics retain the reason and the pre-cleanup allocation snapshot while current GPU allocation counters correctly return to zero after resources are released.
 
-These are explicit remaining work items, not claimed features.
+Quality presets use even stitch-compatible mesh resolutions: Low 32, Medium 48, High 64 and Ultra 64. The stitcher remains explicitly limited to even resolutions 2–64; Ultra no longer requests an unsupported 96. Each preset's GPU budget is checked against the minimum memory needed for twenty root pages.
+
+The active renderer currently draws the twenty root faces. The adaptive selector, persistent active-leaf runtime, neighbor search and 2:1 balancer exist as CPU components but are not yet connected to the active renderer's draw list. The following are therefore still limitations:
+
+1. Adaptive quadtree refinement and merge are not yet driving the active Earth renderer; it currently draws the twenty root faces.
+2. UV and Geodesic paths now share the same deterministic body seed and body-local normalized direction convention, but their procedural material algorithms are still different. Exact pixel-for-pixel texture continuity when switching modes is not yet guaranteed.
+3. Paired cross-face seam tests cover index topology and direction continuity, but displaced GPU seam behavior and rendered texture filtering have not been visually verified.
+4. The active geodesic draw path has not been benchmarked in a browser on GTX 1650; no measured frame-time or VRAM telemetry is claimed.
+5. Context-loss recovery and asynchronous shader compilation are not yet implemented.
 
 ## Подготовка GPU-страниц и атрибутов меша (аудит 2026-11-24)
 
@@ -88,4 +90,4 @@ These are explicit remaining work items, not claimed features.
 - Додано pin, unpin та isPinned. LRU пропускає закріплені шари та повідомляє про вичерпання доступних шарів, якщо всі вони закріплені.
 - Runtime тепер розрізняє стан «видимість ще не задавалася» та явний порожній набір видимих листків.
 
-Обмеження: нормалі меша поки радіальні, а не обчислені з displacement height; UV/сторінка ще не підключені до GLSL. Pin API існує, але виклики pin/unpin ще не пов'язані з життєвим циклом кадру в Solar3DView. Інкрементальний edge index, реальний geodesic draw path, Worker → GPU pipeline та браузерна перевірка залишаються незавершеними.
+Обмеження: mesh normals залишаються радіальними; фінальне освітлення використовує normal texture сторінки. Pin/unpin вже прив'язані до життєвого циклу кадру. Worker → CPU cache → GPU texture arrays → GLSL → drawElements pipeline підключений. Adaptive leaf runtime ще не керує активним draw list; точна процедурна ідентичність UV/Geodesic та візуальна перевірка швів залишаються незавершеними.

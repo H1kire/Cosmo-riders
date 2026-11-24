@@ -99,7 +99,35 @@ const checks: Array<[string, () => Promise<void>]> = [
     const surface = await readFile(new URL('../src/rendering/shaders/planet-surface.ts', import.meta.url), 'utf8');
     if (!surface.includes('uLightPositions[4]') || !surface.includes('uLightIntensities[i]/(22.0*distanceSquared)') || !surface.includes('distributionGGX') || !surface.includes('geometrySchlick') || !surface.includes('surfaceAlbedo')) throw new Error('Planetary materials must use inverse-square multi-light shading, microfacet specular and distinct surface maps.');
     if (!surface.includes('vec3 indirect=albedo*0.0001') || !surface.includes('uSunRadius*along/max(sunDistance-along,1e-12)')) throw new Error('Planetary night-side floor or stellar angular penumbra is not physically bounded.');
-    if (!/for\(const body of bodies\)\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/.test(source) || !/this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*(?:if\(body\.hasRings\)this\.ringRenderer\.render\(vp,scaleModelMatrix\(model,this\.ringRenderer\.outerScale\(body\.id\)\),body\.id\);\s*)?const profile=this\.atmosphereSystem/.test(source)) throw new Error('Surface shader must be rebound before every planet after atmosphere/cloud passes.');
+    const extractBlock=(marker:string):string=>{
+      const markerIndex=source.indexOf(marker);
+      if(markerIndex<0)throw new Error('Render-state block is missing: '+marker);
+      const open=source.indexOf('{',markerIndex);
+      let depth=0,quote='',escaped=false,lineComment=false,blockComment=false;
+      for(let i=open;i<source.length;i++){
+        const char=source[i],next=source[i+1];
+        if(lineComment){if(char==='\n')lineComment=false;continue;}
+        if(blockComment){if(char==='*'&&next==='/'){blockComment=false;i++;}continue;}
+        if(quote){if(escaped){escaped=false;continue;}if(char==='\\'){escaped=true;continue;}if(char===quote)quote='';continue;}
+        if(char==='/'&&next==='/'){lineComment=true;i++;continue;}
+        if(char==='/'&&next==='*'){blockComment=true;i++;continue;}
+        if(char==='"'||char==="'"){quote=char;continue;}
+        if(char==='{')depth++;
+        else if(char==='}'&&--depth===0)return source.slice(open,i+1);
+      }
+      throw new Error('Unbalanced render-state block: '+marker);
+    };
+    const planetLoop=extractBlock('for(const body of bodies){');
+    if(!/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/.test(planetLoop)) throw new Error('Each planet iteration must bind the surface program before any early exit or draw.');
+    if(!/if\(body\.id===['"]earth['"]&&this\.geodesicEarthRenderer&&this\.earthRenderMode!==['"]uv['"]\)/.test(planetLoop) || !/this\.geodesicEarthRenderer\.render\(\{/.test(planetLoop)) throw new Error('Geodesic rendering must be restricted to Earth and use the existing frame data.');
+    if(!/if\(!renderedGeodesicEarth\)\s*\{\s*g\.useProgram\(this\.bodyProgram\);\s*this\.bindMesh\(mesh,l\);\s*g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/.test(planetLoop)) throw new Error('UV fallback must run only when geodesic rendering did not draw and must bind its mesh.');
+    const atmosphereBlock=extractBlock(' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
+    const cloudsBlock=extractBlock(' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');
+    if(!atmosphereBlock.includes('g.useProgram(this.atmosphereProgram)')||!/this\.bindMesh\(mesh,l\);\s*g\.drawElements\(/.test(atmosphereBlock)) throw new Error('Atmosphere pass must bind its own program and mesh before drawing.');
+    if(!cloudsBlock.includes('g.useProgram(this.cloudProgram)')||!/this\.bindMesh\(mesh,l\);\s*g\.drawElements\(/.test(cloudsBlock)) throw new Error('Cloud pass must bind its own program and mesh before drawing.');
+    const rings=await readFile(new URL('../src/rendering/rings/ring-renderer.ts',import.meta.url),'utf8');
+    if(!rings.includes('g.useProgram(this.program)')||!rings.includes('g.drawArrays(g.TRIANGLE_STRIP,0,this.count)')) throw new Error('Ring pass must bind its independent program before drawing.');
+    if(!/for\(const body of bodies\)\{\s*g\.useProgram\(this\.bodyProgram\);/.test(source)) throw new Error('Adjacent planet iterations must reset the surface program to prevent WebGL state leakage.');
     if (!surface.includes('if(uKind>5.5&&uKind<6.5)') || !surface.includes('float cloudBands=fbm3(domainWarp3(n*vec3(7.0,24.0,7.0)') || !surface.includes('if(uColor.g>uColor.b*0.85)') || !source.includes('venus:5') || !source.includes('sun:6,mercury:2') || source.includes('g.uniform1f(l.uKind,7);')) throw new Error('The solar-system-only scene must not retain a spacecraft emissive material path.');
     if (!surface.includes('pow(uColor,vec3(2.2))')) throw new Error('Base material colors must be converted from sRGB to linear light.');
     if (!surface.includes('fbm3Filtered') || !surface.includes('fwidth(p.x)')) throw new Error('Procedural surface detail must filter sub-pixel noise octaves.');
@@ -125,6 +153,31 @@ const checks: Array<[string, () => Promise<void>]> = [
     const radius=6371000/149597870700;
     if (planetaryOrbitOpacity(radius*20,radius)!==0 || planetaryOrbitOpacity(radius*120,radius)!==0 || planetaryOrbitOpacity(radius*2400,radius)!==1) throw new Error('Heliocentric orbit fade thresholds are incorrect.');
     if (!(projectedOrbitRadius(0.0026,1080,38)<0.8) || !(projectedOrbitRadius(0.0026,1080,0.00001)>100)) throw new Error('Sub-pixel orbit culling does not respond to camera distance.');
+  }],
+  ['Start menu gates both published entry points before the loading bootstrap', async () => {
+    const rootPage=await readFile(new URL('../index.html',import.meta.url),'utf8');
+    const labPage=await readFile(new URL('../lab/index.html',import.meta.url),'utf8');
+    const main=await readFile(new URL('../lab/main.ts',import.meta.url),'utf8');
+    const loader=await readFile(new URL('../lab/loading-screen.ts',import.meta.url),'utf8');
+    for(const [name,page] of [['root',rootPage],['lab',labPage]] as const){
+      if(!page.includes('id="start-screen"')||!page.includes('id="start-simulation"'))throw new Error(name+' page is missing the start menu.');
+      if(!page.includes('class="loading-screen is-hidden"')||!page.includes('id="loading-progress"'))throw new Error(name+' page must keep the existing loading screen hidden until entry.');
+      if(!page.includes('id="graphics-diagnostics"'))throw new Error(name+' page is missing live graphics diagnostics.');
+    }
+    if(!main.includes("startButton.addEventListener('click'")||!main.includes("loading.show()")||!main.includes("await import('./lab.ts')"))throw new Error('Start action must reveal LoadingScreen before the existing dynamic application import.');
+    if(!loader.includes("this.root?.classList.remove('is-hidden','is-ready')")||!loader.includes("this.root?.classList.add('is-hidden')"))throw new Error('LoadingScreen must retain explicit show and ready transitions.');
+    if(!rootPage.includes('src="./lab/main.ts"')||!labPage.includes('src="./main.ts"'))throw new Error('Published entry-point module paths are inconsistent.');
+  }],
+  ['Geodesic graphics presets budget twenty pages and throttle per-frame uploads', async () => {
+    const quality=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
+    const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
+    const solar=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+    for(const level of ['low','medium','high','ultra']){
+      if(!quality.includes(level+':{pageResolution:')||!quality.includes('geodesic:GEODESIC_QUALITY_PRESETS.'+level))throw new Error('Missing geodesic quality profile: '+level);
+    }
+    if(!renderer.includes('page.data&&uploadsThisFrame<this.maxUploadsPerFrame')||!renderer.includes('this.gpuBudgetBytes')||!renderer.includes('this.cpuBudgetBytes'))throw new Error('Geodesic uploads and cache budgets must be explicitly bounded.');
+    if(!solar.includes('this.rebuildGeodesicRenderer(this.graphics)')||!solar.includes("window.dispatchEvent(new CustomEvent('graphics-diagnostics'"))throw new Error('Preset changes must rebuild one renderer and publish live diagnostics.');
+    if(!renderer.includes('MAX_VERTEX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_ARRAY_TEXTURE_LAYERS')||!renderer.includes('MAX_TEXTURE_SIZE'))throw new Error('Geodesic renderer must validate the WebGL2 limits it depends on.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');

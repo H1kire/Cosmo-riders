@@ -291,7 +291,6 @@ export class Solar3DView{
   },{passive:false});
   c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
  }
- setEarthRenderMode(mode:PlanetSurfaceMode){this.earthRenderMode=mode;}
  getGeodesicEarthDiagnostics(){const renderer=this.geodesicEarthRenderer;return renderer?{ready:renderer.isReady,failed:renderer.isFailed,loaded:renderer.loadedTileCount,visible:renderer.visibleTileCount,gpuResident:renderer.gpuResidentTileCount,workers:renderer.workerCount,queued:renderer.queuedCount,cpuBytes:renderer.cpuCacheBytes,pinned:renderer.gpuPinnedPages,errors:renderer.errorCount}:{ready:false,failed:true,initError:this.geodesicEarthInitError??'Renderer unavailable'};}
  setStellarSource(id:string,positionSI:[number,number,number],options:{intensity?:number;color?:[number,number,number]}={}){
   if(!id||id==='sun')throw new TypeError('Use a unique non-primary stellar source id.');

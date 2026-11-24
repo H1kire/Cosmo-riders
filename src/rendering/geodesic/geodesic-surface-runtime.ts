@@ -74,15 +74,16 @@ export class GeodesicSurfaceRuntime {
  }
 
  merge(parentKey:string):boolean{
-  const facePath=parentKey.split(':');
-  if(facePath.length!==2||facePath[1]==='root')return false;
-  const face=parseInt(facePath[0],36),path=facePath[1];
-  const parent=childrenOf({id:{face,path:path.slice(0,-1),level:path.length-1,key:face.toString(36)+':'+(path.length===1?'root':path.slice(0,-1))},triangle:this.resolveParentTriangle(face,path.slice(0,-1))} as GeoTile);
-  const childKeys=parent.map(child=>child.id.key);
+  const separator=parentKey.indexOf(':');
+  if(separator<1)return false;
+  const face=parseInt(parentKey.slice(0,separator),36),path=parentKey.slice(separator+1);
+  if(!Number.isInteger(face)||face<0||face>=20)return false;
+  const parentTile=this.resolveTile(face,path==='root'?'':path);
+  if(parentTile.id.key!==parentKey)return false;
+  const childKeys=childrenOf(parentTile).map(child=>child.id.key);
   if(!childKeys.every(key=>this.active.has(key)))return false;
   const candidate=new Map(this.active);
   for(const key of childKeys)candidate.delete(key);
-  const parentTile=this.resolveTile(face,path.slice(0,-1));
   candidate.set(parentTile.id.key,parentTile);
   const validation=findTileNeighbors([...candidate.values()]);
   if(validation.links.some(link=>Math.abs(link.tile.id.level-link.neighbor.id.level)>1))return false;
@@ -91,7 +92,6 @@ export class GeodesicSurfaceRuntime {
   this.rebuildTopology();
   return true;
  }
-
  /** Reconcile a complete desired leaf cover. Parents are replaced atomically by descendants and vice versa. */
  reconcile(desired:readonly GeoTile[],visibleKeys:ReadonlySet<string>=new Set()):void{
   const next=new Map<string,GeoTile>();

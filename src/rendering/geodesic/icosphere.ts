@@ -104,7 +104,7 @@ export function buildTileDirections(tile:GeoTile,resolution:number,gutter=2):Flo
  const expected=tileDirectionVertexCount(resolution,gutter);
  const out=new Float32Array(expected*3);let offset=0;
  for(let row=-gutter;row<=resolution+gutter;row++){
-  for(let col=-gutter;col<=resolution+2*gutter-row;col++){
+  for(let col=-gutter;col<=resolution+gutter-row;col++){
    const u=col/resolution,v=row/resolution,d=barycentricDirection(tile.triangle,u,v);
    out[offset++]=d[0];out[offset++]=d[1];out[offset++]=d[2];
   }

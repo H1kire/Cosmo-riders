@@ -1,34 +1,42 @@
 # Loading System
 
-## Status
+## Current behavior
 
-A lightweight loading overlay and dynamic application import are implemented for /lab/. The overlay is part of initial HTML and CSS; lab/main.ts waits for one animation frame before importing lab/lab.ts.
+The loading overlay is present in both the root and `/lab/` entrypoints. `lab/main.ts` yields a frame before the dynamic import, and `lab/lab.ts` yields again before constructing the WebGL scene so the browser can paint the overlay first.
 
-This is the first bootstrap boundary, not yet a fully asynchronous resource pipeline. lab.ts still performs substantial synchronous initialization, including Solar3DView, WebGL programs, HDR targets, sphere meshes and the physical world. The overlay can be visible before this work begins, but its animation and progress updates cannot run while a long synchronous task occupies the main thread.
+The Solar3DView still creates its base WebGL programs, HDR pipeline and UV sphere meshes synchronously. The expensive geodesic work no longer runs in that constructor or in the first scene frame:
 
-## Stages currently reported
+- Geodesic renderer creation is deferred until after the first scene frame.
+- GPU texture arrays are allocated one array per frame.
+- Root mesh construction and procedural surface-page generation use the shared bounded module Worker pool.
+- Worker results use Transferable Objects.
+- GPU mesh-buffer creation and texture-page uploads share a bounded per-frame operation budget.
+- The UV renderer remains visible while geodesic preparation runs and remains available after a failure.
+
+The first Solar System frame is therefore independent of completion of all twenty geodesic root pages. The loading overlay can close when the scene is accessible; the geodesic surface continues preparing in the background.
+
+## Reported stages
 
 | Stage | Weight | Completion condition |
 |---|---:|---|
-| Application bootstrap | 5% | Initial HTML/CSS and loading controller have reached their first frame |
-| Core data & rendering | 85% | Dynamic import of lab.ts has completed |
-| Initial scene | 10% | A subsequent animation frame has run after module initialization |
+| Bootstrap | 5% | Loading controller has reached its first frame |
+| Application import | 5% | Dynamic import of `lab.ts` has completed |
+| WebGL context | 15% | WebGL2 context and base renderer construction completed |
+| Solar System | 20% | Physical world and initial scenario are prepared |
+| Scene renderer | 15% | Base renderer and animation loop are registered |
+| Geodesic surface | 20% | All twenty root pages and meshes are ready for drawing |
+| GPU pages | 10% | All five texture arrays and twenty root page uploads are ready |
+| First scene frame | 10% | A subsequent animation frame has rendered |
 
-The progress bar advances only when a stage completes. During dynamic import it is indeterminate because the module graph and synchronous initialization do not expose reliable byte or task progress. The percentage is not a simulated byte counter.
+The progress percentage advances only when named stages actually complete. It is not a byte counter or a timer simulation. The loading overlay does not mark the background geodesic stages complete merely because the UV fallback scene is available. When the first frame is ready, the overlay may close while those stages remain pending.
 
-## Errors
+## Failure behavior
 
-Import or initialization failures are logged to the console and shown in the loading overlay. A retry control reloads the page. This currently covers bootstrap import failures and errors thrown during module evaluation.
+Import and initialization failures are logged and shown in the overlay. Worker, mesh, texture allocation or upload failures are retained in graphics diagnostics and switch Earth back to the UV renderer. The Solar System scene remains available unless the base WebGL scene itself fails.
 
-## Remaining work
+## Remaining limits
 
-- Refactor lab.ts into explicit asynchronous initialization steps.
-- Separate physical data construction from GPU resource creation.
-- Yield between renderer setup operations.
-- Use KHR_parallel_shader_compile where available and poll completion across frames.
-- Split mandatory first-frame resources from optional surface detail.
-- Move tile generation to the geodesic Worker pool and stream detail after entry.
-- Add cancellation, context-loss recovery and resource cleanup across the full boot lifecycle.
-- Instrument real phase durations and first-frame timestamps in-browser.
-
-The current overlay improves initial feedback and establishes a dynamic-import boundary. It does not by itself prove that long main-thread stalls have been eliminated.
+- WebGL context-loss recovery is not yet implemented.
+- Shader compilation still uses the synchronous WebGL compile/link path; parallel shader compilation is not yet wired.
+- Base WebGL program/HDR/sphere initialization is still synchronous, though geodesic mesh and page work has been moved off the main thread and GPU allocations are spread across frames.
+- Actual first-frame and phase durations still need browser instrumentation and visual confirmation on the target GPU.

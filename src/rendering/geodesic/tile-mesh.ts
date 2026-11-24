@@ -12,6 +12,7 @@ export interface GeodesicTileMesh {
  /** UV сторінки, узгоджені з squareToTriangleBarycentric() генератора. */
  readonly textureCoordinates:Float32Array;
  readonly indices:Uint32Array;
+ readonly generationMs?:number;
 }
 
 /** Builds the indexed spherical patch consumed by the future planet renderer. */

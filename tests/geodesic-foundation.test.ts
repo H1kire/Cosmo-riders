@@ -90,7 +90,8 @@ test('geodesic tile generation fills every square page texel and produces finite
  assert.equal(tile.height.length,count);
  assert.equal(tile.roughness.length,count);
  assert.equal(tile.materialId.length,count);
- assert.ok(tile.height.every(Number.isFinite));\n assert.ok(tile.height.some(value=>Math.abs(value)>1),'rocky relief is stored in metres, not unitless fractions');
+ assert.ok(tile.height.every(Number.isFinite));
+ assert.ok(tile.height.some(value=>Math.abs(value)>1),'rocky relief is stored in metres, not unitless fractions');
  for(let i=0;i<tile.normal.length;i+=3){
   const nx=tile.normal[i]/255*2-1,ny=tile.normal[i+1]/255*2-1,nz=tile.normal[i+2]/255*2-1;
   const length=Math.hypot(nx,ny,nz);

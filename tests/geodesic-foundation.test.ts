@@ -340,3 +340,72 @@ test('explicitly empty runtime visibility does not make every active leaf visibl
  runtime.setVisible(new Set());
  assert.equal(runtime.getTileStates().filter(state=>state.visible).length,0);
 });
+
+test('all twenty root-face mesh boundaries share identical radial vertices',()=>{
+ const roots=baseGeoTiles(),resolution=8,radius=6371000;
+ const meshes=roots.map(tile=>buildGeodesicTileMesh(tile,resolution,radius));
+ const edge=(kind:0|1|2,index:number)=>{
+  if(kind===0)return triangleGridVertexIndex(resolution,0,index);
+  if(kind===1)return triangleGridVertexIndex(resolution,index,resolution-index);
+  return triangleGridVertexIndex(resolution,resolution-index,0);
+ };
+ for(let face=0;face<20;face++)for(let side=0;side<3;side++){
+  const link=ICOSAHEDRON_ADJACENCY[face].edges[side as 0|1|2];
+  for(let i=0;i<=resolution;i++){
+   const a=edge(side as 0|1|2,i)*3;
+   const b=edge(link.edge,link.reversed?resolution-i:i)*3;
+   for(let axis=0;axis<3;axis++)assert.ok(Math.abs(meshes[face].directions[a+axis]-meshes[link.face].directions[b+axis])<1e-6);
+  }
+ }
+});
+
+test('GPU page cache accounts thirteen bytes per texel and checks uploads before GPU Ready',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const cache=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
+ const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
+ assert.ok(cache.includes('this.pageSize*this.pageSize*13'));
+ for(const format of ['gl.RGBA8','gl.RGB8','gl.R32F','gl.R8'])assert.ok(cache.includes(format));
+ assert.ok(cache.includes('g.UNPACK_ALIGNMENT,1'));
+ assert.ok(cache.includes('g.getError()'));
+ assert.ok(renderer.indexOf('this.gpu.upload(page.data)')<renderer.indexOf('this.manager.markGpuReady(key)'));
+});
+
+test('worker failures reject the active generation request and release the failed slot',async()=>{
+ class BrokenWorker{
+  onmessage:((event:MessageEvent)=>void)|null=null;
+  onerror:((event:ErrorEvent)=>void)|null=null;
+  postMessage(){queueMicrotask(()=>this.onerror?.({message:'intentional worker failure',preventDefault(){}} as ErrorEvent));}
+  terminate(){}
+ }
+ const pool=new SurfaceTileWorkerPool({concurrency:1,workerFactory:()=>new BrokenWorker() as unknown as Worker});
+ await assert.rejects(pool.request(request({resolution:8}),1),/Surface worker failed/);
+ pool.dispose();
+});
+
+test('GPU pinning prevents LRU layer reuse and all geodesic resources have disposal paths',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const cache=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
+ const renderer=await readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8');
+ assert.ok(cache.includes('pinCount===0'));
+ assert.ok(cache.includes('pin(key:string):boolean'));
+ assert.ok(cache.includes('unpin(key:string):void'));
+ assert.ok(cache.includes('getLayer(key:string):number|undefined'));
+ assert.ok(cache.includes('g.deleteTexture(texture)'));
+ assert.ok(renderer.includes('this.gl.deleteBuffer(buffer)'));
+ assert.ok(renderer.includes('this.gl.deleteProgram(this.program)'));
+});
+
+test('geodesic shader performs metric height displacement and manual filtering for R32F pages',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const shader=await readFile(new URL('../src/rendering/shaders/geodesic-planet.ts',import.meta.url),'utf8');
+ const cache=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
+ assert.ok(shader.includes('sampleHeight(aUv)'));
+ assert.ok(shader.includes('heightM/uRadiusM'));
+ assert.ok(shader.includes('textureLod(uHeight'));
+ assert.ok(shader.includes('texture(uAlbedo'));
+ assert.ok(shader.includes('texture(uNormal'));
+ assert.ok(shader.includes('texture(uRoughness'));
+ assert.ok(shader.includes('texture(uMaterial'));
+ assert.ok(cache.includes('internal===gl.R32F?gl.NEAREST'));
+ assert.ok(cache.includes('this.material=create(gl.R8,gl.RED,gl.UNSIGNED_BYTE,gl.NEAREST)'));
+});

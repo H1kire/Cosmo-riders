@@ -138,6 +138,9 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
  const sampleDirection=(direction:Vec3)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet);
  const angularStep=1/(resolution*Math.pow(2,tile.level));
+ // Земна поверхня обмежена фізичним діапазоном від -11 км до +9 км відносно середнього радіуса.
+ // Значення лишається часткою радіуса до побудови нормалей і переводиться в метри лише під час запису каналу Height.
+ const heightFraction=(value:number)=>profile.bodyId==='earth'?clamp(value,-11000/profile.meanRadiusM,9000/profile.meanRadiusM):value;
  let index=0;
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){
@@ -153,8 +156,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const minusU=normalize3([direction[0]-tangentU[0]*angularStep,direction[1]-tangentU[1]*angularStep,direction[2]-tangentU[2]*angularStep]);
    const plusV=normalize3([direction[0]+tangentV[0]*angularStep,direction[1]+tangentV[1]*angularStep,direction[2]+tangentV[2]*angularStep]);
    const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
-   const slopeU=(sampleDirection(plusU).height-sampleDirection(minusU).height)/(2*angularStep);
-   const slopeV=(sampleDirection(plusV).height-sampleDirection(minusV).height)/(2*angularStep);
+   const slopeU=(heightFraction(sampleDirection(plusU).height)-heightFraction(sampleDirection(minusU).height))/(2*angularStep);
+   const slopeV=(heightFraction(sampleDirection(plusV).height)-heightFraction(sampleDirection(minusV).height))/(2*angularStep);
    const surfaceNormal=normalize3([
     direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
     direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,
@@ -162,7 +165,7 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    ]);
    albedo.set([Math.round(clamp(sample.color[0])*255),Math.round(clamp(sample.color[1])*255),Math.round(clamp(sample.color[2])*255),255],index*4);
    normal.set(surfaceNormal.map(value=>Math.round((value*.5+.5)*255)),index*3);
-   height[index]=sample.height*profile.meanRadiusM;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
+   height[index]=heightFraction(sample.height)*profile.meanRadiusM;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
    index++;
   }
  }

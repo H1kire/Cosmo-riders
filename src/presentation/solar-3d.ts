@@ -12,6 +12,8 @@ import { createGraphicsSettings, type GraphicsSettings } from '../rendering/qual
 import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
+import { GeodesicPlanetRenderer, type PlanetSurfaceMode } from '../rendering/geodesic/geodesic-planet-renderer.ts';
+import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;void main(){gl_Position=uViewProjection*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
@@ -72,6 +74,22 @@ function scaleModelMatrix(model,factor){return [model[0]*factor,model[1]*factor,
 function compile(gl,type,src){const s=gl.createShader(type);if(!s)throw Error('WebGL shader allocation failed');let source=src;if(typeof gl.createVertexArray==='function'){source=source.replace(/\battribute\b/g,'in').replace(/\bvarying\b/g,type===gl.VERTEX_SHADER?'out':'in');if(type===gl.FRAGMENT_SHADER&&source.includes('gl_FragColor')){source=source.replace(/(precision\s+\w+\s+float;)/,'$1\nout vec4 outColor;').replace(/gl_FragColor/g,'outColor');}source='#version 300 es\n'+source;}gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const error=gl.getShaderInfoLog(s);gl.deleteShader(s);throw Error(error);}return s;}
 function makeProgram(gl,vs,fs){const vertex=compile(gl,gl.VERTEX_SHADER,vs),fragment=compile(gl,gl.FRAGMENT_SHADER,fs),p=gl.createProgram();if(!p){gl.deleteShader(vertex);gl.deleteShader(fragment);throw Error('WebGL program allocation failed');}gl.attachShader(p,vertex);gl.attachShader(p,fragment);gl.linkProgram(p);gl.detachShader(p,vertex);gl.detachShader(p,fragment);gl.deleteShader(vertex);gl.deleteShader(fragment);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){const error=gl.getProgramInfoLog(p);gl.deleteProgram(p);throw Error(error);}return p;}
 function makeSphere(gl,lat,lon){const p=[],n=[],idx=[];for(let y=0;y<=lat;y++){const v=y/lat,phi=v*Math.PI;for(let x=0;x<=lon;x++){const theta=x/lon*Math.PI*2,q=[-Math.cos(theta)*Math.sin(phi),Math.cos(phi),Math.sin(theta)*Math.sin(phi)];p.push(...q);n.push(...q);}}for(let y=0;y<lat;y++)for(let x=0;x<lon;x++){const a=y*(lon+1)+x,b=a+lon+1;idx.push(a,b,a+1,b,b+1,a+1);}const buffers=[gl.createBuffer(),gl.createBuffer(),gl.createBuffer()];gl.bindBuffer(gl.ARRAY_BUFFER,buffers[0]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(p),gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,buffers[1]);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(n),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,buffers[2]);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return{buffers,count:idx.length};}
+
+function earthSurfaceProfile(body):SurfaceProfile{
+ const surface=body.surface??{},radius=body.meanRadiusM,mu=body.mu??3.986004418e14;
+ return{
+  bodyId:'earth',seed:body.surfaceSeed??surface.seed??1337,kind:'oceanic',
+  massKg:body.massKg??mu/6.67430e-11,meanRadiusM:radius,gravityMS2:surface.gravityMS2??mu/(radius*radius),
+  temperatureK:surface.temperatureK??288,pressurePa:surface.pressurePa??101325,
+  waterFraction:surface.waterFraction??.71,iceFraction:surface.iceFraction??.025,
+  ironFraction:surface.ironFraction??.32,silicateFraction:surface.silicateFraction??.62,
+  volatileFraction:surface.volatileFraction??.03,sulfurFraction:surface.sulfurFraction??.01,
+  tectonicActivity:surface.tectonicActivity??.8,volcanicActivity:surface.volcanicActivity??.32,
+  erosion:surface.erosion??.78,age:surface.age??.18,
+  rotationPeriodSeconds:body.rotationPeriodSeconds??86164,algorithmVersion:surface.algorithmVersion??1
+ };
+}
+
 export class Solar3DView{
  [key: string]: any;
  constructor(canvas){
@@ -95,6 +113,9 @@ export class Solar3DView{
   this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.ringRenderer=new RingRenderer(g);
+  this.earthRenderMode='auto' as PlanetSurfaceMode;
+  this.geodesicEarthRenderer=null;
+  try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(g,{workerCount:2,gpuBudgetBytes:32*1024*1024});}catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
@@ -255,6 +276,8 @@ export class Solar3DView{
   },{passive:false});
   c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
  }
+ setEarthRenderMode(mode:PlanetSurfaceMode){this.earthRenderMode=mode;}
+ getGeodesicEarthDiagnostics(){const renderer=this.geodesicEarthRenderer;return renderer?{ready:renderer.isReady,failed:renderer.isFailed,loaded:renderer.loadedTileCount,visible:renderer.visibleTileCount,gpuResident:renderer.gpuResidentTileCount,workers:renderer.workerCount,queued:renderer.queuedCount,cpuBytes:renderer.cpuCacheBytes,pinned:renderer.gpuPinnedPages,errors:renderer.errorCount}:{ready:false,failed:true,initError:this.geodesicEarthInitError??'Renderer unavailable'};}
  setStellarSource(id:string,positionSI:[number,number,number],options:{intensity?:number;color?:[number,number,number]}={}){
   if(!id||id==='sun')throw new TypeError('Use a unique non-primary stellar source id.');
   if(!positionSI.every(Number.isFinite))throw new TypeError('Stellar source coordinates must be finite SI values.');
@@ -366,7 +389,8 @@ export class Solar3DView{
    g.uniform1fv(l['uLightIntensities[0]'],lightIntensities);g.uniform1i(l.uLightCount,lightSources.length);
    const isStar=!body.parentId;
     const bodySunDistanceAU=Math.hypot(state.position.x-sun.x,state.position.y-sun.y,state.position.z-sun.z)/AU;
-    g.uniform1f(l.uBodyExposure,isStar?1:planetaryDisplayGain(bodySunDistanceAU));
+    const bodyExposure=isStar?1:planetaryDisplayGain(bodySunDistanceAU);
+    g.uniform1f(l.uBodyExposure,bodyExposure);
     g.uniform3f(l.uColor,...(COLORS[body.id]??(isStar?[1,.72,.42]:[.5,.6,.8])));
     g.uniform1f(l.uKind,isStar?6:(KINDS[body.id]??2));
     g.uniform1f(l.uDetail,Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))));
@@ -381,7 +405,16 @@ export class Solar3DView{
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);
    g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);
-   this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
+   let renderedGeodesicEarth=false;
+   if(body.id==='earth'&&this.geodesicEarthRenderer&&this.earthRenderMode!=='uv'){
+    if(!this.geodesicEarthRenderer.isReady&&!this.geodesicEarthRenderer.isFailed){
+     try{this.geodesicEarthRenderer.setPlanetSurface(earthSurfaceProfile(body));}catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
+    }
+    if(!this.geodesicEarthRenderer.isFailed){
+     renderedGeodesicEarth=this.geodesicEarthRenderer.render({model,viewProjection:vp,cameraPosition:eye,lightPositions,lightColors,lightIntensities,lightCount:lightSources.length,bodyExposure,sunPosition:sunRenderPosition,sunRadius:696340000/AU,occluderPositions:occluders.positions,occluderRadii:occluders.radii,occluderCount:occluders.count,shadowsEnabled:this.graphics.shadows});
+    }
+   }
+   if(!renderedGeodesicEarth){g.useProgram(this.bodyProgram);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);}
    if(body.hasRings)this.ringRenderer.render(vp,scaleModelMatrix(model,this.ringRenderer.outerScale(body.id)),body.id);
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
@@ -438,6 +471,7 @@ export class Solar3DView{
   for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram,this.lineProgram])if(program)g.deleteProgram(program);
   this.hdr?.dispose();
   this.ringRenderer?.dispose();
+  this.geodesicEarthRenderer?.dispose();
   this.labels?.remove();
   this.labelNodes?.clear();
   this.orbitCache?.clear();

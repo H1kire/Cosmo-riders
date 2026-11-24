@@ -111,7 +111,7 @@ export class GeodesicPlanetRenderer {
     const reject=(error:unknown)=>{page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;if(!this.disposed&&!this.failed&&(page.retryCount??0)<1){page.retryCount=(page.retryCount??0)+1;page.pending=true;void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.generationErrors++;this.failRenderer(retryError);});}else if(!this.disposed&&!this.failed)this.failRenderer(error);};
     void this.manager.request(request,100).then(accept,reject);
    }
-  }catch(error){this.generationErrors++;this.failRenderer(error);throw error;}
+  }catch(error){this.generationErrors++;this.failRenderer(error);}
  }
 
  private createMesh(directions:Float32Array,uv:Float32Array,indices:Uint32Array):GpuMesh{

@@ -27,7 +27,13 @@ export class LoadingScreen {
   this.retry=document.getElementById('loading-retry') as HTMLButtonElement|null;
   this.retry?.addEventListener('click',()=>location.reload());
  }
- show():void{this.root?.classList.remove('is-hidden');this.root?.setAttribute('aria-hidden','false');}
+ show():void{
+  this.completed.clear();
+  if(this.errorPanel)this.errorPanel.hidden=true;
+  if(this.retry)this.retry.hidden=true;
+  this.root?.classList.remove('is-hidden','is-ready');this.root?.setAttribute('aria-hidden','false');
+  this.stage('bootstrap');this.update();
+ }
  complete(id:string):void{if(STAGES.some(stage=>stage.id===id))this.completed.add(id);this.update();}
  stage(id:string):void{
   const stage=STAGES.find(item=>item.id===id);if(!stage)return;

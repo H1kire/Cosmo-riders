@@ -182,8 +182,9 @@ const checks: Array<[string, () => Promise<void>]> = [
     const meshWorker=await readFile(new URL('../src/rendering/geodesic/surface-tile-worker.ts',import.meta.url),'utf8');
     const pool=await readFile(new URL('../src/rendering/geodesic/surface-worker-pool.ts',import.meta.url),'utf8');
     const meshSource=await readFile(new URL('../src/rendering/geodesic/tile-mesh.ts',import.meta.url),'utf8');
+    const gpuCache=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
     if(renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution')||!renderer.includes('this.manager.requestMesh(')||!meshWorker.includes("kind:'mesh'")||!meshWorker.includes('mesh.indices.buffer')||!pool.includes('maxPendingTasks'))throw new Error('CPU mesh generation must use the bounded shared worker pool and transferable arrays.');
-    if(!solar.includes('requestAnimationFrame(()=>requestAnimationFrame(')||!renderer.includes('initializeStep():boolean')||!meshSource.includes('resolution>64'))throw new Error('Geodesic initialization must be deferred, GPU arrays incremental, and stitching-compatible.');
+    if(!solar.includes('requestAnimationFrame(()=>requestAnimationFrame(')||!gpuCache.includes('initializeStep():boolean')||!meshSource.includes('resolution>64'))throw new Error('Geodesic initialization must be deferred, GPU arrays incremental, and stitching-compatible.');
     const qualitySettings=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
     if(!qualitySettings.includes('ultra:{pageResolution:160,meshResolution:64')||qualitySettings.includes('meshResolution:96'))throw new Error('Every graphics preset must stay within the stitcher resolution contract.');
     if(planetaryLabelOpacity(1000,10)!==planetaryOrbitOpacity(1000,10)||!source.includes('node.style.opacity=String(labelOpacity)')||source.includes('projectedFade'))throw new Error('Planet labels and orbit lines must share one smooth fade without a projected-radius cutoff.');

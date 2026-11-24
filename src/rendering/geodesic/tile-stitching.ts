@@ -17,6 +17,16 @@ function pointKey(point:GridPoint):string{return point[0]+':'+point[1];}
 function edgeKey(a:GridPoint,b:GridPoint):string{
  const ka=pointKey(a),kb=pointKey(b);return ka<kb?ka+'|'+kb:kb+'|'+ka;
 }
+function buildRegularGridTemplate(resolution:number):Uint32Array{
+ const indices=new Uint32Array(resolution*resolution*3);let offset=0;
+ for(let row=0;row<resolution;row++)for(let column=0;column<resolution-row;column++){
+  const a=triangleGridVertexIndex(resolution,row,column),b=triangleGridVertexIndex(resolution,row,column+1),c=triangleGridVertexIndex(resolution,row+1,column);
+  indices[offset++]=a;indices[offset++]=b;indices[offset++]=c;
+  if(row+column<resolution-1){const d=triangleGridVertexIndex(resolution,row+1,column+1);indices[offset++]=b;indices[offset++]=d;indices[offset++]=c;}
+ }
+ if(offset!==indices.length)throw new Error('Regular triangular grid index count mismatch.');
+ return indices;
+}
 function isRemovedBoundaryPoint(row:number,column:number,resolution:number,mask:StitchEdgeMask):boolean{
  return ((mask&1)!==0&&row===0&&column%2===1)||
   ((mask&2)!==0&&row+column===resolution&&row%2===1)||
@@ -32,6 +42,7 @@ export function buildStitchIndexTemplate(resolution:number,mask:StitchEdgeMask):
  if(!Number.isInteger(resolution)||resolution<2||resolution%2!==0||resolution>64)throw new RangeError('Stitching resolution must be an even integer in [2, 64].');
  if(!Number.isInteger(mask)||mask<0||mask>7)throw new RangeError('Stitch edge mask must be in [0, 7].');
  const cacheKey=resolution+':'+mask,cached=indexCache.get(cacheKey);if(cached)return cached;
+ if(mask===0){const regular=buildRegularGridTemplate(resolution);indexCache.set(cacheKey,regular);return regular;}
  const a:GridPoint=[0,0],b:GridPoint=[0,resolution],c:GridPoint=[resolution,0];
  let triangles:Triangle[]=[[a,b,c]];
  for(let row=0;row<=resolution;row++){

@@ -5,7 +5,8 @@ import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, s
 import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
 import { findTileNeighbors } from '../src/rendering/geodesic/tile-neighbors.ts';
 import { balanceGeodesicTiles } from '../src/rendering/geodesic/quadtree-balancer.ts';
-import { selectGeodesicLod } from '../src/rendering/geodesic/quadtree-selector.ts';
+import { selectGeodesicLod, horizonCapUpperBound, isTilePotentiallyVisibleFromHorizon } from '../src/rendering/geodesic/quadtree-selector.ts';
+import { GeodesicSurfaceRuntime } from '../src/rendering/geodesic/geodesic-surface-runtime.ts';
 import { buildStitchIndexTemplate, triangleGridVertexIndex } from '../src/rendering/geodesic/tile-stitching.ts';
 import { buildGeodesicTileMesh } from '../src/rendering/geodesic/tile-mesh.ts';
 
@@ -273,4 +274,61 @@ test('one subscriber abort does not cancel another subscriber to the same worker
 test('atmospheric giant tiles keep solid height at exactly zero metres',()=>{
  const gas=generateSurfaceTile(request({resolution:8,profile:{...profile,kind:'gas-giant'}}));
  assert.ok(gas.height.every(value=>value===0));
+});
+
+
+test('horizon cap upper bound keeps front, tangent and large caps while rejecting the hidden back side',()=>{
+ const camera:[number,number,number]=[0,0,2];
+ assert.equal(isTilePotentiallyVisibleFromHorizon([0,0,1],.05,camera,1),true);
+ assert.equal(isTilePotentiallyVisibleFromHorizon([0,0,-1],.05,camera,1),false);
+ const tangentAngle=Math.acos(.5);
+ const tangentCenter:[number,number,number]=[Math.sin(tangentAngle),0,Math.cos(tangentAngle)];
+ assert.equal(isTilePotentiallyVisibleFromHorizon(tangentCenter,0,camera,1),true);
+ assert.equal(isTilePotentiallyVisibleFromHorizon([0,0,-1],Math.PI*.75,camera,1),true);
+ assert.ok(horizonCapUpperBound([0,0,1],[0,0,1],.2)===1);
+});
+
+test('horizon culling remains conservative at low and high altitude and is disabled inside the body',()=>{
+ const front:[number,number,number]=[0,0,1],back:[number,number,number]=[0,0,-1];
+ for(const distance of [1.000001,1.01,1.1,2,10,1000]){
+  const camera:[number,number,number]=[0,0,distance];
+  assert.equal(isTilePotentiallyVisibleFromHorizon(front,.001,camera,1),true);
+  assert.equal(isTilePotentiallyVisibleFromHorizon(back,.001,camera,1),false);
+ }
+ assert.equal(isTilePotentiallyVisibleFromHorizon(back,.001,[0,0,.99],1),true);
+ assert.equal(isTilePotentiallyVisibleFromHorizon(back,.001,[0,0,1],1),true);
+});
+
+test('per-planet geodesic runtime keeps persistent active leaves and computes stitch masks from all neighbor links',()=>{
+ const earth=new GeodesicSurfaceRuntime('earth',{stitchResolution:8});
+ const mars=new GeodesicSurfaceRuntime('mars',{stitchResolution:8});
+ const root=earth.activeTiles.find(tile=>tile.id.face===0)!;
+ assert.equal(earth.split(root.id.key),true);
+ assert.equal(earth.activeTiles.some(tile=>tile.id.key===root.id.key),false);
+ assert.equal(earth.activeTiles.length,23);
+ assert.equal(mars.activeTiles.length,20);
+ const activeKeys=new Set(earth.activeTiles.map(tile=>tile.id.key));
+ assert.equal(activeKeys.size,earth.activeTiles.length);
+ for(const tile of earth.activeTiles){
+  for(let length=0;length<tile.id.path.length;length++){
+   const ancestor=tile.id.face.toString(36)+':'+(length===0?'root':tile.id.path.slice(0,length));
+   assert.equal(activeKeys.has(ancestor),false);
+  }
+ }
+ assert.equal(earth.merge(root.id.key),true);
+ assert.equal(earth.activeTiles.length,20);
+ assert.equal(earth.activeTiles.some(tile=>tile.id.key===root.id.key),true);
+ assert.ok(earth.topologyStats.fullRebuilds>=3);
+});
+
+test('geodesic runtime rejects incomplete merges and keeps visibility separate from topology',()=>{
+ const runtime=new GeodesicSurfaceRuntime('test',{stitchResolution:8});
+ const root=runtime.activeTiles[0];
+ runtime.split(root.id.key);
+ const child=childrenOf(root)[0];
+ assert.equal(runtime.merge(root.id.key),false);
+ runtime.setVisible(new Set([child.id.key]));
+ assert.equal(runtime.activeTiles.length,23);
+ assert.equal(runtime.getTileStates().filter(state=>state.visible).length,1);
+ assert.equal(runtime.activeTiles.length,23);
 });

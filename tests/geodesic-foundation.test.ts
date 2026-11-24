@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId } from '../src/rendering/geodesic/icosphere.ts';
+import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId, tileDirectionVertexCount, ICOSAHEDRON_ADJACENCY, ICOSAHEDRON_FACE_INDICES } from '../src/rendering/geodesic/icosphere.ts';
 import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
 import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
 
@@ -37,6 +37,45 @@ test('triangular direction grid allocates every generated vertex including its g
   const length=Math.hypot(directions[i],directions[i+1],directions[i+2]);
   assert.ok(Number.isFinite(length));
   assert.ok(Math.abs(length-1)<1e-6);
+ }
+});
+
+test('gutter grid writes every vertex for gutter widths 0, 1, 2, 3 and 8',()=>{
+ const tile=baseGeoTiles()[0],resolution=32;
+ for(const gutter of [0,1,2,3,8]){
+  const directions=buildTileDirections(tile,resolution,gutter);
+  const expected=tileDirectionVertexCount(resolution,gutter);
+  assert.equal(directions.length,expected*3);
+  let count=0;
+  for(let i=0;i<directions.length;i+=3){
+   const x=directions[i],y=directions[i+1],z=directions[i+2],length=Math.hypot(x,y,z);
+   assert.ok(Number.isFinite(x)&&Number.isFinite(y)&&Number.isFinite(z));
+   assert.ok(Math.abs(length-1)<1e-6);
+   count++;
+  }
+  assert.equal(count,expected);
+ }
+});
+
+test('icosahedron topology has thirty two-owner edges and three reciprocal neighbors per face',()=>{
+ assert.equal(ICOSAHEDRON_FACE_INDICES.length,20);
+ assert.equal(ICOSAHEDRON_ADJACENCY.length,20);
+ const owners=new Map<string,number>();
+ for(const face of ICOSAHEDRON_FACE_INDICES){
+  for(const [a,b] of [[face[0],face[1]],[face[1],face[2]],[face[2],face[0]]]){
+   const key=a<b?a+':'+b:b+':'+a;owners.set(key,(owners.get(key)??0)+1);
+  }
+ }
+ assert.equal(owners.size,30);
+ for(const adjacency of ICOSAHEDRON_ADJACENCY){
+  assert.equal(adjacency.edges.length,3);
+  assert.equal(new Set(adjacency.edges.map(edge=>edge.face)).size,3);
+  for(let edge=0;edge<3;edge++){
+   const link=adjacency.edges[edge],reverse=ICOSAHEDRON_ADJACENCY[link.face].edges[link.edge];
+   assert.equal(reverse.face,adjacency.face);
+   assert.equal(reverse.edge,edge);
+   assert.equal(link.reversed,true);
+  }
  }
 });
 

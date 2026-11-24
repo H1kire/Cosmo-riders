@@ -119,7 +119,7 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.orbitBuffers=new Map();
+  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
@@ -328,8 +328,9 @@ export class Solar3DView{
   const smoothVisibility=visibility*visibility*(3-2*visibility);
   opacity*=smoothVisibility;if(opacity<=0.001)return;
   const elements=body.orbitalElements;
-  const targetSegments=Math.max(128,Math.min(1024,Math.ceil(128+projected*.8+elements.eccentricity*320)));
-  const segments=Math.ceil(targetSegments/32)*32;
+  const targetSegments=Math.ceil(Math.max(128,Math.min(1024,128+projected*.8+elements.eccentricity*320))/32)*32;
+  let segments=this.orbitSegmentCounts.get(body.id)??128;
+  if(targetSegments>segments*1.2||targetSegments<segments*.55){segments=targetSegments;this.orbitSegmentCounts.set(body.id,segments);}
   let path=this.orbitCache.get(body.id);
   if(!path||path.length!==segments+1){
    path=[];
@@ -341,6 +342,7 @@ export class Solar3DView{
   }
   let cached=this.orbitBuffers.get(body.id);
   if(!cached||cached.vertices.length!==(segments+1)*3){
+   if(cached)this.gl.deleteBuffer(cached.buffer);
    const buffer=this.gl.createBuffer();if(!buffer)return;
    cached={buffer,vertices:new Float32Array((segments+1)*3),count:segments+1};
    this.orbitBuffers.set(body.id,cached);

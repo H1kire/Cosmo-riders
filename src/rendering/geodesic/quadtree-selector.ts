@@ -31,12 +31,26 @@ const angle=(a:Vec3,b:Vec3)=>Math.acos(Math.max(-1,Math.min(1,dot(a,b))));
 
 function tileCenter(tile:GeoTile):Vec3{return normalize([tile.triangle.a[0]+tile.triangle.b[0]+tile.triangle.c[0],tile.triangle.a[1]+tile.triangle.b[1]+tile.triangle.c[1],tile.triangle.a[2]+tile.triangle.b[2]+tile.triangle.c[2]]);}
 function tileAngularRadius(tile:GeoTile,center:Vec3):number{return Math.max(angle(center,tile.triangle.a),angle(center,tile.triangle.b),angle(center,tile.triangle.c));}
+/** Maximum dot(direction, cameraDirection) over a spherical cap around center. */
+export function horizonCapUpperBound(center:Vec3,cameraDirection:Vec3,angularRadius:number):number{
+ const c=normalize(center),v=normalize(cameraDirection),alpha=Math.max(0,Math.min(Math.PI,angularRadius));
+ const centerDot=Math.max(-1,Math.min(1,dot(c,v))),theta=Math.acos(centerDot);
+ if(theta<=alpha)return 1;
+ return Math.cos(theta-alpha);
+}
+
+/** A cap is culled only when even its most camera-facing point is below the geometric horizon. */
+export function isTilePotentiallyVisibleFromHorizon(center:Vec3,angularRadius:number,cameraPositionM:Vec3,radiusM:number):boolean{
+ if(!Number.isFinite(radiusM)||radiusM<=0)throw new RangeError('Planet radius must be positive metres.');
+ const distance=Math.hypot(...cameraPositionM);
+ if(!Number.isFinite(distance)||distance<=radiusM)return true;
+ const cameraDirection=normalize(cameraPositionM);
+ const upperBound=horizonCapUpperBound(center,cameraDirection,angularRadius);
+ const horizonCosine=radiusM/distance;
+ return upperBound+1e-12>=horizonCosine;
+}
 function isVisible(tile:GeoTile,camera:GeodesicLodCamera,radius:number,center:Vec3,angularRadius:number):'visible'|'frustum'|'horizon'{
- const cameraDistance=Math.hypot(...camera.positionM);
- if(cameraDistance>radius){
-  const cameraDirection=normalize(camera.positionM),horizon=-Math.sqrt(Math.max(0,1-(radius/cameraDistance)**2));
-  if(dot(center,cameraDirection)+Math.sin(angularRadius)<horizon)return'horizon';
- }
+ if(!isTilePotentiallyVisibleFromHorizon(center,angularRadius,camera.positionM,radius))return'horizon';
  const surfacePoint:[number,number,number]=[center[0]*radius,center[1]*radius,center[2]*radius];
  const toTile=normalize([surfacePoint[0]-camera.positionM[0],surfacePoint[1]-camera.positionM[1],surfacePoint[2]-camera.positionM[2]]);
  const vertical=Math.max(.01,Math.min(Math.PI-.01,camera.verticalFovRadians));

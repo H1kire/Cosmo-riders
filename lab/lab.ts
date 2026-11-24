@@ -28,7 +28,7 @@ function activateSolarFallback(error: unknown) {
   const webgl2Available=!/WebGL2.*недоступен/i.test(message);
   window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:{
     webgl2:webgl2Available,maxArrayTextureLayers:'—',maxTextureSize:'—',
-    maxVertexTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
+    maxVertexTextureImageUnits:'—',maxFragmentTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
     maxVertexUniformVectors:'—',maxFragmentUniformVectors:'—',maxVertexAttributes:'—',
     extensions:[],mode:'auto',active:'Canvas 2D fallback',pageSize:'—',pageBytes:'—',
     gpuCacheBytes:'—',gpuLayers:'—',gpuResidentPages:'—',gpuPinnedPages:'—',

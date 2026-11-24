@@ -1,5 +1,3 @@
-import { tileId, type GeoTile, type GeoTileId } from './icosphere.ts';
-
 export type StitchEdgeMask = number;
 /** Edge bits: AB = 1, BC = 2, CA = 4. */
 const indexCache=new Map<string,Uint32Array>();

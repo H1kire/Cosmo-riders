@@ -96,7 +96,7 @@ export function tileDirectionVertexCount(resolution:number,gutter=0):number{
  if(!Number.isInteger(gutter)||gutter<0||gutter>16)throw new RangeError('Invalid tile gutter.');
  const span=resolution+2*gutter;
  // Rows: -g..resolution+g; each row contains (span - row + g + 1) columns.
- return (span+1)*(span/2+2*gutter+1);
+ return (span+1)*(resolution/2+2*gutter+1);
 }
 
 /** Трикутна регулярна сітка; розширений gutter зберігає всі рядки та стовпці обходу. */

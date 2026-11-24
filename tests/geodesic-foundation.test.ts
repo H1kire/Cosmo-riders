@@ -326,9 +326,11 @@ test('geodesic runtime rejects incomplete merges and keeps visibility separate f
  const root=runtime.activeTiles[0];
  runtime.split(root.id.key);
  const child=childrenOf(root)[0];
+ runtime.split(child.id.key);
+ const grandchild=childrenOf(child)[0];
  assert.equal(runtime.merge(root.id.key),false);
- runtime.setVisible(new Set([child.id.key]));
- assert.equal(runtime.activeTiles.length,23);
+ runtime.setVisible(new Set([grandchild.id.key]));
+ assert.equal(runtime.activeTiles.length,26);
  assert.equal(runtime.getTileStates().filter(state=>state.visible).length,1);
- assert.equal(runtime.activeTiles.length,23);
+ assert.equal(runtime.activeTiles.length,26);
 });

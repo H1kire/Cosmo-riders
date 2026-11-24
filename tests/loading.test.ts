@@ -22,6 +22,8 @@ test('bootstrap dynamically imports the heavy application after yielding a frame
  assert.ok(!main.includes(["import '",'.','/lab.ts',"'"].join('')));
  const lab=await readFile(file('..','lab','lab.ts'),'utf8');
  assert.ok(lab.indexOf('await new Promise<void>(resolve=>requestAnimationFrame')<lab.indexOf('new Solar3DView('));
+ assert.ok(lab.includes("reportLoading('first-frame',true)"));
+ assert.ok(main.includes("detail?.id==='first-frame'&&detail.complete"));
 });
 test('loading progress is driven by completed named stages, not a timer counter',async()=>{
  const [loader,docs]=await Promise.all([

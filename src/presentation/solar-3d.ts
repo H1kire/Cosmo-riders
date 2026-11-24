@@ -13,7 +13,6 @@ import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedO
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/shaders/planet-surface.ts';
 import { GeodesicPlanetRenderer, type PlanetSurfaceMode } from '../rendering/geodesic/geodesic-planet-renderer.ts';
-import { SurfaceTileWorkerPool } from '../rendering/geodesic/surface-worker-pool.ts';
 import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
 import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 
@@ -146,12 +145,13 @@ export class Solar3DView{
    this.geodesicInitScheduled=false;if(this.disposed)return;
    const pending=this.pendingGeodesicSettings,generation=this.geodesicGeneration;if(!pending)return;
    const quality=pending.geodesic;
-   if(!this.geodesicWorkerPool)this.geodesicWorkerPool=new SurfaceTileWorkerPool({concurrency:quality.workerCount});
+   const sharedPool=this.geodesicWorkerPool??this.geodesicEarthRenderer?.workerPool;
    let replacement:GeodesicPlanetRenderer;
-   try{replacement=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame,workerPool:this.geodesicWorkerPool});}
+   try{replacement=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame,workerPool:sharedPool});}
    catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);return;}
    if(this.disposed||generation!==this.geodesicGeneration){replacement.dispose();return;}
    this.geodesicPendingRenderer?.dispose();
+   this.geodesicWorkerPool=replacement.workerPool;replacement.releaseWorkerPoolOwnership();
    const active=this.geodesicEarthRenderer;this.geodesicEarthInitError=null;
    if(active?.isReady)this.geodesicPendingRenderer=replacement;
    else{active?.dispose();this.geodesicEarthRenderer=replacement;this.geodesicPendingRenderer=null;}

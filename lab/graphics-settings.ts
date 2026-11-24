@@ -35,6 +35,8 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'CPU cache: '+bytes(value.cpuCacheBytes)+' · '+value.cpuCachePages+' страниц',
   'Страницы: создано '+value.generatedPages+'/20 · загружено '+value.uploadedPages,
   'Worker: '+value.workerActive+'/'+value.workerCount+' активно · очередь '+value.workerQueued,
+  'Подготовка нового renderer: '+(value.pendingRendererState??'—'),
+  'Ошибка новой конфигурации: '+(value.pendingRendererError??'нет'),
   'Ошибки Worker startup/runtime/task: '+value.workerStartupErrors+'/'+value.workerRuntimeErrors+'/'+value.workerTaskErrors,
   'Задачи отменены/dispose: '+value.cancelledTasks+'/'+value.disposedTasks,
   'Генерация mesh/surface: '+value.meshGenerationMs+' / '+value.surfaceGenerationMs+' ms',

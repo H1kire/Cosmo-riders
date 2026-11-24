@@ -44,7 +44,7 @@ vec3 domainWarp3(vec3 p){
 }
 void main(){
   vec3 n=normalize(aNormal);
-  vec3 warped=domainWarp3(n*(18.0+uDetail*54.0)+uSeed);
+  vec3 warped=domainWarp3(n*18.0+uSeed);
   float terrain=fbm3(warped)+ridged3(warped*1.7)*uTectonicActivity*0.24+fbm3(n*31.0+uSeed*2.0)*uVolcanicActivity*0.08;
   float relief=0.0;
   if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
@@ -154,8 +154,8 @@ float shadowVisibility(vec3 point){
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
   vec3 warped=domainWarp3(n*3.1+uSeed);
   float broad=fbm3(warped);
-  float medium=fbm3(domainWarp3(n*(7.0+uDetail*6.0)+uSeed*2.7));
-  float fine=fbm3Filtered(n*(8.0+uDetail*42.0)+uSeed*5.1);
+  float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
+  float fine=fbm3Filtered(n*8.0+uSeed*5.1);
   float ridges=ridged3(warped*9.0);
   float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity*(1.0-uErosion*0.55);
   float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;
@@ -196,7 +196,7 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     bool mercury=uColor.r<0.55&&uColor.g<0.55;
     bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
     bool desert=uKind>2.3&&uKind<2.5;
-    float craterNoise=fbm3Filtered(n*(18.0+uDetail*40.0)+uSeed*3.0)+ridged3(n*25.0+uSeed*9.0)*0.16;
+    float craterNoise=fbm3Filtered(n*18.0+uSeed*3.0)+ridged3(n*25.0+uSeed*9.0)*0.16;
     float craterRim=smoothstep(0.48,0.55,craterNoise)-smoothstep(0.55,0.63,craterNoise);
     float craterBasin=1.0-smoothstep(0.34,0.53,craterNoise);
     if(mars){

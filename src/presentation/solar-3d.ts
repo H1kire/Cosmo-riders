@@ -200,7 +200,7 @@ export class Solar3DView{
  drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){
   const g=this.gl,l=this.atmosphereLoc,shellRadius=radius*(1+profile.atmosphereHeightM/profile.groundRadiusM);
   const model=[shellRadius,0,0,0,0,shellRadius,0,0,0,0,shellRadius,0,p[0],p[1],p[2],1];
-  g.useProgram(this.atmosphereProgram);this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
+  g.useProgram(this.atmosphereProgram);g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
   g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
   g.uniform3f(l.uLightColor,...light.color);g.uniform3f(l.uCameraPosition,...eye);
   g.uniform3f(l.uAtmosphereColor,...profile.rayleigh);g.uniform1f(l.uMie,profile.mie);g.uniform1f(l.uMieAnisotropy,profile.mieAnisotropy);
@@ -359,7 +359,7 @@ export class Solar3DView{
   const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
   g.bufferSubData(g.ARRAY_BUFFER,0,vertices);
   g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);
-  g.uniformMatrix4fv(l.uViewProjection,false,new Float32Array(vp));
+  this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
   g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);
   g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
   g.drawArrays(g.LINE_STRIP,0,cached.count);g.depthMask(true);g.disable(g.BLEND);

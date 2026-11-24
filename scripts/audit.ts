@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { planetaryOrbitOpacity, projectedOrbitRadius, selectMeshLod } from '../src/rendering/quality/render-lod.ts';
+import { planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius, selectMeshLod } from '../src/rendering/quality/render-lod.ts';
 import { dirname, join, resolve } from 'node:path';
 
 const root = new URL('..', import.meta.url);
@@ -145,7 +145,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (!surface.includes('vec3(1.0,0.53,0.16)') || !surface.includes('vec3(0.004,0.018,0.064)') || !surface.includes('vec3(0.012,0.105,0.24)') || !surface.includes('vec3(0.025,0.095,0.035)') || !surface.includes('vec3(0.13,0.29,0.095)')) throw new Error('Star emissive color or the current Earth ocean and land palette is incomplete.');
     if (!source.includes("for(const body of bodies)this.drawOrbit(world,body,states,sun,vp,mapper,body.parentId==='sun'?planetOrbitFade:1,eye,h)") || source.includes('localMode')) throw new Error('All solar-system orbits must remain in one shared scene without local-scene filtering.');
     const orbitLod = await readFile(new URL('../src/rendering/quality/render-lod.ts', import.meta.url), 'utf8');
-    if (!source.includes('makeSphere(g,128,192)') || !source.includes('selectMeshLod(px,this.graphics.maxMeshLod)') || !source.includes('Math.log2(Math.max(1,px)/18)') || !source.includes('i<=192;i++') || !source.includes('planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU)') || !orbitLod.includes('(ratio-120)/(2400-120)') || !orbitLod.includes('projectedOrbitRadius') || !source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12')) throw new Error('High-detail sphere LOD or smooth heliocentric orbit fade is missing.');
+    if (!source.includes('makeSphere(g,128,192)') || !source.includes('selectMeshLod(px,this.graphics.maxMeshLod)') || !source.includes('Math.log2(Math.max(1,px)/18)') || !source.includes('Math.min(1024') || !source.includes('smoothVisibility') || !source.includes('orbitSegmentCounts') || !source.includes('bufferSubData') || source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12') || !source.includes('planetaryOrbitOpacity(orbitCameraDistance,orbitAnchor.meanRadiusM/AU)') || !orbitLod.includes('(ratio-120)/(2400-120)') || !orbitLod.includes('projectedOrbitRadius')) throw new Error('High-detail sphere LOD or stable adaptive orbit rendering is missing.');
     if (!source.includes('body.parentId===\'sun\'?planetOrbitFade:1') || !source.includes('g.enable(g.BLEND)') || !source.includes('g.depthMask(false)')) throw new Error('Planetary orbit fading must preserve satellite orbit visibility and alpha blending.');
   }],
   ['Runtime LOD helpers match the current orbit and mesh policies', async () => {
@@ -176,9 +176,17 @@ const checks: Array<[string, () => Promise<void>]> = [
     for(const level of ['low','medium','high','ultra']){
       if(!quality.includes(level+':{pageResolution:')||!quality.includes('geodesic:GEODESIC_QUALITY_PRESETS.'+level))throw new Error('Missing geodesic quality profile: '+level);
     }
-    if(!renderer.includes('page.data&&uploadsThisFrame<this.maxUploadsPerFrame')||!renderer.includes('this.gpuBudgetBytes')||!renderer.includes('this.cpuBudgetBytes'))throw new Error('Geodesic uploads and cache budgets must be explicitly bounded.');
+    if(!renderer.includes('gpuOperationsThisFrame<this.maxUploadsPerFrame')||!renderer.includes('this.gpuBudgetBytes')||!renderer.includes('this.cpuBudgetBytes')||!renderer.includes('this.gpu.initializeStep()')||!renderer.includes('this.manager.requestMesh('))throw new Error('Geodesic mesh generation, incremental texture allocation and GPU uploads must be explicitly bounded.');
     if(!solar.includes('this.rebuildGeodesicRenderer(this.graphics)')||!solar.includes("window.dispatchEvent(new CustomEvent('graphics-diagnostics'"))throw new Error('Preset changes must rebuild one renderer and publish live diagnostics.');
     if(!renderer.includes('MAX_VERTEX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_TEXTURE_IMAGE_UNITS')||!renderer.includes('MAX_ARRAY_TEXTURE_LAYERS')||!renderer.includes('MAX_TEXTURE_SIZE'))throw new Error('Geodesic renderer must validate the WebGL2 limits it depends on.');
+    const meshWorker=await readFile(new URL('../src/rendering/geodesic/surface-tile-worker.ts',import.meta.url),'utf8');
+    const pool=await readFile(new URL('../src/rendering/geodesic/surface-worker-pool.ts',import.meta.url),'utf8');
+    const meshSource=await readFile(new URL('../src/rendering/geodesic/tile-mesh.ts',import.meta.url),'utf8');
+    if(renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution')||!renderer.includes('this.manager.requestMesh(')||!meshWorker.includes("kind:'mesh'")||!meshWorker.includes('mesh.indices.buffer')||!pool.includes('maxPendingTasks'))throw new Error('CPU mesh generation must use the bounded shared worker pool and transferable arrays.');
+    if(!solar.includes('requestAnimationFrame(()=>requestAnimationFrame(')||!renderer.includes('initializeStep():boolean')||!meshSource.includes('resolution>64'))throw new Error('Geodesic initialization must be deferred, GPU arrays incremental, and stitching-compatible.');
+    const qualitySettings=await readFile(new URL('../src/rendering/quality/quality-settings.ts',import.meta.url),'utf8');
+    if(!qualitySettings.includes('ultra:{pageResolution:160,meshResolution:64')||qualitySettings.includes('meshResolution:96'))throw new Error('Every graphics preset must stay within the stitcher resolution contract.');
+    if(planetaryLabelOpacity(1000,10)!==planetaryOrbitOpacity(1000,10))throw new Error('Planet labels and orbit lines must share one monotonic fade curve.');
     if(!renderer.includes('private failRenderer(error:unknown)')||!renderer.includes('this.lastPinnedPages=pinned.length')||!renderer.includes('retryCount')||!workers.includes('rejectQueuedWithoutWorkers'))throw new Error('Geodesic failures must retry a worker once, release GPU resources, and preserve accurate pin diagnostics.');
   }],
   ['Rendering uses non-mutating fractional snapshots', async () => {

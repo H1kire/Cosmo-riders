@@ -47,8 +47,8 @@ void main(){
   vec3 warped=domainWarp3(n*18.0+uSeed);
   float terrain=fbm3(warped)+ridged3(warped*1.7)*uTectonicActivity*0.24+fbm3(n*31.0+uSeed*2.0)*uVolcanicActivity*0.08;
   float relief=0.0;
-  if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018*uDetail;
-  else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009*uDetail;
+  if(uKind>0.5&&uKind<1.5) relief=(terrain-0.48)*0.0018;
+  else if(uKind>1.5&&uKind<2.5) relief=(terrain-0.48)*0.009;
   float heightScale=uKind<1.5?0.0035:(uKind<2.5?0.012:(uKind>4.9&&uKind<5.5?0.003:0.0));
   relief*=heightScale;
   vec4 world=uModel*vec4(aPosition*(1.0+relief),1.0);
@@ -119,7 +119,7 @@ vec3 domainWarp3(vec3 p){
   return p+vec3(noise3(p+vec3(17.1,-3.7,8.2)),noise3(p+vec3(-9.2,21.4,2.6)),noise3(p+vec3(4.8,6.1,-19.3)))*0.38;
 }
 float fbm3Filtered(vec3 p){
-  float footprint=max(max(fwidth(p.x),fwidth(p.y)),fwidth(p.z));
+  float footprint=max(max(fwidth(p.x),fwidth(p.y)),fwidth(p.z))*mix(1.25,0.8,clamp(uDetail/1.5,0.0,1.0));
   float value=0.0,amplitude=0.5;
   for(int i=0;i<6;i++){
     float octaveWeight=1.0-smoothstep(0.32,0.92,footprint);

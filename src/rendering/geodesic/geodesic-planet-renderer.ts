@@ -108,7 +108,7 @@ export class GeodesicPlanetRenderer {
    const request:SurfaceTileRequest={planetId:profile.bodyId,seed:profile.seed,tile:tile.id,resolution:this.resolution,gutter:this.gutter,profile:this.profile};
    const page:Page={request,mesh:null,pending:true};
    this.pages.set(tile.id.key,page);
-   void this.manager.requestMesh(tile,this.meshResolution,profile.meanRadiusM,120).then(mesh=>{
+   void this.manager.requestMesh(tile,this.meshResolution,profile.meanRadiusM,100).then(mesh=>{
     if(this.disposed||this.failed)return;
     page.meshData=mesh;
    },error=>{if(!this.disposed)this.failRenderer(error);});
@@ -159,11 +159,11 @@ export class GeodesicPlanetRenderer {
 
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
-  const gl=this.gl,visible:Page[]=[];let uploadsThisFrame=0,meshBuildsThisFrame=0;this.lastPinnedPages=0;
+  const gl=this.gl,visible:Page[]=[];let gpuOperationsThisFrame=0;this.lastPinnedPages=0;
   for(const page of this.pages.values()){
-   if(!page.mesh&&page.meshData&&meshBuildsThisFrame<this.maxUploadsPerFrame){meshBuildsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
+   if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
    if(!page.mesh)continue;
-   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&uploadsThisFrame<this.maxUploadsPerFrame){uploadsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
+   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
    const layer=this.gpu.getLayer(page.data?.key??'');
    if(layer!==undefined&&page.mesh){page.layer=layer;visible.push(page);}
   }
@@ -204,7 +204,7 @@ export class GeodesicPlanetRenderer {
    }
    gl.disable(gl.CULL_FACE);
    return true;
-  }catch(error){this.generationErrors++;this.failed=true;this.lastError=error instanceof Error?error.message:String(error);return false;}
+  }catch(error){this.generationErrors++;this.failRenderer(error);return false;}
   finally{this.lastPinnedPages=pinned.length;for(const key of pinned){this.gpu?.unpin(key);if(!this.failed)this.manager.markVisible(key,false);}if(this.failed){this.manager.dispose();this.disposeGpuOnly();}gl.disable(gl.CULL_FACE);}
  }
 

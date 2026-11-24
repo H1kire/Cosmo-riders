@@ -115,7 +115,6 @@ export class SurfaceGpuPageCache {
    return this.ready;
   }catch(error){
    g.deleteTexture(texture);
-   this.dispose();
    throw error;
   }
  }

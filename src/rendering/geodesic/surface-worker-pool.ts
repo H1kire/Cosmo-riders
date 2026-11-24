@@ -115,10 +115,10 @@ export class SurfaceTileWorkerPool {
    }
   }
  }
- private subscribe(task:Task,signal?:AbortSignal):Promise<SurfaceTileData>{
+ private subscribe<T extends WorkerValue>(task:Task,signal?:AbortSignal):Promise<T>{
   if(signal?.aborted)return Promise.reject(new DOMException('Surface request aborted.','AbortError'));
-  return new Promise<WorkerValue>((resolve,reject)=>{
-   const subscriber:Subscriber={resolve,reject,signal};
+  return new Promise<T>((resolve,reject)=>{
+   const subscriber:Subscriber={resolve:value=>resolve(value as T),reject,signal};
    if(signal){
     subscriber.abort=()=>{
      task.subscribers.delete(subscriber);
@@ -142,22 +142,22 @@ export class SurfaceTileWorkerPool {
   if(existing){
    existing.priority=Math.max(existing.priority,priority);
    this.pump();
-   return this.subscribe(existing,signal) as Promise<SurfaceTileData>;
+   return this.subscribe<SurfaceTileData>(existing,signal);
   }
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
   if(this.pending.size>=this.maxPendingTasks)return Promise.reject(new Error('Surface worker queue reached its configured task limit.'));
   const task:Task={id:++this.sequence,key,payload:{kind:'tile',request},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
-  const promise=this.subscribe(task,signal) as Promise<SurfaceTileData>;
+  const promise=this.subscribe<SurfaceTileData>(task,signal);
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
  }
  requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0):Promise<GeodesicTileMesh>{
   if(this.disposed)return Promise.reject(new Error('Surface worker pool is disposed.'));
   const key='mesh:'+tile.id.key+':'+resolution+':'+radiusM,existing=this.pending.get(key);
-  if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe(existing) as Promise<GeodesicTileMesh>;}
+  if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe<GeodesicTileMesh>(existing);}
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
   if(this.pending.size>=this.maxPendingTasks)return Promise.reject(new Error('Surface worker queue reached its configured task limit.'));
   const task:Task={id:++this.sequence,key,payload:{kind:'mesh',tile,resolution,radiusM},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
-  const promise=this.subscribe(task) as Promise<GeodesicTileMesh>;
+  const promise=this.subscribe<GeodesicTileMesh>(task);
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
  }
  reprioritize(key:string,priority:number):void{

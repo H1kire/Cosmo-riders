@@ -12,7 +12,7 @@ const V:Vec3[]=[
  [-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],
  [0,-1,PHI],[0,1,PHI],[0,-1,-PHI],[0,1,-PHI],
  [PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]
-].map(normalize);
+].map(value=>normalize(value as Vec3));
 
 const F:readonly (readonly [number,number,number])[]=[
  [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],

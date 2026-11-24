@@ -36,6 +36,7 @@ export class SurfaceTileWorkerPool {
   if(this.disposed)return;
   try{
    const worker=this.workerFactory(),slot:WorkerSlot={worker,task:null};
+   this.startupError=null;
    worker.onmessage=(event:MessageEvent<WorkerReply>)=>this.finish(slot,event.data);
    worker.onerror=event=>{
     event.preventDefault?.();
@@ -50,9 +51,18 @@ export class SurfaceTileWorkerPool {
    this.slots.push(slot);
   }catch(error){
    this.startupError=error instanceof Error?error:new Error(String(error));
+   if(this.slots.length===0)this.rejectQueuedWithoutWorkers();
   }
  }
  private startupError:Error|null=null;
+ private rejectQueuedWithoutWorkers():void{
+  if(this.slots.length>0)return;
+  const error=this.startupError??new Error('No surface workers are available.');
+  for(const task of this.queue.splice(0)){
+   if(this.pending.get(task.key)===task)this.pending.delete(task.key);
+   this.rejectSubscribers(task,error);
+  }
+ }
  private rejectSubscribers(task:Task,error:Error):void{
   for(const subscriber of task.subscribers){
    subscriber.signal?.removeEventListener('abort',subscriber.abort!);
@@ -128,7 +138,7 @@ export class SurfaceTileWorkerPool {
    this.pump();
    return this.subscribe(existing,signal);
   }
-  if(this.startupError)return Promise.reject(this.startupError);
+  if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
   const task:Task={id:++this.sequence,key,request,priority,order:this.sequence,subscribers:new Set(),cancelled:false};
   const promise=this.subscribe(task,signal);
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;

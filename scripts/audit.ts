@@ -119,7 +119,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     };
     const planetLoop=extractBlock('for(const body of bodies){\n   g.useProgram(this.bodyProgram);');
     if(!/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/.test(planetLoop)) throw new Error('Each planet iteration must bind the surface program before any early exit or draw.');
-    if(!/if\(body\.id===['"]earth['"]&&this\.geodesicEarthRenderer&&this\.earthRenderMode!==['"]uv['"]\)/.test(planetLoop) || !/this\.geodesicEarthRenderer\.render\(\{/.test(planetLoop)) throw new Error('Geodesic rendering must be restricted to Earth and use the existing frame data.');
+    if(!/if\(body\.id===['"]earth['"]&&this\.geodesicEarthRenderer&&this\.earthRenderMode!==['"]uv['"]\)/.test(planetLoop) || !/(?:pendingRenderer|activeRenderer)\.render\(frame\)/.test(planetLoop)) throw new Error('Geodesic rendering must be restricted to Earth and use the existing frame data.');
     if(!/if\(!renderedGeodesicEarth\)\s*\{\s*(?:\/\/[^\n]*\s*)?g\.disable\(g\.CULL_FACE\);\s*g\.disable\(g\.BLEND\);\s*g\.depthMask\(true\);\s*g\.activeTexture\(g\.TEXTURE0\);\s*g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);\s*g\.useProgram\(this\.bodyProgram\);\s*this\.bindMesh\(mesh,l\);\s*g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/.test(planetLoop)) throw new Error('UV fallback must restore WebGL state, run only when geodesic rendering did not draw, and bind its mesh.');
     const atmosphereBlock=extractBlock(' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
     const cloudsBlock=extractBlock(' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');

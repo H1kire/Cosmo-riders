@@ -37,7 +37,7 @@ export class GeodesicPlanetRenderer {
  readonly gpuBudgetBytes:number;
  readonly cpuBudgetBytes:number;
  private readonly gl:WebGL2RenderingContext;
- private readonly manager:VirtualSurfaceManager;
+ private readonly manager!:VirtualSurfaceManager;
  private gpu:SurfaceGpuPageCache|null=null;
  private program:WebGLProgram|null=null;
  private readonly pages=new Map<string,Page>();

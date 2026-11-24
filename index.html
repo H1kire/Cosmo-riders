@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070b14">
+<title>Cosmo-riders — Solar System</title><link rel="icon" type="image/svg+xml" href="./favicon.svg"><link rel="stylesheet" href="./lab/style.css">
+</head>
+<body>
+<header class="topbar">
+ <a class="brand" href="./" aria-label="Cosmo-riders"><span class="brand-mark">C</span><span><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></span></a>
+ <button id="menu-toggle" class="menu-toggle" type="button" aria-expanded="true" aria-controls="app-sidebar" title="Показать или скрыть меню">☰ Меню</button>
+ <div class="top-status"><i class="live-dot"></i><span>СИМУЛЯЦИЯ АКТИВНА</span><i class="divider"></i><span>J2000.0</span></div>
+ <div class="top-clock"><span>МИССИОННОЕ ВРЕМЯ</span><strong id="clock-value">J2000.0 + 0 суток</strong></div><label class="time-scale-control"><span>УСКОРЕНИЕ ВРЕМЕНИ</span><select id="time-scale"><option value="0">0× · Пауза</option><option value="1" selected>1× · Реальное время</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+</header>
+<aside class="sidebar" id="app-sidebar">
+ <div class="side-label">КОСМИЧЕСКИЙ ЦЕНТР</div>
+ <button class="nav-item active" data-open-window="window-system"><span>◎</span> Солнечная система</button>
+ <div class="side-divider"></div>
+ <button class="nav-item" data-open-window="window-model"><span>▤</span> Информация о планете</button>
+ <button class="nav-item" data-open-window="window-ship"><span>◈</span> Корабль и телеметрия</button>
+ <button class="nav-item" data-open-window="window-flight"><span>✦</span> Управление полётом</button>
+ <button class="nav-item" data-open-window="window-maneuvers"><span>⌁</span> Планировщик манёвров</button>
+ <button class="nav-item" data-open-window="window-local"><span>◉</span> Локальная система</button>
+ <button class="nav-item" data-open-window="window-settings"><span>⚙</span> Настройки</button>
+ <div class="side-divider"></div>
+ <div class="side-label">ИНСТРУМЕНТЫ КАМЕРЫ</div>
+ <div class="camera-tools"><button id="camera-home" class="button subtle">⌖ Сбросить камеру</button><small>ПКМ + перетаскивание — вращение 3D-камеры<br>СКМ + перетаскивание — панорамирование<br>ЛКМ — выбор небесного тела<br>Колесо мыши — приближение / удаление<br>Home — сброс камеры</small></div>
+ <div class="sidebar-bottom"><i class="status-dot"></i> PHYSICS CORE <b>READY</b></div>
+</aside>
+<main class="universe">
+ <div class="universe-title"><span>STARMAP / SOLAR SYSTEM</span><b>СОЛНЕЧНАЯ СИСТЕМА</b><small>Перемещайте камеру и исследуйте орбиты планет</small></div>
+ <canvas id="solar-view" aria-label="Интерактивная карта Солнечной системы"></canvas>
+ <nav id="system-navigation" class="system-navigation" aria-label="Навигация по звёздной системе"></nav>
+ <div class="map-hud"><span><i class="map-dot"></i> LIVE SIMULATION</span><span>ПКМ — ВРАЩЕНИЕ 3D-КАМЕРЫ</span><span>КЛИК — ФОКУС НА ТЕЛЕ</span><span>СКМ — ПАНОРАМИРОВАНИЕ</span><span>СКРОЛЛ — МАСШТАБ</span></div>
+ <div class="map-legend"><span><i class="dot sun"></i>Солнце</span><span><i class="dot mercury"></i>Меркурий</span><span><i class="dot venus"></i>Венера</span><span><i class="dot earth"></i>Земля</span><span><i class="dot mars"></i>Марс</span><span><i class="dot jupiter"></i>Юпитер</span><span><i class="dot saturn"></i>Сатурн</span><span><i class="dot uranus"></i>Уран</span><span><i class="dot neptune"></i>Нептун</span></div>
+ <div class="zoom-dock"><button class="zoom-button" data-zoom-view="solar" data-zoom-action="out">−</button><output id="zoom-value-solar">100%</output><button class="zoom-button" data-zoom-view="solar" data-zoom-action="in">+</button></div>
+</main>
+<section class="floating-window" id="window-ship" data-window="ship" style="left:250px;top:100px;width:390px;display:none">
+ <header class="window-titlebar"><div><span>VESSEL TELEMETRY</span><strong>Корабль «Rider-01»</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><div class="vessel-view"><canvas id="vessel-view"></canvas><div class="vessel-caption" id="detail-scale">Локальная система координат</div></div><div class="window-status"><span>АКТИВНЫЙ ЦЕНТР</span><b id="primary-badge">Земля</b></div>
+ <div class="telemetry-grid"><div class="metric"><span>РАДИУС</span><strong id="distance-value">—</strong></div><div class="metric"><span>СКОРОСТЬ</span><strong id="speed-value">—</strong></div><div class="metric"><span>ПЕРИОД</span><strong id="period-value">—</strong></div><div class="metric"><span>ЭКСЦЕНТРИСИТЕТ</span><strong id="eccentricity-value">—</strong></div></div>
+ <div class="wide-metric"><span>СФЕРА ВЛИЯНИЯ / SOI</span><strong id="soi-value">—</strong></div><div class="wide-metric"><span>ПОСЛЕДНЯЯ СМЕНА ЦЕНТРА</span><strong id="switch-value">Не было</strong></div>
+ <div class="wide-metric"><span>МАССА КОРАБЛЯ</span><strong id="mass-value">12 000 кг</strong></div><div class="wide-metric"><span>ТЯГООРУЖЁННОСТЬ</span><strong id="twr-value">—</strong></div></div>
+</section>
+<section class="floating-window" id="window-flight" data-window="flight" style="left:280px;top:125px;width:360px;display:none">
+ <header class="window-titlebar"><div><span>FLIGHT CONTROL</span><strong>Управление полётом</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><label class="select-wrap"><span>СЦЕНАРИЙ ПОЛЁТА</span><select id="scenario"><option value="earth-orbit">Орбита Земли</option><option value="moon-approach">Сближение с Луной</option><option value="moon-orbit">Орбита Луны</option></select></label>
+ 
+ <div class="button-row"><button id="pause-button" class="button primary">Ⅱ Пауза</button><button id="step-button" class="button subtle">Шаг +1 с</button><button id="reset-button" class="button subtle">Перезапуск</button></div>
+ <div class="engine-box"><span class="panel-kicker">MAIN ENGINE / R-200</span><strong>200 kN · Isp 340 с</strong><div class="button-row"><button id="retro-button" class="button engine-button">−10 м/с · РЕТРОГРАД</button><button id="pro-button" class="button engine-button">+10 м/с · ПРОГРАД</button></div><p id="burn-status" class="inline-status">Двигатель готов к импульсному включению</p></div></div>
+</section>
+<section class="floating-window" id="window-maneuvers" data-window="maneuvers" style="left:310px;top:145px;width:390px;display:none">
+ <header class="window-titlebar"><div><span>TRAJECTORY DESIGN</span><strong>Планировщик манёвров</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><span class="badge">HOHMANN · ЗЕМЛЯ → МАРС</span><p class="panel-subtitle">Идеализированный переход между круговыми копланарными орбитами.</p>
+ <div class="maneuver-result"><div><span>Δv ОТЛЁТА</span><strong id="hohmann-departure">—</strong></div><div><span>Δv ПРИБЫТИЯ</span><strong id="hohmann-arrival">—</strong></div><div><span>ОБЩИЙ Δv</span><strong id="hohmann-total">—</strong></div></div><div class="transfer-time"><span>ВРЕМЯ ПЕРЕЛЁТА</span><strong id="hohmann-time">—</strong></div><p class="footnote">Не учитывает старт с поверхности, фазовый угол, наклонение и гравитационные возмущения.</p></div>
+</section>
+<section class="floating-window" id="window-local" data-window="local" style="left:340px;top:165px;width:430px;display:none">
+ <header class="window-titlebar"><div><span>LOCAL SYSTEM</span><strong>Земля — Луна</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><canvas id="lunar-view" class="local-canvas"></canvas><div class="local-footer"><span><i class="dot earth"></i>Земля</span><span><i class="dot moon"></i>Луна</span><div class="camera-controls"><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="out">−</button><output id="zoom-value-lunar">34%</output><button class="zoom-button" data-zoom-view="lunar" data-zoom-action="in">+</button><button class="zoom-button reset-zoom" data-zoom-view="lunar" data-zoom-action="reset">СБРОС</button></div></div></div>
+</section>
+<section class="floating-window" id="window-model" data-window="model" style="left:370px;top:185px;width:390px;display:none">
+ <header class="window-titlebar"><div><span>CELESTIAL BODY DATA</span><strong>Информация о планете</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content"><div id="planet-info" class="planet-info"><p class="footnote">Данные будут определены по текущему центру орбиты корабля.</p></div></div>
+</section>
+<section class="floating-window" id="window-settings" data-window="settings" style="left:400px;top:120px;width:390px;display:none">
+ <header class="window-titlebar"><div><span>APPLICATION SETTINGS</span><strong>Настройки графики</strong></div><button class="window-close" aria-label="Закрыть">×</button></header>
+ <div class="window-content graphics-settings">
+  <div class="settings-tabs" role="tablist"><button type="button" class="settings-tab active" data-settings-tab="general" role="tab" aria-selected="true">Основные</button><button type="button" class="settings-tab" data-settings-tab="graphics" role="tab" aria-selected="false">Графика</button></div>
+  <div class="settings-section" data-settings-panel="general"><h3>Основные</h3>
+   <label class="select-wrap"><span>ЯЗЫК ИНТЕРФЕЙСА</span><select id="app-language"><option value="ru">Русский</option><option value="en">English</option><option value="uk">Українська</option></select></label>
+   <label class="select-wrap"><span>ФОРМАТ ЧИСЕЛ</span><select id="number-format"><option value="scientific">Научная нотация</option><option value="engineering">Инженерная нотация</option><option value="suffix" selected>Буквенная (K, M, B, T, Qa, Qi)</option><option value="full">Полная запись</option></select></label>
+  </div>
+  <div class="settings-section" data-settings-panel="graphics" hidden><h3>Графика</h3>
+  <label class="select-wrap"><span>ПРЕСЕТ КАЧЕСТВА</span><select id="graphics-preset"><option value="low">Low · Максимальная производительность</option><option value="medium">Medium · Сбалансированный</option><option value="high" selected>High · Высокое качество</option><option value="ultra">Ultra · Максимальное качество</option></select></label>
+  <div class="graphics-options">
+   <label><input id="gfx-shadows" type="checkbox"> Тени и затмения</label>
+   <label><input id="gfx-atmosphere" type="checkbox" checked> Атмосферное рассеивание</label>
+   <label><input id="gfx-clouds" type="checkbox" checked> Облачные слои</label>
+   <label><input id="gfx-bloom" type="checkbox" checked> Bloom</label>
+   <label><input id="gfx-glare" type="checkbox"> Glare</label>
+   <label><input id="gfx-lens-flare" type="checkbox"> Lens flare</label>
+   <label><input id="gfx-hdr" type="checkbox" checked> HDR и Tone Mapping</label>
+  </div>
+  <p id="graphics-status" class="footnote">Настройки графики.</p>
+  </div>
+ </div>
+</section>
+<div id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-hidden="false"><div class="loading-card"><div class="loading-brand"><span class="loading-mark">C</span><div><strong>COSMO-RIDERS</strong><small>SPACE SIMULATION</small></div></div><div class="loading-orbit"><span></span><i></i></div><div class="loading-meta"><span>INITIALIZING SOLAR SYSTEM</span><b id="loading-percent">0%</b></div><div id="loading-progress" class="loading-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="loading-progress-fill"></i></div><strong id="loading-stage" class="loading-stage">Application bootstrap</strong><p id="loading-description" class="loading-description">Подготовка загрузчика и графического интерфейса</p><p id="loading-error" class="loading-error" hidden></p><button id="loading-retry" class="loading-retry" type="button" hidden>Повторить запуск</button></div></div>\n<script type="module" src="./lab/main.ts"></script>
+<script type="module" src="./lab/graphics-settings.ts"></script>
+<script type="module" src="./lab/menu.ts"></script>
+</body></html>

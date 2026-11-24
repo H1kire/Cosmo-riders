@@ -1,0 +1,1 @@
+import type{Color3}from'../core/render-types.ts';export interface SurfaceMaterialOptions{albedo:Color3;roughness:number;metallic:number;emissive:Color3;emissiveIntensity:number;}export class SurfaceMaterial{constructor(public options:SurfaceMaterialOptions){}}

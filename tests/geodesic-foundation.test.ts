@@ -499,3 +499,18 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and persiste
  assert.ok(source.includes('this.gl.deleteBuffer(cached.buffer)'));
  assert.ok(!source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12'));
 });
+
+test('GPU texture arrays are allocated incrementally and geodesic setup does not build meshes synchronously',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [cache,renderer,solar]=await Promise.all([
+  readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(cache.includes('initializeStep():boolean'));
+ assert.ok(cache.includes('const definition=definitions[index]'));
+ assert.ok(renderer.includes('this.gpu.initializeStep()'));
+ assert.ok(renderer.includes('gpuOperationsThisFrame<this.maxUploadsPerFrame'));
+ assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution'));
+ assert.ok(solar.includes('requestAnimationFrame(()=>requestAnimationFrame('));
+});

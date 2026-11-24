@@ -120,7 +120,7 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitViewProjection=new Float32Array(16);
+  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitViewProjection=new Float32Array(16);
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
@@ -328,6 +328,9 @@ export class Solar3DView{
   const parentPosition=mapper(parent,parentState.position),parentDistance=Math.hypot(parentPosition[0]-eye[0],parentPosition[1]-eye[1],parentPosition[2]-eye[2]);
   opacity*=planetaryOrbitOpacity(bodyDistance,body.meanRadiusM/AU);
   const projected=projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance);
+  let orbitVisible=this.orbitVisibilityStates.get(body.id)??projected>.08;
+  if(orbitVisible?projected<.02:projected>.08)orbitVisible=!orbitVisible;
+  this.orbitVisibilityStates.set(body.id,orbitVisible);if(!orbitVisible)return;
   const visibility=Math.max(0,Math.min(1,(projected-.035)/.36));
   const smoothVisibility=visibility*visibility*(3-2*visibility);
   opacity*=smoothVisibility;if(opacity<=0.001)return;
@@ -519,7 +522,7 @@ export class Solar3DView{
   const g=this.gl;
   for(const mesh of this.meshes??[])for(const buffer of mesh.buffers)g.deleteBuffer(buffer);
   for(const orbit of this.orbitBuffers?.values()??[])g.deleteBuffer(orbit.buffer);
-  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();
+  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();
   for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram,this.lineProgram])if(program)g.deleteProgram(program);
   this.hdr?.dispose();
   this.ringRenderer?.dispose();

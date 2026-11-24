@@ -33,13 +33,13 @@ For active patches, `tile-neighbors.ts` compares only tiles belonging to the sam
 
 The output allocation uses this derived count and verifies the final write offset. This is deliberately not the ordinary triangular-lattice count: the gutter loop includes rows and columns outside the original triangle. Tests exercise gutter widths 0, 1, 2, 3 and 8 and validate every written direction.
 
-## Adaptive geodesic LOD
+## Conservative planetary horizon culling\n\n`quadtree-selector.ts` now evaluates the maximum possible camera-direction dot product over the tile's spherical cap. For center angle \\(\\theta\\) and cap radius \\(\\alpha\\), the upper bound is 1 when \\(\\theta\\le\\alpha\\), otherwise \\(\\cos(\\theta-\\alpha)\\). A tile is rejected only when this upper bound is below \\(R/D\\), where \\(R\\) is body radius and \\(D\\) is camera distance from the body center. The test suite covers front/back, tangent, large caps, low/high altitude and camera positions at or inside the body.\n\n## Adaptive geodesic LOD
 
 `quadtree-selector.ts` evaluates each candidate patch in body-local coordinates. It estimates angular patch radius from the normalized triangle centroid, computes spherical sagitta error, projects that error using the viewport focal length and camera-to-patch distance, and applies a pixel-error threshold. It also performs conservative view-frustum and planetary-horizon rejection. A previous split-key set provides split/merge hysteresis; when the camera moves away, the recursive selection naturally returns parent leaves. Maximum depth and active leaf budget are explicit limits.
 
 `quadtree-balancer.ts` checks actual neighboring edge intervals and splits the coarse side until adjacent active leaves differ by at most one level, subject to maximum depth and tile budget. Diagnostics report checked neighbor pairs, split operations, maximum remaining level difference, violations, iterations and budget limitation. The present balancer recomputes the active neighbor map after each refinement pass; it is correct for the current bounded patch sets but is not yet an incremental per-edge update queue.
 
-## Stitching and indexed mesh construction
+## Persistent per-planet active leaf state\n\n`geodesic-surface-runtime.ts` introduces independent CPU state per planet. It owns active leaves, visibility flags, priorities, current neighbor links and computed stitch masks. Split replaces a parent with its four children and applies 2:1 balancing; Merge requires all four active children and rejects a replacement that would violate 2:1. Visibility is stored separately and never removes leaves from the topology. Reconciliation accepts a complete desired leaf cover and validates that it is an antichain before balancing.\n\nThe runtime currently rebuilds the complete neighbor map after a mutation. Its statistics expose updated tile count, changed links, edge comparisons, recomputed masks, full rebuild count and elapsed CPU time. This is a persistent state manager, but it is **not yet an incremental edge-index implementation**; the counters deliberately make full rebuilds visible rather than presenting them as incremental work.\n\n## Stitching and indexed mesh construction
 
 `tile-stitching.ts` defines three edge bits (AB=1, BC=2, CA=4) and caches all eight coarse-neighbor masks per even mesh resolution. For each mask it omits odd boundary samples on coarse-neighbor edges, then incrementally inserts every retained triangular-grid point into a planar triangulation. Points lying on an existing edge split all incident triangles, avoiding T-junctions. The algorithm preserves the complete triangular domain rather than collapsing boundary vertices into the interior.
 
@@ -73,9 +73,9 @@ The current maintenance pass also fixed two independent issues: cache identity n
 
 1. The tile generator, Worker pool and caches are not yet wired into Solar3DView.
 2. The renderer still uses the old procedural surface fragment shader and UV sphere geometry.
-3. The new selector, neighbor search, 2:1 balancer and stitched mesh templates are CPU-side foundations only; they are not yet connected to Solar3DView or used to draw planets.
-4. Neighbor lookup still uses pairwise edge-interval comparisons within adjacent base-face groups, and balancing rebuilds the neighbor map after refinement passes. A persistent hierarchical edge index and incremental update queue remain future optimizations.
-5. Stitching is validated as indexed CPU geometry for all eight masks, but cross-face GPU upload, displacement-height continuity and rendered seam behavior still require WebGL/browser validation.
+3. The selector, active-leaf runtime, neighbor search, 2:1 balancer and stitch templates are CPU-side components. The runtime computes masks from all neighbor links on each topology rebuild, but it is not yet connected to Solar3DView or used to draw planets.
+4. Neighbor lookup still uses pairwise edge-interval comparisons within adjacent base-face groups. The runtime also rebuilds the complete neighbor map after Split/Merge; a persistent hierarchical edge index and incremental update queue remain future work.
+5. Stitch masks are automatically derived from every neighbor link and cached index templates are requested when a mask changes. Paired cross-face seam tests over actual position/index buffers and displacement-height continuity are still required; rendered seam behavior has not been verified.
 6. The gutter direction grid is tested for full writes and normalized directions. Cross-page texture filtering continuity for neighboring LOD pages has not yet been proven in the GPU sampler.
 7. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
 

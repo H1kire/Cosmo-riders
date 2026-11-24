@@ -155,8 +155,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
    const slopeU=(sampleDirection(plusU).height-sampleDirection(minusU).height)/(2*angularStep);
    const slopeV=(sampleDirection(plusV).height-sampleDirection(minusV).height)/(2*angularStep);
-   const radiusScale=Math.max(profile.meanRadiusM,1);\n   const surfaceNormal=normalize3([
-    direction[0]-tangentU[0]*(slopeU/radiusScale)-tangentV[0]*(slopeV/radiusScale),
+   const surfaceNormal=normalize3([
+    direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
     direction[1]-tangentU[1]*(slopeU/radiusScale)-tangentV[1]*(slopeV/radiusScale),
     direction[2]-tangentU[2]*(slopeU/radiusScale)-tangentV[2]*(slopeV/radiusScale)
    ]);

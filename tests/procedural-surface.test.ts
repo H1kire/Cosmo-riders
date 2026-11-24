@@ -143,3 +143,16 @@ test('all reference Solar System bodies generate finite material maps',async()=>
  }
  assert.ok(new Set(results.map(item=>item.signature)).size>=9,'reference bodies should not collapse into a few shared texture templates');
 });
+
+test('planet shader keeps world-space noise frequencies independent of camera detail',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const shader=await readFile(new URL('../src/rendering/shaders/planet-surface.ts',import.meta.url),'utf8');
+ assert.ok(shader.includes('domainWarp3(n*18.0+uSeed)'));
+ assert.ok(shader.includes('domainWarp3(n*7.0+uSeed*2.7)'));
+ assert.ok(shader.includes('fbm3Filtered(n*8.0+uSeed*5.1)'));
+ assert.ok(shader.includes('fbm3Filtered(n*18.0+uSeed*3.0)'));
+ assert.ok(shader.includes('fwidth(p.x)'));
+ assert.ok(!shader.includes('n*(18.0+uDetail*54.0)'));
+ assert.ok(!shader.includes('n*(7.0+uDetail*6.0)'));
+ assert.ok(!shader.includes('n*(8.0+uDetail*42.0)'));
+});

@@ -16,7 +16,7 @@ export interface GeodesicTileMesh {
 
 /** Builds the indexed spherical patch consumed by the future planet renderer. */
 export function buildGeodesicTileMesh(tile:GeoTile,resolution:number,radiusM:number,coarseEdgeMask:StitchEdgeMask=0):GeodesicTileMesh{
- if(!Number.isInteger(resolution)||resolution<2||resolution%2!==0)throw new RangeError('Geodesic mesh resolution must be an even integer >= 2.');
+ if(!Number.isInteger(resolution)||resolution<2||resolution%2!==0||resolution>64)throw new RangeError('Geodesic mesh resolution must be an even integer in [2, 64].');
  if(!Number.isFinite(radiusM)||radiusM<=0)throw new RangeError('Geodesic mesh radius must be positive metres.');
  const vertexCount=(resolution+1)*(resolution+2)/2,directions=new Float32Array(vertexCount*3),positionsM=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),textureCoordinates=new Float32Array(vertexCount*2);
  let index=0;

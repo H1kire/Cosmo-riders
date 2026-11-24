@@ -496,6 +496,8 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and persiste
  assert.ok(source.includes('smoothVisibility'));
  assert.ok(source.includes('Math.min(1024'));
  assert.ok(source.includes('orbitSegmentCounts'));
+ assert.ok(source.includes('orbitVisibilityStates'));
+ assert.ok(source.includes('projected<.02:projected>.08'));
  assert.ok(source.includes('bufferSubData'));
  assert.ok(source.includes('this.gl.deleteBuffer(cached.buffer)'));
  assert.ok(!source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12'));

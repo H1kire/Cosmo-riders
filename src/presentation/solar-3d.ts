@@ -91,7 +91,7 @@ function earthSurfaceProfile(body):SurfaceProfile{
 }
 
 function loadGraphicsSettings():GraphicsSettings{
- try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,geodesic:base.geodesic}:base;}
+ try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,preset,geodesic:base.geodesic}:base;}
  catch{return createGraphicsSettings('high');}
 }
 export class Solar3DView{

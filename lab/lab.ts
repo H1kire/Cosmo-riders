@@ -9,6 +9,12 @@ import { rotateStateToParentEquator } from '../src/physics/orbital-frame.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
 import { formatDisplayNumber } from './preferences.ts';
 
+const reportLoading=(id:string,complete=false)=>window.dispatchEvent(new CustomEvent('cosmo-loading-stage',{detail:{id,complete}}));
+reportLoading('application');
+// Yield once so the browser can paint the loading overlay before scene construction.
+await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+reportLoading('webgl');
+
 const $ = (id: string): (HTMLElement & { value: string }) | null => document.getElementById(id) as (HTMLElement & { value: string }) | null;
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
 let solar3D: Solar3DView | null = null;
@@ -45,6 +51,7 @@ function activateSolarFallback(error: unknown) {
 }
 try {
   solar3D = new Solar3DView(canvases.solar);
+  reportLoading('webgl',true);reportLoading('solar-system');reportLoading('renderer',true);
 } catch (error) {
   activateSolarFallback(error);
 }
@@ -601,6 +608,7 @@ function animate(timestamp){
   renderedBodyStates=null;
   renderedVesselState=null;
   requestAnimationFrame(animate);
+reportLoading('solar-system',true);
 }
 $('scenario').addEventListener('change',event=>{createScenario((event.target as HTMLInputElement).value);});
 $('time-scale').addEventListener('change',event=>world.setTimeScale(Number((event.target as HTMLInputElement).value)));

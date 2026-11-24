@@ -17,18 +17,19 @@ const cross=(a:Vec3,b:Vec3):Vec3=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*
 const length=(v:Vec3)=>Math.hypot(v[0],v[1],v[2]);
 const angle=(a:Vec3,b:Vec3)=>Math.acos(Math.max(-1,Math.min(1,dot(a,b))));
 const edges=(tile:GeoTile):readonly (readonly [Vec3,Vec3])[]=>[[tile.triangle.a,tile.triangle.b],[tile.triangle.b,tile.triangle.c],[tile.triangle.c,tile.triangle.a]];
-function onMinorArc(point:Vec3,a:Vec3,b:Vec3):boolean{
+function onMinorArc(point:Vec3,segment:readonly [Vec3,Vec3]):boolean{
+ const [a,b]=segment,normal=cross(a,b),normalLength=length(normal);
+ if(normalLength<TOLERANCE||Math.abs(dot(normal,point))/normalLength>TOLERANCE)return false;
  const ab=angle(a,b),sum=angle(a,point)+angle(point,b);
- return Math.abs(sum-ab)<=TOLERANCE;
+ return Math.abs(sum-ab)<=1e-7;
 }
 function sameArc(a:readonly [Vec3,Vec3],b:readonly [Vec3,Vec3]):boolean{
  const na=cross(a[0],a[1]),nb=cross(b[0],b[1]),la=length(na),lb=length(nb);
  if(la<TOLERANCE||lb<TOLERANCE)return false;
- if(1-Math.abs(dot(na,nb)/(la*lb))>TOLERANCE)return false;
- let contained=0;
- for(const point of a)if(onMinorArc(point,b[0],b[1]))contained++;
- for(const point of b)if(onMinorArc(point,a[0],a[1]))contained++;
- return contained>=2&&angle(a[0],a[1])+angle(b[0],b[1])>TOLERANCE;
+ if(Math.abs(dot(na,nb)/(la*lb))<1-TOLERANCE)return false;
+ const aInsideB=onMinorArc(a[0],b)&&onMinorArc(a[1],b);
+ const bInsideA=onMinorArc(b[0],a)&&onMinorArc(b[1],a);
+ return (aInsideB||bInsideA)&&Math.min(angle(a[0],a[1]),angle(b[0],b[1]))>TOLERANCE;
 }
 
 /** Finds exact shared great-circle edge intervals, including a fine edge contained in a coarse edge. */

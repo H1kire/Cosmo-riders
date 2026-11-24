@@ -8,10 +8,10 @@ scope.onmessage=event=>{
  try{
   if(task.kind==='mesh'){
    const mesh:GeodesicTileMesh=buildGeodesicTileMesh(task.tile,task.resolution,task.radiusM);
-   scope.postMessage({id:task.id,mesh},[mesh.directions.buffer,mesh.positionsM.buffer,mesh.normals.buffer,mesh.textureCoordinates.buffer,mesh.indices.buffer]);
+   scope.postMessage({id:task.id,mesh},[mesh.directions.buffer as ArrayBuffer,mesh.positionsM.buffer as ArrayBuffer,mesh.normals.buffer as ArrayBuffer,mesh.textureCoordinates.buffer as ArrayBuffer,mesh.indices.buffer as ArrayBuffer]);
    return;
   }
   const tile=generateSurfaceTile(task.request);
-  scope.postMessage({id:task.id,tile},[tile.albedo.buffer,tile.normal.buffer,tile.height.buffer,tile.roughness.buffer,tile.materialId.buffer]);
+  scope.postMessage({id:task.id,tile},[tile.albedo.buffer as ArrayBuffer,tile.normal.buffer as ArrayBuffer,tile.height.buffer as ArrayBuffer,tile.roughness.buffer as ArrayBuffer,tile.materialId.buffer as ArrayBuffer]);
  }catch(error){scope.postMessage({id:task.id,error:error instanceof Error?error.message:String(error)});}
 };

@@ -90,6 +90,10 @@ function earthSurfaceProfile(body):SurfaceProfile{
  };
 }
 
+function loadGraphicsSettings():GraphicsSettings{
+ try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,geodesic:base.geodesic}:base;}
+ catch{return createGraphicsSettings('high');}
+}
 export class Solar3DView{
  [key: string]: any;
  constructor(canvas){
@@ -97,15 +101,15 @@ export class Solar3DView{
   this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
   if(!this.gl)throw Error('WebGL2 недоступен');
   const g=this.gl;
-  this.graphics=createGraphicsSettings('high');
+  this.graphics=loadGraphicsSettings();
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.shaderLibrary=createDefaultShaderLibrary();
   this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
   this.applyGraphicsSettings(this.graphics);
   this.graphicsChangeHandler=(event:Event)=>{
-    const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{};
-    this.graphics={...this.graphics,...value};
-    this.applyGraphicsSettings(this.graphics);
+    const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{};const previousPreset=this.graphics.preset;
+    this.graphics={...this.graphics,...value};this.applyGraphicsSettings(this.graphics);
+    if(this.graphics.preset!==previousPreset)this.rebuildGeodesicRenderer(this.graphics);
   };
   window.addEventListener('graphics-settings-change',this.graphicsChangeHandler);
   this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);
@@ -113,9 +117,7 @@ export class Solar3DView{
   this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
   this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
   this.ringRenderer=new RingRenderer(g);
-  this.earthRenderMode='auto' as PlanetSurfaceMode;
-  this.geodesicEarthRenderer=null;
-  try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(g,{workerCount:2,gpuBudgetBytes:32*1024*1024});}catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
+  this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
   this.lineBuffer=g.createBuffer();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
@@ -130,6 +132,19 @@ export class Solar3DView{
   this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);
   this.labelNodes=new Map();this.bind();
   g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);
+ }
+
+ setEarthRenderMode(mode:PlanetSurfaceMode):void{this.earthRenderMode=mode;}
+ rebuildGeodesicRenderer(settings:GraphicsSettings):void{
+  this.geodesicEarthRenderer?.dispose();this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=settings.preset;
+  const quality=settings.geodesic;
+  try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame});}
+  catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
+ }
+ getGraphicsDiagnostics(){
+  const gl=this.gl,renderer=this.geodesicEarthRenderer,supported=gl.getSupportedExtensions()??[],mode=this.earthRenderMode??'auto';
+  const active=mode==='uv'?'UV':renderer?.isReady?'Geodesic':'UV fallback';
+  return{webgl2:true,maxArrayTextureLayers:Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize:Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)),maxVertexTextureImageUnits:Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),maxCombinedTextureImageUnits:Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)),maxVertexUniformVectors:Number(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)),maxFragmentUniformVectors:Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),maxVertexAttributes:Number(gl.getParameter(gl.MAX_VERTEX_ATTRIBS)),extensions:supported.filter(name=>name==='EXT_color_buffer_float'||name==='EXT_texture_filter_anisotropic'),mode,active,pageSize:renderer?.gpuPageSize??0,pageBytes:renderer?.gpuPageBytes??0,gpuCacheBytes:renderer?.gpuCacheBytes??0,gpuLayers:renderer?.gpuLayerCapacity??0,gpuResidentPages:renderer?.gpuResidentTileCount??0,gpuPinnedPages:renderer?.gpuPinnedPages??0,cpuCacheBytes:renderer?.cpuCacheBytes??0,cpuCachePages:renderer?.cpuCacheSize??0,generatedPages:renderer?.loadedTileCount??0,uploadedPages:renderer?.uploadedPageCount??0,workerCount:renderer?.workerCount??0,workerActive:renderer?.activeWorkerCount??0,workerQueued:renderer?.queuedCount??0,rendererErrors:(renderer?.errorCount??0)+(this.geodesicEarthInitError?1:0),uploadErrors:renderer?.uploadErrorCount??0,fallbackReason:active==='Geodesic'?'No fallback active':mode==='uv'?'UV mode selected':renderer?.fallbackReason??this.geodesicEarthInitError??'Geodesic renderer is unavailable.'};
  }
  applyGraphicsSettings(settings){
   this.hdr.setHDREnabled(settings.hdr);
@@ -460,6 +475,7 @@ export class Solar3DView{
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
+  if(frameStarted-(this.lastDiagnosticsPublish??0)>=500){this.lastDiagnosticsPublish=frameStarted;window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:this.getGraphicsDiagnostics()}));}
  }
  dispose(){
   if(this.disposed)return;

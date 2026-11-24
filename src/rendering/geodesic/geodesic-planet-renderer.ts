@@ -1,6 +1,7 @@
-import { baseGeoTiles } from './icosphere.ts';
+import { baseGeoTiles, type GeoTile } from './icosphere.ts';
 import type { GeodesicTileMesh } from './tile-mesh.ts';
 import { VirtualSurfaceManager, SurfaceGpuPageCache } from './virtual-surface-manager.ts';
+import { SurfaceWorkerTaskError } from './surface-worker-pool.ts';
 import type { SurfaceProfile, SurfaceTileRequest, SurfaceTileData } from './surface-tile.ts';
 import { GEODESIC_VERTEX_SHADER, GEODESIC_FRAGMENT_SHADER } from '../shaders/geodesic-planet.ts';
 
@@ -24,7 +25,7 @@ export interface GeodesicPlanetFrame {
  readonly shadowsEnabled:boolean;
 }
 interface GpuMesh { readonly position:WebGLBuffer; readonly uv:WebGLBuffer; readonly index:WebGLBuffer; readonly count:number; }
-interface Page { readonly request:SurfaceTileRequest; mesh:GpuMesh|null; meshData?:GeodesicTileMesh; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; retryCount?:number; }
+interface Page { readonly tile:GeoTile; readonly request:SurfaceTileRequest; mesh:GpuMesh|null; meshData?:GeodesicTileMesh; meshGenerated:boolean; meshPending:boolean; data?:SurfaceTileData; layer?:number; error?:string; pending:boolean; }
 
 /** GPU renderer for the twenty root faces of one procedural geodesic planet. */
 export class GeodesicPlanetRenderer {
@@ -55,6 +56,8 @@ export class GeodesicPlanetRenderer {
  private failedGpuResidentPagesValue=0;
  private failedGpuLayerCapacityValue=0;
  private failedGpuCacheBytesValue=0;
+ private firstFailureValue:string|null=null;private failureTaskKindValue:string|null=null;private failureTaskKeyValue:string|null=null;private failureTimestampValue:number|null=null;private rendererFailureCountValue=0;
+ private meshGenerationMsValue=0;private surfaceGenerationMsValue=0;
 
  constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number}={}){
   this.gl=gl;this.resolution=options.resolution??128;this.meshResolution=options.meshResolution??64;
@@ -71,7 +74,6 @@ export class GeodesicPlanetRenderer {
   if(vertexTextureUnits<1)throw new Error('Vertex texture sampling is unavailable on this WebGL2 device.');
   if(fragmentTextureUnits<5||combinedTextureUnits<5)throw new Error('Fewer than five fragment/combined texture units are available for geodesic channels.');
   if(vertexAttributes<2||vertexUniformVectors<40||fragmentUniformVectors<96)throw new Error('WebGL2 shader limits are below the geodesic renderer requirements.');
-  this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??2});
   try{
    this.gpu=new SurfaceGpuPageCache(gl,this.resolution,this.gutter,this.gpuBudgetBytes);
    if(this.gpu.capacity<20)throw new Error('GPU texture-array capacity is below the twenty root pages required for atomic activation.');
@@ -79,13 +81,9 @@ export class GeodesicPlanetRenderer {
    this.attribs.direction=gl.getAttribLocation(this.program,'aDirection');this.attribs.uv=gl.getAttribLocation(this.program,'aUv');
    if(this.attribs.direction<0||this.attribs.uv<0)throw new Error('Required geodesic shader attributes are unavailable.');
    for(const name of ['uViewProjection','uModel','uCameraPosition','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uBodyExposure','uRadiusM','uPageSize','uResolution','uGutter','uLayer','uAlbedo','uNormal','uHeight','uRoughness','uMaterial']){const location=gl.getUniformLocation(this.program,name);if(location===null)throw new Error('Required geodesic shader uniform is unavailable: '+name);this.locations[name]=location;}
-  }catch(error){
-   this.failed=true;
-   this.generationErrors++;
-   this.manager.dispose();
-   this.disposeGpuOnly();
-   throw error;
-  }
+   // Worker threads start only after WebGL limits, GPU capacity and shader interfaces pass validation.
+   this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??1});
+  }catch(error){this.failed=true;this.generationErrors++;this.disposeGpuOnly();throw error;}
  }
 
  private createProgram():WebGLProgram{
@@ -104,25 +102,35 @@ export class GeodesicPlanetRenderer {
  setPlanetSurface(profile:SurfaceProfile):void{
   if(this.disposed||this.failed)return;
   if(this.profile){if(JSON.stringify(this.profile)===JSON.stringify(profile))return;throw new Error('Geodesic renderer profile is immutable after page requests begin.');}
-  this.profile=Object.freeze({...profile});
-  this.ready=false;reportLoadingStage('surface');
+  this.profile=Object.freeze({...profile});this.ready=false;reportLoadingStage('surface');
   for(const tile of baseGeoTiles()){
    const request:SurfaceTileRequest={planetId:profile.bodyId,seed:profile.seed,tile:tile.id,resolution:this.resolution,gutter:this.gutter,profile:this.profile};
-   const page:Page={request,mesh:null,pending:true};
-   this.pages.set(tile.id.key,page);
-   void this.manager.requestMesh(tile,this.meshResolution,profile.meanRadiusM,100).then(mesh=>{
-    if(this.disposed||this.failed)return;
-    page.meshData=mesh;
-   },error=>{if(!this.disposed){this.generationErrors++;this.failRenderer(error);}});
-   const accept=(data:SurfaceTileData)=>{if(this.disposed||this.failed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;};
-   const reject=(error:unknown)=>{
-    page.pending=false;page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;
-    if(!this.disposed&&!this.failed&&(page.retryCount??0)<1){
-     page.retryCount=(page.retryCount??0)+1;page.pending=true;
-     void this.manager.request(request,100).then(accept,retryError=>{page.pending=false;page.error=retryError instanceof Error?retryError.message:String(retryError);this.generationErrors++;this.failRenderer(retryError);});
-    }else if(!this.disposed&&!this.failed)this.failRenderer(error);
-   };
-   void this.manager.request(request,100).then(accept,reject);
+   this.pages.set(tile.id.key,{tile,request,mesh:null,meshGenerated:false,meshPending:false,pending:false});
+  }
+ }
+ /** Обмежуємо чергу двома задачами: активною та однією наступною. */
+ private scheduleWorkerTasks():void{
+  if(this.disposed||this.failed||!this.profile)return;
+  if(this.manager.workerCount===0){const reason=this.manager.startupFailure??'No healthy surface worker is available.';this.failRenderer(new SurfaceWorkerTaskError('worker-startup','worker-pool','startup',reason),'worker-startup','worker-pool');return;}
+  while(this.manager.pendingCount<2){
+   let scheduled=false;
+   for(const page of this.pages.values()){
+    if(!page.meshGenerated&&!page.meshPending){
+     page.meshPending=true;const key='mesh:'+page.tile.id.key+':'+this.meshResolution+':'+this.profile.meanRadiusM;
+     void this.manager.requestMesh(page.tile,this.meshResolution,this.profile.meanRadiusM,90).then(mesh=>{
+      if(this.disposed||this.failed)return;page.meshData=mesh;page.meshGenerated=true;page.meshPending=false;this.meshGenerationMsValue+=mesh.generationMs??0;
+     },error=>{page.meshPending=false;if(this.disposed||this.failed||error instanceof DOMException&&error.name==='AbortError')return;this.failRenderer(error,'mesh',key);});
+     scheduled=true;break;
+    }
+    if(!page.data&&!page.pending){
+     page.pending=true;const key=page.request.tile.face.toString(36)+':'+page.request.tile.path;
+     void this.manager.request(page.request,100).then(data=>{
+      if(this.disposed||this.failed)return;page.data=data;page.pending=false;page.error=undefined;this.lastError=null;this.surfaceGenerationMsValue+=data.generationMs;
+     },error=>{page.pending=false;if(this.disposed||this.failed||error instanceof DOMException&&error.name==='AbortError')return;this.failRenderer(error,'tile',key);});
+     scheduled=true;break;
+    }
+   }
+   if(!scheduled)break;
   }
  }
 
@@ -133,13 +141,16 @@ export class GeodesicPlanetRenderer {
   catch(error){for(const item of created)gl.deleteBuffer(item);throw error;}
  }
 
- private failRenderer(error:unknown):void{
-  if(this.failed)return;
+ private failRenderer(error:unknown,taskKind='renderer',taskKey='renderer'):void{
+  if(this.failed||this.disposed)return;
+  const taskError=error instanceof SurfaceWorkerTaskError?error:null;
+  this.firstFailureValue=error instanceof Error?error.message:String(error);this.failureTaskKindValue=taskError?.taskKind??taskKind;this.failureTaskKeyValue=taskError?.taskKey??taskKey;
+  this.failureTimestampValue=Date.now();this.rendererFailureCountValue++;this.generationErrors++;
   this.lastGeneratedPages=this.loadedTileCount;
   this.failedGpuResidentPagesValue=this.gpu?.residentPages??0;
   this.failedGpuLayerCapacityValue=this.gpu?.capacity??0;
   this.failedGpuCacheBytesValue=this.gpuCacheBytes;
-  this.failed=true;this.lastError=error instanceof Error?error.message:String(error);
+  this.failed=true;this.lastError=this.firstFailureValue;
   this.manager.dispose();this.disposeGpuOnly();
  }
 
@@ -154,7 +165,7 @@ export class GeodesicPlanetRenderer {
    page.layer=layer;page.error=undefined;this.lastError=null;this.uploadedPages++;
    return true;
   }catch(error){
-   page.error=error instanceof Error?error.message:String(error);this.lastError=page.error;this.generationErrors++;this.uploadErrors++;
+   page.error=error instanceof Error?error.message:String(error);this.uploadErrors++;
    return false;
   }
  }
@@ -162,11 +173,12 @@ export class GeodesicPlanetRenderer {
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
   const gl=this.gl,visible:Page[]=[];let gpuOperationsThisFrame=0;this.lastPinnedPages=0;
-  if(!this.gpu.ready){try{this.gpu.initializeStep();if(this.gpu.ready)reportLoadingStage('gpu');}catch(error){this.generationErrors++;this.failRenderer(error);}return false;}
+  this.scheduleWorkerTasks();if(this.failed)return false;
+  if(!this.gpu.ready){try{this.gpu.initializeStep();if(this.gpu.ready)reportLoadingStage('gpu');}catch(error){this.failRenderer(error,'gpu-allocation','texture-array');}return false;}
   for(const page of this.pages.values()){
-   if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.generationErrors++;this.failRenderer(error);return false;}}
+   if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error,'mesh-upload',page.request.tile.face.toString(36)+':'+page.request.tile.path);return false;}}
    if(!page.mesh)continue;
-   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.');return false;}}
+   if((page.layer===undefined||this.gpu.getLayer(page.data?.key??'')===undefined)&&page.data&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;if(!this.upload(page)){this.failRenderer(page.error??'GPU page upload failed.','gpu-upload',page.data?.key??'unknown-page');return false;}}
    const layer=this.gpu.getLayer(page.data?.key??'');
    if(layer!==undefined&&page.mesh){page.layer=layer;visible.push(page);}
   }
@@ -208,7 +220,7 @@ export class GeodesicPlanetRenderer {
    }
    gl.disable(gl.CULL_FACE);
    return true;
-  }catch(error){this.generationErrors++;this.failRenderer(error);return false;}
+  }catch(error){this.failRenderer(error,'render','frame');return false;}
   finally{this.lastPinnedPages=pinned.length;for(const key of pinned){this.gpu?.unpin(key);if(!this.failed)this.manager.markVisible(key,false);}if(this.failed){this.manager.dispose();this.disposeGpuOnly();}gl.disable(gl.CULL_FACE);}
  }
 
@@ -224,6 +236,18 @@ export class GeodesicPlanetRenderer {
  get visibleTileCount():number{return this.ready?20:0;}
  get gpuResidentTileCount():number{return this.gpu?.residentPages??0;}
  get workerCount():number{return this.manager.workerCount;}
+ get workerStartupErrors():number{return this.manager.workerStartupErrors;}
+ get workerRuntimeErrors():number{return this.manager.workerRuntimeErrors;}
+ get workerTaskErrors():number{return this.manager.workerTaskErrors;}
+ get cancelledTasks():number{return this.manager.cancelledTasks;}
+ get disposedTasks():number{return this.manager.disposedTasks;}
+ get firstFailure():string|null{return this.firstFailureValue;}
+ get failureTaskKind():string|null{return this.failureTaskKindValue;}
+ get failureTaskKey():string|null{return this.failureTaskKeyValue;}
+ get failureTimestamp():number|null{return this.failureTimestampValue;}
+ get rendererFailureCount():number{return this.rendererFailureCountValue;}
+ get meshGenerationMs():number{return this.meshGenerationMsValue;}
+ get surfaceGenerationMs():number{return this.surfaceGenerationMsValue;}
  get queuedCount():number{return this.manager.queuedCount;}
  get cpuCacheBytes():number{return this.manager.memoryBytes;}
  get gpuPinnedPages():number{return this.lastPinnedPages;}

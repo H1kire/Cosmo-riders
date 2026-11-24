@@ -28,7 +28,7 @@ test('planet render loop isolates WebGL programs and keeps the UV fallback condi
  assert.match(loop,/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/);
  assert.match(loop,/if\(body\.id==='earth'&&this\.geodesicEarthRenderer&&this\.earthRenderMode!=='uv'\)/);
  assert.match(loop,/this\.geodesicEarthRenderer\.render\(\{/);
- assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{\s*g\.disable\(g\.CULL_FACE\);g\.disable\(g\.BLEND\);g\.depthMask\(true\);g\.activeTexture\(g\.TEXTURE0\);g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);\s*g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/);
+ assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{\s*(?:\/\/[^\n]*\s*)?g\.disable\(g\.CULL_FACE\);g\.disable\(g\.BLEND\);g\.depthMask\(true\);g\.activeTexture\(g\.TEXTURE0\);g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);\s*g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/);
  const atmosphere=extractBlock(source,' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
  const clouds=extractBlock(source,' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');
  assert.match(atmosphere,/g\.useProgram\(this\.atmosphereProgram\)/);

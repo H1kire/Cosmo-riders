@@ -215,7 +215,8 @@ test('tile cache identity changes whenever any generation-affecting profile fiel
 test('label renderer uses the computed distance opacity instead of forcing full opacity',async()=>{
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- assert.ok(source.includes("node.style.opacity=String(p.labelOpacity??1)"));
+ assert.ok(source.includes("node.style.opacity=String(labelOpacity)"));
+ assert.ok(!source.includes('projectedFade'));
  assert.ok(!source.includes("node.style.opacity='1'"));
 });
 

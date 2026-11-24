@@ -23,6 +23,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'MAX_ARRAY_TEXTURE_LAYERS: '+value.maxArrayTextureLayers,
   'MAX_TEXTURE_SIZE: '+value.maxTextureSize,
   'MAX_VERTEX_TEXTURE_IMAGE_UNITS: '+value.maxVertexTextureImageUnits,
+  'MAX_TEXTURE_IMAGE_UNITS: '+value.maxFragmentTextureImageUnits,
   'MAX_COMBINED_TEXTURE_IMAGE_UNITS: '+value.maxCombinedTextureImageUnits,
   'MAX_VERTEX_UNIFORM_VECTORS: '+value.maxVertexUniformVectors,
   'MAX_FRAGMENT_UNIFORM_VECTORS: '+value.maxFragmentUniformVectors,

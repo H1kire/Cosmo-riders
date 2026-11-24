@@ -25,9 +25,11 @@ export class SurfaceTileWorkerPool {
  private sequence=0;
  private disposed=false;
  readonly concurrency:number;
- constructor(options:{concurrency?:number;workerFactory?:()=>Worker}={}){
+ readonly maxPendingTasks:number;
+ constructor(options:{concurrency?:number;maxPendingTasks?:number;workerFactory?:()=>Worker}={}){
   const cores=typeof navigator!=='undefined'&&Number.isFinite(navigator.hardwareConcurrency)?navigator.hardwareConcurrency:4;
   this.concurrency=Math.max(1,Math.min(4,options.concurrency??Math.max(1,Math.min(3,cores-2))));
+  this.maxPendingTasks=Math.max(this.concurrency,this.concurrency===1?48:96,Math.floor(options.maxPendingTasks??96));
   this.workerFactory=options.workerFactory??(()=>new Worker(new URL('./surface-tile-worker.ts',import.meta.url),{type:'module'}));
   this.start();
  }
@@ -143,6 +145,7 @@ export class SurfaceTileWorkerPool {
    return this.subscribe(existing,signal) as Promise<SurfaceTileData>;
   }
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
+  if(this.pending.size>=this.maxPendingTasks)return Promise.reject(new Error('Surface worker queue reached its configured task limit.'));
   const task:Task={id:++this.sequence,key,payload:{kind:'tile',request},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
   const promise=this.subscribe(task,signal) as Promise<SurfaceTileData>;
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
@@ -152,6 +155,7 @@ export class SurfaceTileWorkerPool {
   const key='mesh:'+tile.id.key+':'+resolution+':'+radiusM,existing=this.pending.get(key);
   if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe(existing) as Promise<GeodesicTileMesh>;}
   if(this.slots.length===0)return Promise.reject(this.startupError??new Error('No surface workers are available.'));
+  if(this.pending.size>=this.maxPendingTasks)return Promise.reject(new Error('Surface worker queue reached its configured task limit.'));
   const task:Task={id:++this.sequence,key,payload:{kind:'mesh',tile,resolution,radiusM},priority,order:this.sequence,subscribers:new Set(),cancelled:false};
   const promise=this.subscribe(task) as Promise<GeodesicTileMesh>;
   this.pending.set(key,task);this.queue.push(task);this.pump();return promise;

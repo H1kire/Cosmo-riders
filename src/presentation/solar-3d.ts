@@ -145,7 +145,8 @@ export class Solar3DView{
    this.geodesicInitScheduled=false;if(this.disposed)return;
    const pending=this.pendingGeodesicSettings,generation=this.geodesicGeneration;if(!pending)return;
    const quality=pending.geodesic;
-   const sharedPool=this.geodesicWorkerPool??this.geodesicEarthRenderer?.workerPool;
+   const candidatePool=this.geodesicWorkerPool??this.geodesicEarthRenderer?.workerPool;
+   const sharedPool=candidatePool&&candidatePool.workerCount>0?candidatePool:undefined;
    let replacement:GeodesicPlanetRenderer;
    try{replacement=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame,workerPool:sharedPool});}
    catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);this.geodesicEarthInitFailureTaskKind='renderer-constructor';this.geodesicEarthInitFailureTaskKey='constructor';this.geodesicEarthInitFailureTimestamp=Date.now();return;}

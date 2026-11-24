@@ -117,7 +117,7 @@ const checks: Array<[string, () => Promise<void>]> = [
       }
       throw new Error('Unbalanced render-state block: '+marker);
     };
-    const planetLoop=extractBlock('for(const body of bodies){');
+    const planetLoop=extractBlock('for(const body of bodies){\\n   g.useProgram(this.bodyProgram);');
     if(!/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/.test(planetLoop)) throw new Error('Each planet iteration must bind the surface program before any early exit or draw.');
     if(!/if\(body\.id===['"]earth['"]&&this\.geodesicEarthRenderer&&this\.earthRenderMode!==['"]uv['"]\)/.test(planetLoop) || !/this\.geodesicEarthRenderer\.render\(\{/.test(planetLoop)) throw new Error('Geodesic rendering must be restricted to Earth and use the existing frame data.');
     if(!/if\(!renderedGeodesicEarth\)\s*\{\s*g\.useProgram\(this\.bodyProgram\);\s*this\.bindMesh\(mesh,l\);\s*g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/.test(planetLoop)) throw new Error('UV fallback must run only when geodesic rendering did not draw and must bind its mesh.');

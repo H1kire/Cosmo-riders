@@ -1,8 +1,13 @@
 export interface LoadingStage { id:string; label:string; description:string; weight:number; }
 const STAGES:readonly LoadingStage[]=[
  {id:'bootstrap',label:'Application bootstrap',description:'Проверка оболочки и подготовка загрузчика',weight:5},
- {id:'application',label:'Core data & rendering',description:'Загрузка физической модели, WebGL и начальной сцены',weight:85},
- {id:'first-frame',label:'Initial scene',description:'Ожидание первого кадра Солнечной системы',weight:10}
+ {id:'application',label:'Загрузка приложения',description:'Импорт модулей физики и визуализации',weight:5},
+ {id:'webgl',label:'WebGL-контекст',description:'Создание графического контекста и базовых программ',weight:15},
+ {id:'solar-system',label:'Солнечная система',description:'Подготовка физических тел и начального состояния',weight:20},
+ {id:'renderer',label:'Рендерер сцены',description:'Подготовка камеры, освещения и графических систем',weight:15},
+ {id:'surface',label:'Поверхность Земли',description:'Генерация геодезических мешей и процедурных страниц в Worker',weight:20},
+ {id:'gpu',label:'GPU-страницы',description:'Постепенная загрузка текстурных страниц',weight:10},
+ {id:'first-frame',label:'Сцена готова',description:'Первый кадр Солнечной системы отрисован',weight:10}
 ];
 
 /** Прогрес завжди відображає лише завершені етапи; невідома робота показується як indeterminate. */
@@ -39,7 +44,7 @@ export class LoadingScreen {
   const stage=STAGES.find(item=>item.id===id);if(!stage)return;
   if(this.title)this.title.textContent=stage.label;
   if(this.description)this.description.textContent=stage.description;
-  this.root?.classList.toggle('is-indeterminate',id==='application');
+  this.root?.classList.toggle('is-indeterminate',id==='application'||id==='surface'||id==='gpu');
   this.update();
  }
  private update():void{

@@ -35,5 +35,6 @@ test('loading progress is driven by completed named stages, not a timer counter'
  assert.ok(loader.includes("id==='application'||id==='surface'||id==='gpu'"));
  for(const stage of ['webgl','solar-system','renderer','surface','gpu'])assert.ok(loader.includes("id:'"+stage+"'"));
  assert.ok(!loader.includes('setInterval'));
- assert.ok(docs.includes('does not by itself prove that long main-thread stalls have been eliminated'));
+ assert.ok(docs.includes('first Solar System frame is therefore independent'));
+  assert.ok(docs.includes('moved off the main thread'));
 });

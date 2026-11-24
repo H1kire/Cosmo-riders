@@ -51,7 +51,8 @@ test('both published entry points gate application import behind the start scree
   assert.match(page,/id="start-simulation"/,name+' start button');
   assert.match(page,/class="loading-screen is-hidden"/,name+' hidden loading screen');
  }
- assert.ok(main.indexOf('loading.show()')<main.indexOf("await import('./lab.ts')"));
+ assert.match(main,/startButton\.addEventListener\('click',\(\)=>\{[\s\S]*?loading\.show\(\);[\s\S]*?void startApplication\(\);/);
+ assert.match(main,/async function startApplication\(\):Promise<void>\{[\s\S]*?await loading\.nextFrame\(\);[\s\S]*?await import\('\.\/lab\.ts'\)/);
  assert.match(main,/startButton\.addEventListener\('click'/);
 });
 

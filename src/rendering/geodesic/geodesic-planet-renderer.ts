@@ -160,6 +160,7 @@ export class GeodesicPlanetRenderer {
  render(frame:GeodesicPlanetFrame):boolean{
   if(this.disposed||this.failed||!this.program||!this.gpu||!this.profile||this.pages.size!==20)return false;
   const gl=this.gl,visible:Page[]=[];let gpuOperationsThisFrame=0;this.lastPinnedPages=0;
+  if(!this.gpu.ready){try{this.gpu.initializeStep();}catch(error){this.failRenderer(error);}return false;}
   for(const page of this.pages.values()){
    if(!page.mesh&&page.meshData&&gpuOperationsThisFrame<this.maxUploadsPerFrame){gpuOperationsThisFrame++;try{page.mesh=this.createMesh(page.meshData.directions,page.meshData.textureCoordinates,page.meshData.indices);page.meshData=undefined;}catch(error){this.failRenderer(error);return false;}}
    if(!page.mesh)continue;
@@ -228,14 +229,15 @@ export class GeodesicPlanetRenderer {
  get uploadedPageCount():number{return this.uploadedPages;}
  get activeWorkerCount():number{return this.manager.activeWorkers;}
  get cpuCacheSize():number{return this.manager.cacheSize;}
- get gpuCacheBytes():number{return(this.gpu?.capacity??0)*(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
+ get gpuCacheBytes():number{return this.gpu?.allocatedBytes??0;}
+ get allocatedTextureArrays():number{return this.gpu?.ready?5:0;}
  get failedGpuCacheBytes():number{return this.failedGpuCacheBytesValue;}
  get failedGpuLayerCapacity():number{return this.failedGpuLayerCapacityValue;}
  get failedGpuResidentPages():number{return this.failedGpuResidentPagesValue;}
  get rendererState():'failed'|'ready'|'preparing'|'idle'{return this.failed?'failed':this.ready?'ready':this.profile?'preparing':'idle';}
  get gpuPageBytes():number{return(this.gpu?.pageSize??0)*(this.gpu?.pageSize??0)*13;}
  get gpuPageSize():number{return this.gpu?.pageSize??0;}
- get gpuLayerCapacity():number{return this.gpu?.capacity??0;}
+ get gpuLayerCapacity():number{return this.gpu?.ready?this.gpu.capacity:0;}
  get fallbackReason():string|null{if(this.failed)return this.lastError??'Geodesic renderer failed.';if(this.lastError)return this.lastError;if(!this.profile)return 'Earth surface profile has not been requested yet.';if(!this.ready)return 'Preparing geodesic pages: '+this.loadedTileCount+'/20 generated, '+this.gpuResidentTileCount+'/20 uploaded.';return null;}
 }
 

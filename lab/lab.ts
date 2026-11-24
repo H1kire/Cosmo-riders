@@ -554,7 +554,7 @@ function updateManeuverPlanner(){
   $('hohmann-total').textContent=fmt(transfer.totalDeltaVMS/1000,3)+' км/с';
   $('hohmann-time').textContent=fmt(transfer.transferTimeSeconds/DAY,1)+' суток';
 }
-let lastTelemetryUpdate=0;
+let lastTelemetryUpdate=0,firstFrameReported=false;
 function animate(timestamp){
   if(!lastFrame)lastFrame=timestamp;
   const delta=Math.min((timestamp-lastFrame)/1000,.1);
@@ -604,6 +604,7 @@ function animate(timestamp){
   for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
   const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
   drawAll();
+  if(!firstFrameReported){firstFrameReported=true;reportLoading('first-frame',true);}
 
   renderedBodyStates=null;
   renderedVesselState=null;

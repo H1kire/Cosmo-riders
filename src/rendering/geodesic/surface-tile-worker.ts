@@ -3,11 +3,14 @@ import { buildGeodesicTileMesh, type GeodesicTileMesh } from './tile-mesh.ts';
 import type { GeoTile } from './icosphere.ts';
 type WorkerTask={id:number;kind:'tile';request:SurfaceTileRequest}|{id:number;kind:'mesh';tile:GeoTile;resolution:number;radiusM:number};
 const scope=self as unknown as {onmessage:((event:MessageEvent<WorkerTask>)=>void)|null;postMessage:(value:unknown,transfer?:Transferable[])=>void};
+scope.postMessage({type:'ready'});
 scope.onmessage=event=>{
  const task=event.data;
  try{
   if(task.kind==='mesh'){
-   const mesh:GeodesicTileMesh=buildGeodesicTileMesh(task.tile,task.resolution,task.radiusM);
+   const started=typeof performance!=='undefined'?performance.now():Date.now();
+   const built=buildGeodesicTileMesh(task.tile,task.resolution,task.radiusM);
+   const mesh:GeodesicTileMesh={...built,generationMs:(typeof performance!=='undefined'?performance.now():Date.now())-started};
    scope.postMessage({id:task.id,mesh},[mesh.directions.buffer as ArrayBuffer,mesh.positionsM.buffer as ArrayBuffer,mesh.normals.buffer as ArrayBuffer,mesh.textureCoordinates.buffer as ArrayBuffer,mesh.indices.buffer as ArrayBuffer]);
    return;
   }

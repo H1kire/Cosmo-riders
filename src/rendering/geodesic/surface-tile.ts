@@ -60,6 +60,17 @@ function plates(seed:number,profile:SurfaceProfile):Plate[]{
  }
  return out;
 }
+/** Швидкий height-only шлях для океанічного профілю Землі без побудови кольорових каналів. */
+function oceanicHeightSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):number{
+ const seed=p.seed,macro=fbm([d[0]*3.1,d[1]*3.1,d[2]*3.1],seed,5),regional=fbm([d[0]*11,d[1]*11,d[2]*11],seed+31,4);
+ let nearest=2,second=2;
+ for(const plate of plateSet){const q=1-(d[0]*plate.direction[0]+d[1]*plate.direction[1]+d[2]*plate.direction[2]);if(q<nearest){second=nearest;nearest=q;}else if(q<second)second=q;}
+ const boundary=1-smooth(.006,.055,second-nearest),volcanic=fbm([d[0]*19,d[1]*19,d[2]*19],seed+71,4)*p.volcanicActivity,detail=fbm([d[0]*47,d[1]*47,d[2]*47],seed+97,3);
+ let height=(macro-.5)*.18+(regional-.5)*.065+Math.pow(boundary,.7)*p.tectonicActivity*.16-boundary*boundary*p.tectonicActivity*.11+volcanic*.035;
+ const frost=smooth(.68,.96,Math.abs(d[1]))*p.iceFraction;if(frost>.08)height*=1-frost*.3;
+ height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
+ return height+(detail-.5)*.006;
+}
 function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):{color:[number,number,number];height:number;rough:number;material:number}{
  const seed=p.seed,macro=fbm([d[0]*3.1,d[1]*3.1,d[2]*3.1],seed,5),regional=fbm([d[0]*11,d[1]*11,d[2]*11],seed+31,4);
  let nearest=2,second=2,first:Plate|undefined;
@@ -137,6 +148,7 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
  const sampleDirection=(direction:Vec3)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet);
+ const sampleHeight=(direction:Vec3)=>profile.kind==='oceanic'||profile.waterFraction>.45?oceanicHeightSample(direction,profile,plateSet):sampleDirection(direction).height;
  const angularStep=1/(resolution*Math.pow(2,tile.level));
  // Земна поверхня обмежена фізичним діапазоном від -11 км до +9 км відносно середнього радіуса.
  // Значення лишається часткою радіуса до побудови нормалей і переводиться в метри лише під час запису каналу Height.
@@ -156,8 +168,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const minusU=normalize3([direction[0]-tangentU[0]*angularStep,direction[1]-tangentU[1]*angularStep,direction[2]-tangentU[2]*angularStep]);
    const plusV=normalize3([direction[0]+tangentV[0]*angularStep,direction[1]+tangentV[1]*angularStep,direction[2]+tangentV[2]*angularStep]);
    const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
-   const slopeU=(heightFraction(sampleDirection(plusU).height)-heightFraction(sampleDirection(minusU).height))/(2*angularStep);
-   const slopeV=(heightFraction(sampleDirection(plusV).height)-heightFraction(sampleDirection(minusV).height))/(2*angularStep);
+   const slopeU=(heightFraction(sampleHeight(plusU))-heightFraction(sampleHeight(minusU)))/(2*angularStep);
+   const slopeV=(heightFraction(sampleHeight(plusV))-heightFraction(sampleHeight(minusV)))/(2*angularStep);
    const surfaceNormal=normalize3([
     direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
     direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,

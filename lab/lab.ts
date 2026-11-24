@@ -25,6 +25,17 @@ function activateSolarFallback(error: unknown) {
   }
   const message = error instanceof Error ? error.message : String(error ?? 'неизвестная ошибка');
   notice.textContent = '3D-режим недоступен — включена резервная карта: ' + message;
+  const webgl2Available=!/WebGL2.*недоступен/i.test(message);
+  window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:{
+    webgl2:webgl2Available,maxArrayTextureLayers:'—',maxTextureSize:'—',
+    maxVertexTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
+    maxVertexUniformVectors:'—',maxFragmentUniformVectors:'—',maxVertexAttributes:'—',
+    extensions:[],mode:'auto',active:'Canvas 2D fallback',pageSize:'—',pageBytes:'—',
+    gpuCacheBytes:'—',gpuLayers:'—',gpuResidentPages:'—',gpuPinnedPages:'—',
+    cpuCacheBytes:'—',cpuCachePages:'—',generatedPages:'—',uploadedPages:'—',
+    workerCount:'—',workerActive:'—',workerQueued:'—',rendererErrors:'—',uploadErrors:'—',
+    fallbackReason:message
+  }}));
   if (!fallbackCanvas) {
     fallbackCanvas = document.createElement('canvas');
     fallbackCanvas.className = 'solar-fallback';

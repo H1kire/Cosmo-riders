@@ -1,0 +1,78 @@
+import { baseGeoTiles, childrenOf, type GeoTile, type Vec3 } from './icosphere.ts';
+
+export interface GeodesicLodCamera {
+ readonly positionM:Vec3;
+ readonly forward:Vec3;
+ readonly verticalFovRadians:number;
+ readonly viewportHeightPx:number;
+ readonly viewportWidthPx:number;
+}
+export interface GeodesicLodOptions {
+ readonly planetRadiusM:number;
+ readonly targetErrorPx?:number;
+ readonly maxDepth?:number;
+ readonly maxTiles?:number;
+ readonly previousSplitKeys?:ReadonlySet<string>;
+}
+export interface GeodesicLodStats {
+ readonly tested:number;
+ readonly culledFrustum:number;
+ readonly culledHorizon:number;
+ readonly split:number;
+ readonly leaves:number;
+ readonly maxLevel:number;
+ readonly maxScreenErrorPx:number;
+}
+export interface GeodesicLodSelection { readonly tiles:readonly GeoTile[]; readonly stats:GeodesicLodStats; }
+
+const dot=(a:Vec3,b:Vec3)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const normalize=(v:Vec3):Vec3=>{const length=Math.hypot(...v)||1;return[v[0]/length,v[1]/length,v[2]/length];};
+const angle=(a:Vec3,b:Vec3)=>Math.acos(Math.max(-1,Math.min(1,dot(a,b))));
+const add=(a:Vec3,b:Vec3):Vec3=>[a[0]+b[0]+b[0],a[1]+b[1]+b[1],a[2]+b[2]+b[2]];
+
+function tileCenter(tile:GeoTile):Vec3{return normalize([tile.triangle.a[0]+tile.triangle.b[0]+tile.triangle.c[0],tile.triangle.a[1]+tile.triangle.b[1]+tile.triangle.c[1],tile.triangle.a[2]+tile.triangle.b[2]+tile.triangle.c[2]]);}
+function tileAngularRadius(tile:GeoTile,center:Vec3):number{return Math.max(angle(center,tile.triangle.a),angle(center,tile.triangle.b),angle(center,tile.triangle.c));}
+function isVisible(tile:GeoTile,camera:GeodesicLodCamera,radius:number,center:Vec3,angularRadius:number):'visible'|'frustum'|'horizon'{
+ const cameraDistance=Math.hypot(...camera.positionM);
+ if(cameraDistance>radius){
+  const cameraDirection=normalize(camera.positionM),horizon=-Math.sqrt(Math.max(0,1-(radius/cameraDistance)**2));
+  if(dot(center,cameraDirection)+Math.sin(angularRadius)<horizon)return'horizon';
+ }
+ const surfacePoint:[number,number,number]=[center[0]*radius,center[1]*radius,center[2]*radius];
+ const toTile=normalize([surfacePoint[0]-camera.positionM[0],surfacePoint[1]-camera.positionM[1],surfacePoint[2]-camera.positionM[2]]);
+ const vertical=Math.max(.01,Math.min(Math.PI-.01,camera.verticalFovRadians));
+ const aspect=Math.max(.1,camera.viewportWidthPx/Math.max(1,camera.viewportHeightPx));
+ const horizontal=2*Math.atan(Math.tan(vertical/2)*aspect);
+ const halfAngle=Math.min(Math.PI,Math.max(vertical,horizontal)/2+angularRadius);
+ if(dot(toTile,normalize(camera.forward))<Math.cos(halfAngle))return'frustum';
+ return'visible';
+}
+
+/** Selects visible icosphere leaves by projected spherical sagitta error with split/merge hysteresis. */
+export function selectGeodesicLod(camera:GeodesicLodCamera,options:GeodesicLodOptions):GeodesicLodSelection{
+ const radius=options.planetRadiusM,target=Math.max(.1,options.targetErrorPx??2),maxDepth=Math.max(0,Math.min(20,Math.trunc(options.maxDepth??12)));
+ const maxTiles=Math.max(20,Math.trunc(options.maxTiles??4096));
+ if(!Number.isFinite(radius)||radius<=0)throw new RangeError('Planet radius must be positive metres.');
+ if(!Number.isFinite(camera.viewportHeightPx)||camera.viewportHeightPx<=0||!Number.isFinite(camera.viewportWidthPx)||camera.viewportWidthPx<=0)throw new RangeError('Viewport dimensions must be positive.');
+ const focalPixels=camera.viewportHeightPx/(2*Math.tan(camera.verticalFovRadians/2));
+ const selected:GeoTile[]=[],stats={tested:0,culledFrustum:0,culledHorizon:0,split:0,leaves:0,maxLevel:0,maxScreenErrorPx:0};
+ const visit=(tile:GeoTile)=>{
+  stats.tested++;
+  const center=tileCenter(tile),angularRadius=tileAngularRadius(tile,center),visibility=isVisible(tile,camera,radius,center,angularRadius);
+  if(visibility==='frustum'){stats.culledFrustum++;return;}
+  if(visibility==='horizon'){stats.culledHorizon++;return;}
+  const surfaceDistance=Math.max(1,Math.hypot(camera.positionM[0]-center[0]*radius,camera.positionM[1]-center[1]*radius,camera.positionM[2]-center[2]*radius));
+  const sagitta=radius*(1-Math.cos(angularRadius/2));
+  const errorPx=sagitta*focalPixels/surfaceDistance;
+  stats.maxScreenErrorPx=Math.max(stats.maxScreenErrorPx,errorPx);
+  const wasSplit=options.previousSplitKeys?.has(tile.id.key)??false;
+  const threshold=target*(wasSplit?.8:1.2);
+  const canSplit=tile.id.level<maxDepth&&selected.length+4<=maxTiles;
+  if(errorPx>threshold&&canSplit){
+   stats.split++;for(const child of childrenOf(tile))visit(child);return;
+  }
+  selected.push(tile);stats.leaves++;stats.maxLevel=Math.max(stats.maxLevel,tile.id.level);
+ };
+ for(const tile of baseGeoTiles())visit(tile);
+ return{tiles:selected,stats:Object.freeze(stats)};
+}

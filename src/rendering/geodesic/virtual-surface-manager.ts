@@ -8,11 +8,15 @@ interface CpuEntry { tile:SurfaceTileData; bytes:number; used:number; }
 /** Керує станами тайлів та обмеженим CPU LRU-кешем. */
 export class VirtualSurfaceManager {
  private readonly pool:SurfaceTileWorkerPool;
+ private readonly ownsPool:boolean;
+ private readonly abortController=new AbortController();
+ private disposed=false;
  private readonly cpu=new Map<string,CpuEntry>();
  private readonly statuses=new Map<string,SurfaceTileStatus>();
  private clock=0; private bytes=0;
  constructor(options:{cpuBudgetBytes?:number;workerCount?:number;pool?:SurfaceTileWorkerPool}={}){
   this.cpuBudgetBytes=Math.max(1,options.cpuBudgetBytes??96*1024*1024);
+  this.ownsPool=!options.pool;
   this.pool=options.pool??new SurfaceTileWorkerPool({concurrency:options.workerCount});
  }
  readonly cpuBudgetBytes:number;
@@ -34,9 +38,11 @@ export class VirtualSurfaceManager {
   if(bytes<=this.cpuBudgetBytes){this.cpu.set(tile.key,{tile,bytes,used:++this.clock});this.bytes+=bytes;}
  }
  requestMesh(tile:import('./icosphere.ts').GeoTile,resolution:number,radiusM:number,priority=0):Promise<import('./tile-mesh.ts').GeodesicTileMesh>{
-  return this.pool.requestMesh(tile,resolution,radiusM,priority);
+  if(this.disposed)return Promise.reject(new DOMException('Surface manager is disposed.','AbortError'));
+  return this.pool.requestMesh(tile,resolution,radiusM,priority,this.abortController.signal);
  }
  async request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{
+  if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');
   const key=surfaceTileKey(request),state=this.status(key,priority),hit=this.cpu.get(key);
   if(hit){hit.used=++this.clock;state.state='CPU Ready';return hit.tile;}
   if(state.state==='Queued'||state.state==='Generating') {
@@ -45,9 +51,10 @@ export class VirtualSurfaceManager {
   }
   state.state='Queued';state.error=undefined;
   try{
-   const promise=this.pool.request(request,priority,signal);
+   const combinedSignal=signal?AbortSignal.any([this.abortController.signal,signal]):this.abortController.signal;
+   const promise=this.pool.request(request,priority,combinedSignal);
    state.state='Generating';
-   const tile=await promise;this.remember(tile);state.state='CPU Ready';return tile;
+   const tile=await promise;if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');this.remember(tile);state.state='CPU Ready';return tile;
   }catch(error){
    if(error instanceof DOMException&&error.name==='AbortError'){state.state='Evicted';}
    else{state.state='Failed';state.error=error instanceof Error?error.message:String(error);}
@@ -59,7 +66,8 @@ export class VirtualSurfaceManager {
  markVisible(key:string,visible:boolean):void{const state=this.status(key);if(visible){state.state='Visible';}else if(state.state==='Visible')state.state=this.cpu.has(key)?'GPU Ready':'Evicted';}
  getCached(key:string):SurfaceTileData|undefined{const entry=this.cpu.get(key);if(entry)entry.used=++this.clock;return entry?.tile;}
  evict(key:string):void{const entry=this.cpu.get(key);if(entry){this.bytes-=entry.bytes;this.cpu.delete(key);}const state=this.statuses.get(key);if(state&&state.state!=='Visible')state.state='Evicted';}
- dispose():void{this.pool.dispose();this.cpu.clear();this.statuses.clear();this.bytes=0;}
+ dispose():void{if(this.disposed)return;this.disposed=true;this.abortController.abort();if(this.ownsPool)this.pool.dispose();this.cpu.clear();this.statuses.clear();this.bytes=0;}
+ get workerPool():SurfaceTileWorkerPool{return this.pool;}
  get memoryBytes():number{return this.bytes;}
  get cacheSize():number{return this.cpu.size;}
  get queuedCount():number{return this.pool.queuedCount;}

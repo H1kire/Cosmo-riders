@@ -77,6 +77,7 @@ export class SurfaceGpuPageCache {
  get roughness():WebGLTexture{return this.textures[3]!;}
  get material():WebGLTexture{return this.textures[4]!;}
  get ready():boolean{return this.textures.length===5;}
+ get allocatedTextureCount():number{return this.textures.length;}
  get allocatedBytes():number{return this.pageSize*this.pageSize*this.capacity*[4,3,4,1,1].slice(0,this.textures.length).reduce((sum,value)=>sum+value,0);}
  readonly pageSize:number; readonly capacity:number;
  private readonly slots:{key:string|null;used:number}[]=[];

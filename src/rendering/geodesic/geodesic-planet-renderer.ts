@@ -235,6 +235,7 @@ export class GeodesicPlanetRenderer {
  get loadedTileCount():number{return Math.max(this.lastGeneratedPages,[...this.pages.values()].filter(page=>Boolean(page.data)).length);}
  get visibleTileCount():number{return this.ready?20:0;}
  get gpuResidentTileCount():number{return this.gpu?.residentPages??0;}
+ releaseWorkerPoolOwnership():void{this.manager.releasePoolOwnership();}
  get workerPool():SurfaceTileWorkerPool{return this.manager.workerPool;}
   get workerCount():number{return this.manager.workerCount;}
  get workerStartupErrors():number{return this.manager.workerStartupErrors;}

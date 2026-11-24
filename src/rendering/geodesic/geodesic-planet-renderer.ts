@@ -1,7 +1,7 @@
 import { baseGeoTiles, type GeoTile } from './icosphere.ts';
 import type { GeodesicTileMesh } from './tile-mesh.ts';
 import { VirtualSurfaceManager, SurfaceGpuPageCache } from './virtual-surface-manager.ts';
-import { SurfaceWorkerTaskError } from './surface-worker-pool.ts';
+import { SurfaceWorkerTaskError, type SurfaceTileWorkerPool } from './surface-worker-pool.ts';
 import type { SurfaceProfile, SurfaceTileRequest, SurfaceTileData } from './surface-tile.ts';
 import { GEODESIC_VERTEX_SHADER, GEODESIC_FRAGMENT_SHADER } from '../shaders/geodesic-planet.ts';
 
@@ -59,7 +59,7 @@ export class GeodesicPlanetRenderer {
  private firstFailureValue:string|null=null;private failureTaskKindValue:string|null=null;private failureTaskKeyValue:string|null=null;private failureTimestampValue:number|null=null;private rendererFailureCountValue=0;
  private meshGenerationMsValue=0;private surfaceGenerationMsValue=0;
 
- constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number}={}){
+ constructor(gl:WebGL2RenderingContext,options:{resolution?:number;meshResolution?:number;cpuBudgetBytes?:number;gpuBudgetBytes?:number;workerCount?:number;maxUploadsPerFrame?:number;workerPool?:SurfaceTileWorkerPool}={}){
   this.gl=gl;this.resolution=options.resolution??128;this.meshResolution=options.meshResolution??64;
   this.cpuBudgetBytes=options.cpuBudgetBytes??96*1024*1024;this.gpuBudgetBytes=options.gpuBudgetBytes??32*1024*1024;
   this.maxUploadsPerFrame=Math.max(1,Math.floor(options.maxUploadsPerFrame??2));
@@ -82,7 +82,7 @@ export class GeodesicPlanetRenderer {
    if(this.attribs.direction<0||this.attribs.uv<0)throw new Error('Required geodesic shader attributes are unavailable.');
    for(const name of ['uViewProjection','uModel','uCameraPosition','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uBodyExposure','uRadiusM','uPageSize','uResolution','uGutter','uLayer','uAlbedo','uNormal','uHeight','uRoughness','uMaterial']){const location=gl.getUniformLocation(this.program,name);if(location===null)throw new Error('Required geodesic shader uniform is unavailable: '+name);this.locations[name]=location;}
    // Worker threads start only after WebGL limits, GPU capacity and shader interfaces pass validation.
-   this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??1});
+   this.manager=new VirtualSurfaceManager({cpuBudgetBytes:this.cpuBudgetBytes,workerCount:options.workerCount??1,pool:options.workerPool});
   }catch(error){this.failed=true;this.generationErrors++;this.disposeGpuOnly();throw error;}
  }
 
@@ -235,7 +235,8 @@ export class GeodesicPlanetRenderer {
  get loadedTileCount():number{return Math.max(this.lastGeneratedPages,[...this.pages.values()].filter(page=>Boolean(page.data)).length);}
  get visibleTileCount():number{return this.ready?20:0;}
  get gpuResidentTileCount():number{return this.gpu?.residentPages??0;}
- get workerCount():number{return this.manager.workerCount;}
+ get workerPool():SurfaceTileWorkerPool{return this.manager.workerPool;}
+  get workerCount():number{return this.manager.workerCount;}
  get workerStartupErrors():number{return this.manager.workerStartupErrors;}
  get workerRuntimeErrors():number{return this.manager.workerRuntimeErrors;}
  get workerTaskErrors():number{return this.manager.workerTaskErrors;}

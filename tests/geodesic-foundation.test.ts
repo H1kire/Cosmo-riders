@@ -9,6 +9,8 @@ import { selectGeodesicLod, horizonCapUpperBound, isTilePotentiallyVisibleFromHo
 import { GeodesicSurfaceRuntime } from '../src/rendering/geodesic/geodesic-surface-runtime.ts';
 import { buildStitchIndexTemplate, triangleGridVertexIndex } from '../src/rendering/geodesic/tile-stitching.ts';
 import { buildGeodesicTileMesh } from '../src/rendering/geodesic/tile-mesh.ts';
+import { GEODESIC_QUALITY_PRESETS } from '../src/rendering/quality/quality-settings.ts';
+import { planetaryOrbitOpacity, planetaryLabelOpacity } from '../src/rendering/quality/render-lod.ts';
 
 const profile:SurfaceProfile={
  bodyId:'earth',seed:12345,kind:'oceanic',massKg:5.9722e24,meanRadiusM:6371000,gravityMS2:9.81,
@@ -439,4 +441,37 @@ test('Solar3DView preserves UV fallback and scopes geodesic rendering to Earth',
  assert.ok(source.includes("if(!renderedGeodesicEarth)"));
  assert.ok(source.includes("this.geodesicEarthRenderer?.dispose()"));
  assert.ok(source.includes("this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0)"));
+});
+
+test('all quality presets stay within stitch limits and reserve twenty root texture pages',()=>{
+ for(const [name,preset] of Object.entries(GEODESIC_QUALITY_PRESETS)){
+  assert.ok(Number.isInteger(preset.meshResolution)&&preset.meshResolution>=2&&preset.meshResolution<=64&&preset.meshResolution%2===0,name+' mesh resolution must be stitch-compatible');
+  const pageSize=preset.pageResolution+4,minimumBytes=20*pageSize*pageSize*13;
+  assert.ok(preset.gpuBudgetBytes>=minimumBytes,name+' GPU cache must hold all twenty root pages');
+ }
+ assert.equal(GEODESIC_QUALITY_PRESETS.ultra.meshResolution,64);
+});
+
+test('planet labels use the same monotonic distance fade as orbit lines',()=>{
+ const radius=6_371_000;
+ for(const ratio of [1,20,120,300,1000,2400,5000]){
+  const orbit=planetaryOrbitOpacity(radius*ratio,radius);
+  const label=planetaryLabelOpacity(radius*ratio,radius);
+  assert.equal(label,orbit);
+ }
+ assert.ok(planetaryLabelOpacity(radius*100,radius)<planetaryLabelOpacity(radius*1000,radius));
+});
+
+test('worker pool protocol supports transferable geodesic mesh jobs without main-thread mesh generation',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [pool,worker,renderer]=await Promise.all([
+  readFile(new URL('../src/rendering/geodesic/surface-worker-pool.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/geodesic/surface-tile-worker.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/geodesic/geodesic-planet-renderer.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(pool.includes('requestMesh(tile:GeoTile')));
+ assert.ok(worker.includes("kind:'mesh'"));
+ assert.ok(worker.includes('mesh.indices.buffer'));
+ assert.ok(renderer.includes('this.manager.requestMesh('));
+ assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution')));
 });

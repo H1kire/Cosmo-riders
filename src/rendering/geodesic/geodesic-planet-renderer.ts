@@ -233,7 +233,7 @@ export class GeodesicPlanetRenderer {
  get activeWorkerCount():number{return this.manager.activeWorkers;}
  get cpuCacheSize():number{return this.manager.cacheSize;}
  get gpuCacheBytes():number{return this.gpu?.allocatedBytes??0;}
- get allocatedTextureArrays():number{return this.gpu?.ready?5:0;}
+ get allocatedTextureArrays():number{return this.gpu?.allocatedTextureCount??0;}
  get failedGpuCacheBytes():number{return this.failedGpuCacheBytesValue;}
  get failedGpuLayerCapacity():number{return this.failedGpuLayerCapacityValue;}
  get failedGpuResidentPages():number{return this.failedGpuResidentPagesValue;}

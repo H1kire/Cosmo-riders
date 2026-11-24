@@ -119,7 +119,7 @@ export class Solar3DView{
   this.ringRenderer=new RingRenderer(g);
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.rebuildGeodesicRenderer(this.graphics);
   this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
-  this.lineBuffer=g.createBuffer();this.orbitBuffers=new Map();
+  this.orbitBuffers=new Map();
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
@@ -139,14 +139,14 @@ export class Solar3DView{
   this.pendingGeodesicSettings=settings;this.geodesicPreset=settings.preset;
   if(this.geodesicInitScheduled)return;
   this.geodesicInitScheduled=true;
-  requestAnimationFrame(()=>{
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
    this.geodesicInitScheduled=false;
    const pending=this.pendingGeodesicSettings;if(!pending)return;
    this.geodesicEarthRenderer?.dispose();this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;
    const quality=pending.geodesic;
    try{this.geodesicEarthRenderer=new GeodesicPlanetRenderer(this.gl,{resolution:quality.pageResolution,meshResolution:quality.meshResolution,cpuBudgetBytes:quality.cpuBudgetBytes,gpuBudgetBytes:quality.gpuBudgetBytes,workerCount:quality.workerCount,maxUploadsPerFrame:quality.uploadsPerFrame});}
    catch(error){this.geodesicEarthInitError=error instanceof Error?error.message:String(error);}
-  });
+  }));
  }
  getGraphicsDiagnostics(){
   const gl=this.gl,renderer=this.geodesicEarthRenderer,supported=gl.getSupportedExtensions()??[],mode=this.earthRenderMode??'auto';

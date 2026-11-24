@@ -80,3 +80,12 @@ The current maintenance pass also fixed two independent issues: cache identity n
 7. No browser GPU timing, VRAM measurement or 2K/4K visual benchmark has been recorded.
 
 These are explicit remaining work items, not claimed features.
+
+## Подготовка GPU-страниц и атрибутов меша (аудит 2026-11-24)
+
+- GeodesicTileMesh тепер формує радіальні нормалі та textureCoordinates для кожної вершини. UV обчислюються через обернене перетворення triangleToSquareUv, обернене до squareToTriangleBarycentric генератора сторінок.
+- SurfaceGpuPageCache враховує 14 байт на тексель для п'яти каналів (RGBA8, RGB8, R32F, R8, R8), встановлює UNPACK_ALIGNMENT=1 на час завантаження та відновлює попереднє значення навіть у разі помилки.
+- Додано pin, unpin та isPinned. LRU пропускає закріплені шари та повідомляє про вичерпання доступних шарів, якщо всі вони закріплені.
+- Runtime тепер розрізняє стан «видимість ще не задавалася» та явний порожній набір видимих листків.
+
+Обмеження: нормалі меша поки радіальні, а не обчислені з displacement height; UV/сторінка ще не підключені до GLSL. Pin API існує, але виклики pin/unpin ще не пов'язані з життєвим циклом кадру в Solar3DView. Інкрементальний edge index, реальний geodesic draw path, Worker → GPU pipeline та браузерна перевірка залишаються незавершеними.

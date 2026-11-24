@@ -11,6 +11,7 @@ export class VirtualSurfaceManager {
  private readonly cpu=new Map<string,CpuEntry>();
  private readonly statuses=new Map<string,SurfaceTileStatus>();
  private clock=0; private bytes=0;
+ private readonly pins=new Map<string,number>();
  constructor(options:{cpuBudgetBytes?:number;workerCount?:number;pool?:SurfaceTileWorkerPool}={}){
   this.cpuBudgetBytes=Math.max(1,options.cpuBudgetBytes??96*1024*1024);
   this.pool=options.pool??new SurfaceTileWorkerPool({concurrency:options.workerCount});
@@ -75,7 +76,7 @@ export class SurfaceGpuPageCache {
  constructor(private readonly gl:WebGL2RenderingContext,resolution:number,gutter=2,budgetBytes=32*1024*1024){
   this.pageSize=resolution+gutter*2;
   const maxLayers=gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
-  const bytesPerPage=this.pageSize*this.pageSize*13;
+  const bytesPerPage=this.pageSize*this.pageSize*14;
   this.capacity=Math.max(1,Math.min(maxLayers,Math.floor(budgetBytes/bytesPerPage)));
   const create=(internal:number,format:number,type:number):WebGLTexture=>{
    const texture=gl.createTexture();if(!texture)throw new Error('Не вдалося виділити GPU texture array.');
@@ -97,16 +98,33 @@ export class SurfaceGpuPageCache {
   let layer=this.pages.get(tile.key);
   if(layer===undefined){
    let slot=this.slots.findIndex(item=>item.key===null);
-   if(slot<0){slot=this.slots.reduce((best,item,index,all)=>item.used<all[best].used?index:best,0);const old=this.slots[slot].key;if(old)this.pages.delete(old);}
+   if(slot<0){
+    let oldest=Infinity;
+    for(let i=0;i<this.slots.length;i++){
+     const candidate=this.slots[i],pinCount=candidate.key?this.pins.get(candidate.key)??0:0;
+     if(pinCount===0&&candidate.used<oldest){oldest=candidate.used;slot=i;}
+    }
+    if(slot<0)throw new Error('All GPU texture-array layers are pinned by visible tiles.');
+    const old=this.slots[slot].key;if(old)this.pages.delete(old);
+   }
    layer=slot;this.slots[slot].key=tile.key;this.pages.set(tile.key,layer);
   }
-  const w=this.pageSize;
+  const w=this.pageSize,previousAlignment=g.getParameter(g.UNPACK_ALIGNMENT) as number;
+  g.pixelStorei(g.UNPACK_ALIGNMENT,1);
   const put=(texture:WebGLTexture,format:number,type:number,data:ArrayBufferView)=>{g.bindTexture(g.TEXTURE_2D_ARRAY,texture);g.texSubImage3D(g.TEXTURE_2D_ARRAY,0,0,0,layer!,w,w,1,format,type,data);};
-  put(this.albedo,g.RGBA,g.UNSIGNED_BYTE,tile.albedo);put(this.normal,g.RGB,g.UNSIGNED_BYTE,tile.normal);
-  put(this.height,g.RED,g.FLOAT,tile.height);put(this.roughness,g.RED,g.UNSIGNED_BYTE,tile.roughness);put(this.material,g.RED,g.UNSIGNED_BYTE,tile.materialId);
+  try{
+   put(this.albedo,g.RGBA,g.UNSIGNED_BYTE,tile.albedo);put(this.normal,g.RGB,g.UNSIGNED_BYTE,tile.normal);
+   put(this.height,g.RED,g.FLOAT,tile.height);put(this.roughness,g.RED,g.UNSIGNED_BYTE,tile.roughness);put(this.material,g.RED,g.UNSIGNED_BYTE,tile.materialId);
+  }finally{g.pixelStorei(g.UNPACK_ALIGNMENT,previousAlignment);}
   this.slots[layer].used=++this.clock;return layer;
  }
  getLayer(key:string):number|undefined{const layer=this.pages.get(key);if(layer!==undefined)this.slots[layer].used=++this.clock;return layer;}
- dispose():void{const g=this.gl;for(const texture of [this.albedo,this.normal,this.height,this.roughness,this.material])g.deleteTexture(texture);this.pages.clear();for(const slot of this.slots)slot.key=null;}
+ /** Закріплює сторінку до завершення кадру, щоб LRU не перевикористав її шар. */
+ pin(key:string):boolean{if(!this.pages.has(key))return false;this.pins.set(key,(this.pins.get(key)??0)+1);return true;}
+ /** Знімає одне закріплення; повторні pin-виклики потребують парних unpin. */
+ unpin(key:string):void{const count=this.pins.get(key)??0;if(count<=1)this.pins.delete(key);else this.pins.set(key,count-1);}
+ isPinned(key:string):boolean{return(this.pins.get(key)??0)>0;}
+ get pinnedPages():number{return this.pins.size;}
+ dispose():void{const g=this.gl;for(const texture of [this.albedo,this.normal,this.height,this.roughness,this.material])g.deleteTexture(texture);this.pages.clear();this.pins.clear();for(const slot of this.slots)slot.key=null;}
  get residentPages():number{return this.pages.size;}
 }

@@ -30,6 +30,7 @@ export class GeodesicSurfaceRuntime {
  private readonly options:Required<GeodesicRuntimeOptions>;
  private active=new Map<string,GeoTile>();
  private visible=new Set<string>();
+ private visibilityConfigured=false;
  private neighbors:TileNeighborMap=findTileNeighbors([]);
  private masks=new Map<string,StitchEdgeMask>();
  private priorities=new Map<string,number>();
@@ -53,6 +54,7 @@ export class GeodesicSurfaceRuntime {
 
  setVisible(tileKeys:ReadonlySet<string>):void{
   this.visible=new Set([...tileKeys].filter(key=>this.active.has(key)));
+  this.visibilityConfigured=true;
  }
  setPriority(tileKey:string,priority:number):void{
   if(!this.active.has(tileKey))throw new RangeError('Priority can only be assigned to an active leaf.');
@@ -60,7 +62,7 @@ export class GeodesicSurfaceRuntime {
   this.priorities.set(tileKey,priority);
  }
  getTileStates():readonly GeodesicTileState[]{
-  return [...this.active.values()].map(tile=>({tile,visible:this.visible.size===0||this.visible.has(tile.id.key),stitchMask:this.masks.get(tile.id.key)??0,priority:this.priorities.get(tile.id.key)??0}));
+  return [...this.active.values()].map(tile=>({tile,visible:!this.visibilityConfigured||this.visible.has(tile.id.key),stitchMask:this.masks.get(tile.id.key)??0,priority:this.priorities.get(tile.id.key)??0}));
  }
 
  split(tileKey:string):boolean{
@@ -105,6 +107,7 @@ export class GeodesicSurfaceRuntime {
   if(balanced.violations>0)throw new Error('Desired leaf set cannot satisfy the 2:1 balance within configured limits.');
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
   this.visible=new Set([...visibleKeys].filter(key=>this.active.has(key)));
+  this.visibilityConfigured=true;
   this.rebuildTopology();
  }
 

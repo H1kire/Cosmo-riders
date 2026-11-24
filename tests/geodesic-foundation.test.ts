@@ -334,3 +334,9 @@ test('geodesic runtime rejects incomplete merges and keeps visibility separate f
  assert.equal(runtime.getTileStates().filter(state=>state.visible).length,1);
  assert.ok(runtime.activeTiles.length>=26);
 });
+
+test('explicitly empty runtime visibility does not make every active leaf visible',()=>{
+ const runtime=new GeodesicSurfaceRuntime('visibility-empty',{stitchResolution:8});
+ runtime.setVisible(new Set());
+ assert.equal(runtime.getTileStates().filter(state=>state.visible).length,0);
+});

@@ -26,7 +26,7 @@ The physics worker is deliberately separate from surface generation. It does not
 - SOI enter/exit hysteresis and primary transition history;
 - impulsive maneuvers and idealized rocket-equation burns as separate legacy/planning operations;
 - multiple per-vessel engines with independent propellant, throttle, enable state, ISP and inertial thrust direction;
-- RK4 continuous-thrust integration of vessel position, velocity and changing mass, including gravity and engine-specific fuel-depletion events;
+- RK4 continuous-thrust integration of vessel position, velocity and changing mass, including gravity, commanded burn-end events and engine-specific fuel-depletion events;
 - current propulsion telemetry (resultant thrust, mass flow, acceleration and remaining propellant);
 - analytic body spin metadata, Rust-computed spin phase at arbitrary render time and tidal-lock period derivation;
 - optional barycentric N-body mode using pairwise Newtonian gravity and kick-drift-kick velocity Verlet; massless vessels are integrated as test particles in the combined field, while SOI remains presentation/primary metadata.
@@ -49,7 +49,7 @@ The physics handle API is exported from `wasm_physics.rs`:
 - `advance_simulation`, `step_simulation`;
 - `get_body_states`, `get_body_states_at`, `get_vessel_state`, `get_vessel_state_at`;
 - `get_sphere_of_influence`, `apply_maneuver`, `apply_idealized_burn`;
-- `add_engine`, `set_engine_enabled`, `set_engine_throttle`, `set_engine_direction`, `get_propulsion_state`;
+- `add_engine`, `start_engine_burn`, `set_engine_enabled`, `set_engine_throttle`, `set_engine_direction`, `get_propulsion_state`;
 - `get_physics_snapshot`, `get_orbit_path`, `dispose_physics_world`.
 
 Additional orbital computations are also available through the worker: state-to-elements, general conic elements-to-state conversion, orbital path sampling, orbital period, Hohmann transfer and plane-change delta-v. `PhysicsBridge.enableNBody()` and `PhysicsWorldClient.enableNBody()` select the dynamic mode in the same Rust-owned PhysicsWorld; it is not a second world.

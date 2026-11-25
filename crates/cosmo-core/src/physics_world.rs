@@ -22,7 +22,7 @@ pub struct BodyDefinition{
  #[serde(default)]pub axial_tilt_rad:Option<f64>,#[serde(default)]pub pole_right_ascension_rad:Option<f64>,
  #[serde(default)]pub pole_declination_rad:Option<f64>,#[serde(default="one")]pub rotation_direction:i8,
  #[serde(default)]pub prime_meridian_rad:f64,#[serde(default)]pub rotation_epoch_seconds:f64,
- #[serde(default)]pub tidal_lock:bool,#[serde(default)]pub equatorial_radius_m:Option<f64>,
+ #[serde(default)]pub tidal_lock:bool,#[serde(default)]pub equatorial_radius_m:Option<f64>,#[serde(default)]pub j2:f64,
  #[serde(default)]pub solar_day_seconds:Option<f64>,#[serde(default)]pub atmosphere_composition:Vec<String>,
  #[serde(default)]pub has_rings:bool,#[serde(default="frame")]pub orbital_reference_frame:String
 }
@@ -46,12 +46,31 @@ pub struct VesselState{pub id:String,pub primary_body_id:String,pub position:[f6
 #[serde(rename_all="camelCase")]
 pub struct VesselDefinition{pub id:String,pub primary_body_id:String,pub position:[f64;3],pub velocity:[f64;3],#[serde(default="mass")]pub mass_kg:f64,#[serde(default)]pub engines:Vec<Engine>}
 fn mass()->f64{1000.0}
-fn gravity_from_bodies(bodies:&[(f64,f64,Vec3)],position:Vec3)->Result<Vec3,String>{
+#[derive(Clone,Copy)]
+struct GravityBody{mass_kg:f64,collision_radius_m:f64,equatorial_radius_m:f64,j2:f64,pole_axis:Vec3,position:Vec3}
+fn pole_axis_ecliptic(body:&BodyDefinition)->Vec3{
+ let(Some(ra),Some(dec))=(body.pole_right_ascension_rad,body.pole_declination_rad)else{return Vec3::new(0.0,0.0,1.0)};
+ let e=23.4392911_f64.to_radians();
+ Vec3::new(dec.cos()*ra.cos(),e.cos()*dec.cos()*ra.sin()+e.sin()*dec.sin(),-e.sin()*dec.cos()*ra.sin()+e.cos()*dec.sin()).normalized().unwrap_or(Vec3::new(0.0,0.0,1.0))
+}
+fn gravity_body(body:&BodyDefinition,position:Vec3)->GravityBody{
+ GravityBody{mass_kg:body.mass_kg,collision_radius_m:body.mean_radius_m,equatorial_radius_m:body.equatorial_radius_m.unwrap_or(body.mean_radius_m),j2:body.j2,pole_axis:pole_axis_ecliptic(body),position}
+}
+fn gravity_from_bodies(bodies:&[GravityBody],position:Vec3)->Result<Vec3,String>{
  let mut acceleration=Vec3::new(0.0,0.0,0.0);
- for(mass,radius,body_position)in bodies{
-  let delta=body_position.sub(position);let distance=delta.norm();
-  if !distance.is_finite()||distance<=*radius{return Err("Vessel collision with a celestial body's physical radius.".into())}
-  acceleration=acceleration.add(delta.scale(G*mass/(distance*distance*distance)));
+ for body in bodies{
+  let delta=body.position.sub(position);let distance=delta.norm();
+  if !distance.is_finite()||distance<=body.collision_radius_m{return Err("Vessel collision with a celestial body's physical radius.".into())}
+  acceleration=acceleration.add(delta.scale(G*body.mass_kg/(distance*distance*distance)));
+  if body.j2!=0.0{
+   let relative=position.sub(body.position);let r2=relative.norm2();
+   let projection=relative.x*body.pole_axis.x+relative.y*body.pole_axis.y+relative.z*body.pole_axis.z;
+   let z2=projection*projection/r2;
+   let perpendicular=relative.sub(body.pole_axis.scale(projection));
+   let shape=perpendicular.scale(5.0*z2-1.0).add(body.pole_axis.scale(projection*(5.0*z2-3.0)));
+   let factor=1.5*G*body.mass_kg*body.j2*body.equatorial_radius_m.powi(2)/(r2*r2*r2.sqrt());
+   acceleration=acceleration.add(shape.scale(factor));
+  }
  }
  if acceleration.finite(){Ok(acceleration)}else{Err("Gravitational acceleration became non-finite.".into())}
 }
@@ -77,7 +96,7 @@ impl PhysicsWorld{
  pub fn add_body(&mut self,mut b:BodyDefinition)->Result<(),String>{
   if self.initialized{return Err("Cannot add bodies after ephemeris initialization.".into())}if b.id.trim().is_empty()||b.name.trim().is_empty(){return Err("Body id and name must be non-empty.".into())}positive(b.mass_kg,"massKg")?;positive(b.mean_radius_m,"meanRadiusM")?;v(b.position)?;v(b.velocity)?;
   if b.rotation_direction!=1&&b.rotation_direction != -1{return Err("rotationDirection must be 1 or -1.".into())}if b.orbital_reference_frame!="ecliptic"&&b.orbital_reference_frame!="parent-equator"{return Err("Unsupported orbital reference frame.".into())}
-  if let Some(x)=b.rotation_period_seconds{positive(x,"rotationPeriodSeconds")?}if let Some(x)=b.equatorial_radius_m{positive(x,"equatorialRadiusM")?}if let Some(x)=b.semi_major_axis_m{positive(x,"semiMajorAxisM")?}if let Some(x)=b.solar_day_seconds{positive(x,"solarDaySeconds")?}
+  if let Some(x)=b.rotation_period_seconds{positive(x,"rotationPeriodSeconds")?}if let Some(x)=b.equatorial_radius_m{positive(x,"equatorialRadiusM")?}if !b.j2.is_finite(){return Err("j2 must be finite.".into())}if let Some(x)=b.semi_major_axis_m{positive(x,"semiMajorAxisM")?}if let Some(x)=b.solar_day_seconds{positive(x,"solarDaySeconds")?}
   if !b.prime_meridian_rad.is_finite()||!b.rotation_epoch_seconds.is_finite(){return Err("Rotation phase and epoch must be finite.".into())}
   if let Some(e)=&b.orbital_elements{positive(e.semi_major_axis_m,"semiMajorAxisM")?;if !e.eccentricity.is_finite()||!(0.0..1.0).contains(&e.eccentricity){return Err("Elliptic eccentricity must be in [0, 1).".into())}if b.parent_id.is_none(){return Err("An orbiting body must have parentId.".into())}}
   if self.indices.contains_key(&b.id){return Err(format!("Duplicate body id: {}",b.id))}match &b.parent_id{Some(p)if !self.indices.contains_key(p)=>return Err(format!("Parent body not found: {p}")),None if !self.bodies.is_empty()=>return Err("Only one root body is supported.".into()),_=>{}}
@@ -111,7 +130,7 @@ impl PhysicsWorld{
  pub fn enable_n_body(&mut self)->Result<(),String>{
   self.ready()?;if self.nbody.is_some(){return Ok(())}
   let mut bodies:Vec<NBody>=self.bodies.iter().zip(self.states.iter()).map(|(body,state)|NBody{
-   id:body.id.clone(),mass_kg:body.mass_kg,collision_radius_m:body.mean_radius_m,
+   id:body.id.clone(),mass_kg:body.mass_kg,collision_radius_m:body.mean_radius_m,equatorial_radius_m:body.equatorial_radius_m.unwrap_or(body.mean_radius_m),j2:body.j2,pole_axis:pole_axis_ecliptic(body),
    position:state.p(),velocity:state.vel()
   }).collect();
   let total_mass:f64=bodies.iter().map(|b|b.mass_kg).sum();
@@ -134,7 +153,7 @@ impl PhysicsWorld{
  fn step_n_body(&mut self)->Result<(),String>{
   let dt=self.options.fixed_step_seconds;let start=self.nbody.as_ref().ok_or("N-body mode is not enabled.")?.clone();
   let end=start.advanced_adaptive(dt,dt.abs(),N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?.0;self.nbody=Some(end);self.sync_n_body_states()?;self.simulation_time_seconds+=dt;
-  let gravity_bodies:Vec<(f64,f64,Vec3)>=self.bodies.iter().zip(self.states.iter()).map(|(b,s)|(b.mass_kg,b.mean_radius_m,s.p())).collect();
+  let gravity_bodies:Vec<GravityBody>=self.bodies.iter().zip(self.states.iter()).map(|(b,state)|gravity_body(b,state.p())).collect();
   for i in 0..self.vessels.len(){
    if self.vessels[i].engines.is_empty(){
     let(p,vv,_)=NBodySystem::integrate_test_particle_adaptive(&start,self.nbody.as_ref().unwrap(),self.vessels[i].p,self.vessels[i].vel,dt,dt.abs(),N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?;
@@ -166,10 +185,10 @@ impl PhysicsWorld{
  pub fn set_engine_enabled(&mut self,vessel_id:&str,engine_id:&str,enabled:bool)->Result<(),String>{let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let engine=self.vessels[i].engines.iter_mut().find(|e|e.id==engine_id).ok_or_else(||format!("Unknown engine: {engine_id}"))?;engine.enabled=enabled;if !enabled{engine.burn_remaining_seconds=None;}Ok(())}
  pub fn set_engine_throttle(&mut self,vessel_id:&str,engine_id:&str,throttle:f64)->Result<(),String>{if !throttle.is_finite()||!(0.0..=1.0).contains(&throttle){return Err("throttle must be in [0, 1].".into())}let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let engine=self.vessels[i].engines.iter_mut().find(|e|e.id==engine_id).ok_or_else(||format!("Unknown engine: {engine_id}"))?;engine.throttle=throttle;Ok(())}
  pub fn set_engine_direction(&mut self,vessel_id:&str,engine_id:&str,direction:[f64;3])->Result<(),String>{let direction=v(direction)?.normalized()?;let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let engine=self.vessels[i].engines.iter_mut().find(|e|e.id==engine_id).ok_or_else(||format!("Unknown engine: {engine_id}"))?;engine.direction=arr(direction);Ok(())}
- pub fn propulsion_state(&self,vessel_id:&str)->Result<serde_json::Value,String>{let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let vessel=&self.vessels[i];let mut force=Vec3::new(0.0,0.0,0.0);let mut flow=0.0;for engine in &vessel.engines{if engine.enabled&&engine.throttle>0.0&&engine.propellant_kg>1.0e-12{let thrust=engine.max_thrust_n*engine.throttle;force=force.add(Vec3::new(engine.direction[0],engine.direction[1],engine.direction[2]).scale(thrust));flow+=thrust/(engine.isp_seconds*STANDARD_G);}}let gravity_bodies:Vec<(f64,f64,Vec3)>=self.bodies.iter().zip(self.states.iter()).map(|(b,state)|(b.mass_kg,b.mean_radius_m,state.p())).collect();let acceleration=gravity_from_bodies(&gravity_bodies,vessel.p)?.add(force.scale(1.0/vessel.mass)).norm();Ok(serde_json::json!({"vesselId":vessel.id,"massKg":vessel.mass,"thrustN":force.norm(),"massFlowKgS":flow,"accelerationMS2":acceleration,"propellantRemainingKg":vessel.engines.iter().map(|e|e.propellant_kg).sum::<f64>(),"engines":&vessel.engines}))}
+ pub fn propulsion_state(&self,vessel_id:&str)->Result<serde_json::Value,String>{let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let vessel=&self.vessels[i];let mut force=Vec3::new(0.0,0.0,0.0);let mut flow=0.0;for engine in &vessel.engines{if engine.enabled&&engine.throttle>0.0&&engine.propellant_kg>1.0e-12{let thrust=engine.max_thrust_n*engine.throttle;force=force.add(Vec3::new(engine.direction[0],engine.direction[1],engine.direction[2]).scale(thrust));flow+=thrust/(engine.isp_seconds*STANDARD_G);}}let gravity_bodies:Vec<GravityBody>=self.bodies.iter().zip(self.states.iter()).map(|(b,state)|gravity_body(b,state.p())).collect();let acceleration=gravity_from_bodies(&gravity_bodies,vessel.p)?.add(force.scale(1.0/vessel.mass)).norm();Ok(serde_json::json!({"vesselId":vessel.id,"massKg":vessel.mass,"thrustN":force.norm(),"massFlowKgS":flow,"accelerationMS2":acceleration,"propellantRemainingKg":vessel.engines.iter().map(|e|e.propellant_kg).sum::<f64>(),"engines":&vessel.engines}))}
  pub fn vessel_state(&self,id:&str)->Result<VesselState,String>{let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;Ok(self.vessels[i].snapshot())}
  pub fn vessel_states(&self)->Vec<VesselState>{self.vessels.iter().map(Vessel::snapshot).collect()}
- pub fn vessel_state_at(&self,id:&str,t:f64,body_states:&[f64])->Result<VesselState,String>{if !t.is_finite(){return Err("timeSeconds must be finite.".into())}let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let vessel=&self.vessels[i];let pi=self.indices[&vessel.primary];if body_states.len()!=self.bodies.len()*6{return Err("Invalid body snapshot length.".into())}let k=pi*6;let p=Vec3::new(body_states[k],body_states[k+1],body_states[k+2]);let vel=Vec3::new(body_states[k+3],body_states[k+4],body_states[k+5]);let dt=t-self.simulation_time_seconds;if !vessel.engines.is_empty()&&dt>0.0{let gravity_bodies:Vec<(f64,f64,Vec3)>=self.bodies.iter().enumerate().map(|(index,b)|(b.mass_kg,b.mean_radius_m,Vec3::new(body_states[index*6],body_states[index*6+1],body_states[index*6+2]))).collect();let mut absolute_position=vessel.p;let mut absolute_velocity=vessel.vel;let mut mass=vessel.mass;let mut engines=vessel.engines.clone();integrate_engines(&mut absolute_position,&mut absolute_velocity,&mut mass,&mut engines,dt,|position|gravity_from_bodies(&gravity_bodies,position))?;return Ok(VesselState{position:arr(absolute_position),velocity:arr(absolute_velocity),relative_position:arr(absolute_position.sub(p)),relative_velocity:arr(absolute_velocity.sub(vel)),mass_kg:mass,..vessel.snapshot()})}let rel=if let Some(system)=&self.nbody{let projected=system.advanced_adaptive(dt,self.options.fixed_step_seconds,N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?.0;let(absolute_position,absolute_velocity,_)=NBodySystem::integrate_test_particle_adaptive(system,&projected,vessel.p,vessel.vel,dt,self.options.fixed_step_seconds,N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?;let relative_position=absolute_position.sub(p);let relative_velocity=absolute_velocity.sub(vel);return Ok(VesselState{position:arr(absolute_position),velocity:arr(absolute_velocity),relative_position:arr(relative_position),relative_velocity:arr(relative_velocity),..vessel.snapshot()})}else{propagate_kepler(vessel.r,vessel.v,G*self.bodies[pi].mass_kg,dt,1e-10,100)?};Ok(VesselState{position:arr(p.add(rel.position)),velocity:arr(vel.add(rel.velocity)),relative_position:arr(rel.position),relative_velocity:arr(rel.velocity),..vessel.snapshot()})}
+ pub fn vessel_state_at(&self,id:&str,t:f64,body_states:&[f64])->Result<VesselState,String>{if !t.is_finite(){return Err("timeSeconds must be finite.".into())}let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let vessel=&self.vessels[i];let pi=self.indices[&vessel.primary];if body_states.len()!=self.bodies.len()*6{return Err("Invalid body snapshot length.".into())}let k=pi*6;let p=Vec3::new(body_states[k],body_states[k+1],body_states[k+2]);let vel=Vec3::new(body_states[k+3],body_states[k+4],body_states[k+5]);let dt=t-self.simulation_time_seconds;if !vessel.engines.is_empty()&&dt>0.0{let gravity_bodies:Vec<GravityBody>=self.bodies.iter().enumerate().map(|(index,b)|gravity_body(b,Vec3::new(body_states[index*6],body_states[index*6+1],body_states[index*6+2]))).collect();let mut absolute_position=vessel.p;let mut absolute_velocity=vessel.vel;let mut mass=vessel.mass;let mut engines=vessel.engines.clone();integrate_engines(&mut absolute_position,&mut absolute_velocity,&mut mass,&mut engines,dt,|position|gravity_from_bodies(&gravity_bodies,position))?;return Ok(VesselState{position:arr(absolute_position),velocity:arr(absolute_velocity),relative_position:arr(absolute_position.sub(p)),relative_velocity:arr(absolute_velocity.sub(vel)),mass_kg:mass,..vessel.snapshot()})}let rel=if let Some(system)=&self.nbody{let projected=system.advanced_adaptive(dt,self.options.fixed_step_seconds,N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?.0;let(absolute_position,absolute_velocity,_)=NBodySystem::integrate_test_particle_adaptive(system,&projected,vessel.p,vessel.vel,dt,self.options.fixed_step_seconds,N_BODY_RELATIVE_TOLERANCE,N_BODY_MIN_STEP_SECONDS,N_BODY_MAX_SUBSTEPS)?;let relative_position=absolute_position.sub(p);let relative_velocity=absolute_velocity.sub(vel);return Ok(VesselState{position:arr(absolute_position),velocity:arr(absolute_velocity),relative_position:arr(relative_position),relative_velocity:arr(relative_velocity),..vessel.snapshot()})}else{propagate_kepler(vessel.r,vessel.v,G*self.bodies[pi].mass_kg,dt,1e-10,100)?};Ok(VesselState{position:arr(p.add(rel.position)),velocity:arr(vel.add(rel.velocity)),relative_position:arr(rel.position),relative_velocity:arr(rel.velocity),..vessel.snapshot()})}
  pub fn apply_impulse(&mut self,id:&str,direction:[f64;3],dv:f64)->Result<(),String>{if !dv.is_finite()||dv<0.0{return Err("deltaVMS must be non-negative.".into())}let dir=v(direction)?.normalized()?;let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let pi=self.indices[&self.vessels[i].primary];self.vessels[i].v=self.vessels[i].v.add(dir.scale(dv));self.vessels[i].vel=self.states[pi].vel().add(self.vessels[i].v);Ok(())}
  pub fn apply_idealized_burn(&mut self,id:&str,direction:[f64;3],dv:f64,vacuum:f64,sea:f64,isp:f64,ambient:f64,reference:f64,dry:f64)->Result<BurnResult,String>{
   positive(vacuum,"vacuumThrustN")?;positive(isp,"ispSeconds")?;positive(reference,"referencePressurePa")?;positive(dry,"dryMassKg")?;

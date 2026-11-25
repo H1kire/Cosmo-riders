@@ -15,7 +15,7 @@ test('Rust exports the numerical and geodesic worker API',async()=>{
 
 test('active geodesic worker delegates tile and mesh generation to WASM',async()=>{
  const worker=await read('src/rendering/geodesic/surface-tile-worker.ts');
- assert.match(worker,/import init,\s*\{\s*build_geodesic_tile_mesh,\s*generate_surface_tile\s*\}/);
+ assert.match(worker,/import init,\s*\{(?=[^}]*\bbuild_geodesic_tile_mesh\b)(?=[^}]*\bgenerate_surface_tile\b)[^}]*\}/);
  assert.match(worker,/await ensureWasm\(\)/);
  assert.match(worker,/generate_surface_tile\(/);
  assert.match(worker,/build_geodesic_tile_mesh\(/);

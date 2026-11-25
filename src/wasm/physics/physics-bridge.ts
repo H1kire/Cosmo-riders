@@ -5,6 +5,8 @@ export class PhysicsBridge{
  constructor(){this.worker=new Worker(new URL('./physics-worker.ts',import.meta.url),{type:'module',name:'cosmo-physics'});this.worker.onmessage=(event:MessageEvent<PhysicsResponse>)=>{const m=event.data,p=this.pending.get(m.id);if(!p)return;this.pending.delete(m.id);if(m.ok)p.resolve(m.result);else p.reject(new Error(m.error??'Physics Worker command failed.'));};this.worker.onerror=event=>{const e=new Error(event.message||'Physics Worker failed.');for(const p of this.pending.values())p.reject(e);this.pending.clear();};}
  private request<T>(command:PhysicsCommand):Promise<T>{if(this.disposed)return Promise.reject(new Error('PhysicsBridge disposed.'));const id=this.nextId++;return new Promise<T>((resolve,reject)=>{this.pending.set(id,{resolve:resolve as (v:unknown)=>void,reject});this.worker.postMessage({id,command});});}
  initialize(catalog:readonly Record<string,unknown>[],options:Record<string,number>={}):Promise<void>{return this.request({type:'initialize',catalog,options});}
+ enableNBody():Promise<void>{return this.request({type:'enable-n-body'});}
+ nBodyEnabled():Promise<boolean>{return this.request({type:'n-body-status'});}
  advance(realDeltaSeconds:number):Promise<AdvanceResult>{return this.request({type:'advance',realDeltaSeconds});}
  step():Promise<PhysicsSnapshot>{return this.request({type:'step'});}
  setTimeScale(value:number):Promise<void>{return this.request({type:'set-time-scale',value});}

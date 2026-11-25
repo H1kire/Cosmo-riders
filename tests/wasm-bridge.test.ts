@@ -170,7 +170,7 @@ test('Solar3DView consumes Rust worker snapshots in the live application',async(
  assert.match(client,/this\.bridge\.initialize\(this\.catalog,options\)/);
  assert.match(client,/result\.renderBodyStates/);
  assert.match(view,/render\(world,states,timeSeconds/);
- assert.match(view,/const bodies=\[\.\.\.world\.bodies\.values\(\)\]/);
+ assert.match(view,/bodies=\[\.\.\.world\.bodies\.values\(\)\]/);
  assert.match(view,/const bodyState=states\.get\(body\.id\)/);
 });
 

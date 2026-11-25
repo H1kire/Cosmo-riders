@@ -7,6 +7,9 @@ pub struct NBody {
     pub id: String,
     pub mass_kg: f64,
     pub collision_radius_m: f64,
+    pub equatorial_radius_m: f64,
+    pub j2: f64,
+    pub pole_axis: Vec3,
     pub position: Vec3,
     pub velocity: Vec3,
 }
@@ -22,6 +25,28 @@ pub struct AdaptiveAdvanceStats {
     pub rejected_steps: usize,
     pub minimum_step_seconds: f64,
     pub maximum_normalized_error: f64,
+}
+
+fn axis_projection_squared(relative: Vec3, axis: Vec3, distance: f64) -> f64 {
+    let projection = relative.x * axis.x + relative.y * axis.y + relative.z * axis.z;
+    (projection / distance).powi(2)
+}
+
+fn j2_acceleration(body: &NBody, relative: Vec3) -> Result<Vec3, String> {
+    if body.j2 == 0.0 { return Ok(Vec3::new(0.0, 0.0, 0.0)); }
+    let r2 = relative.norm2();
+    if !r2.is_finite() || r2 <= body.collision_radius_m.powi(2) {
+        return Err(format!("J2 field query intersects {}.", body.id));
+    }
+    let projection = relative.x * body.pole_axis.x + relative.y * body.pole_axis.y + relative.z * body.pole_axis.z;
+    let z2_over_r2 = projection * projection / r2;
+    let perpendicular = relative.sub(body.pole_axis.scale(projection));
+    let shape = perpendicular.scale(5.0 * z2_over_r2 - 1.0)
+        .add(body.pole_axis.scale(projection * (5.0 * z2_over_r2 - 3.0)));
+    let factor = 1.5 * G * body.mass_kg * body.j2 * body.equatorial_radius_m.powi(2)
+        / (r2 * r2 * r2.sqrt());
+    let acceleration = shape.scale(factor);
+    if acceleration.finite() { Ok(acceleration) } else { Err("J2 acceleration became non-finite.".into()) }
 }
 
 fn normalized_step_error(coarse: &NBodySystem, fine: &NBodySystem, relative_tolerance: f64) -> f64 {
@@ -55,6 +80,7 @@ fn interpolated_particle_acceleration(
             return Err(format!("Test particle intersects {}.", a.id));
         }
         result = result.add(delta.scale(G * a.mass_kg / (r2 * r2.sqrt())));
+        result = result.add(j2_acceleration(a, position.sub(body_position))?);
     }
     if result.finite() { Ok(result) } else { Err("Test-particle acceleration became non-finite.".into()) }
 }
@@ -85,7 +111,7 @@ fn rk4_test_particle_step(
 }
 
 impl NBodySystem {
-    pub fn new(bodies: Vec<NBody>) -> Result<Self, String> {
+    pub fn new(mut bodies: Vec<NBody>) -> Result<Self, String> {
         if bodies.is_empty() {
             return Err("N-body system must contain at least one body.".into());
         }
@@ -100,6 +126,10 @@ impl NBodySystem {
             if !body.collision_radius_m.is_finite() || body.collision_radius_m < 0.0 {
                 return Err(format!("Invalid collision radius for {}.", body.id));
             }
+            if !body.equatorial_radius_m.is_finite() || body.equatorial_radius_m <= 0.0 || !body.j2.is_finite() {
+                return Err(format!("Invalid J2 gravity parameters for {}.", body.id));
+            }
+            body.pole_axis = body.pole_axis.normalized()?;
             if !body.position.finite() || !body.velocity.finite() {
                 return Err(format!("Non-finite initial state for {}.", body.id));
             }
@@ -129,6 +159,12 @@ impl NBodySystem {
                     return Err(format!("Collision or singular separation between {} and {}.", a.id, b.id));
                 }
                 energy -= G * a.mass_kg * b.mass_kg / distance;
+                let relative = b.position.sub(a.position);
+                let p2_a = 0.5 * (3.0 * axis_projection_squared(relative, a.pole_axis, distance) - 1.0);
+                let p2_b = 0.5 * (3.0 * axis_projection_squared(relative, b.pole_axis, distance) - 1.0);
+                energy += G * a.mass_kg * b.mass_kg / distance
+                    * (a.j2 * (a.equatorial_radius_m / distance).powi(2) * p2_a
+                        + b.j2 * (b.equatorial_radius_m / distance).powi(2) * p2_b);
             }
         }
         if energy.is_finite() { Ok(energy) } else { Err("N-body energy became non-finite.".into()) }
@@ -149,6 +185,10 @@ impl NBodySystem {
                 let inverse_r3 = 1.0 / (r2 * r2.sqrt());
                 acceleration[i] = acceleration[i].add(delta.scale(G * b.mass_kg * inverse_r3));
                 acceleration[j] = acceleration[j].sub(delta.scale(G * a.mass_kg * inverse_r3));
+                let j2_on_a = j2_acceleration(b, a.position.sub(b.position))?;
+                let j2_on_b = j2_acceleration(a, b.position.sub(a.position))?;
+                acceleration[i] = acceleration[i].add(j2_on_a).sub(j2_on_b.scale(b.mass_kg / a.mass_kg));
+                acceleration[j] = acceleration[j].add(j2_on_b).sub(j2_on_a.scale(a.mass_kg / b.mass_kg));
             }
         }
         if acceleration.iter().all(|a| a.finite()) { Ok(acceleration) }
@@ -165,6 +205,7 @@ impl NBodySystem {
                 return Err(format!("Test particle intersects {}.", body.id));
             }
             result = result.add(delta.scale(G * body.mass_kg / (r2 * r2.sqrt())));
+            result = result.add(j2_acceleration(body, position.sub(body.position))?);
         }
         if result.finite() { Ok(result) } else { Err("Test-particle acceleration became non-finite.".into()) }
     }
@@ -417,6 +458,22 @@ mod tests {
             NBody { id: "earth".into(), mass_kg: planet_mass, collision_radius_m: 6.371e6,
                 position: Vec3::new(planet_r, 0.0, 0.0), velocity: Vec3::new(0.0, planet_v, 0.0) },
         ]).unwrap()
+    }
+
+    #[test]
+    fn j2_changes_equatorial_and_polar_gravity_with_correct_sign() {
+        let base = NBody { id: "earth".into(), mass_kg: 5.9722e24, collision_radius_m: 6.371e6,
+            equatorial_radius_m: 6.3781366e6, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
+            position: Vec3::new(0.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) };
+        let mut oblate = base.clone(); oblate.j2 = 1.08262617385222e-3;
+        let point = Vec3::new(2.0*oblate.equatorial_radius_m,0.0,0.0);
+        let point_mass = NBodySystem::new(vec![base.clone()]).unwrap().acceleration_at(point).unwrap();
+        let j2_field = NBodySystem::new(vec![oblate.clone()]).unwrap().acceleration_at(point).unwrap();
+        assert!(j2_field.x < point_mass.x);
+        let polar = Vec3::new(0.0,0.0,2.0*oblate.equatorial_radius_m);
+        let point_mass_polar = NBodySystem::new(vec![base]).unwrap().acceleration_at(polar).unwrap();
+        let j2_polar = NBodySystem::new(vec![oblate]).unwrap().acceleration_at(polar).unwrap();
+        assert!(j2_polar.z > point_mass_polar.z);
     }
 
     #[test]

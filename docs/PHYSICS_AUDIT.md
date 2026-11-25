@@ -39,7 +39,7 @@ Run `npm run check` with Node.js 20+. Tests cover SI constants, vector arithmeti
 - Hohmann transfers assume circular coplanar orbits; launch windows, phase targeting and capture are not solved.
 - Planet rendering is procedural and currently has no high-resolution real surface textures, tiled/quadtree terrain, true heightmap displacement, atmospheric scattering, shadows, eclipses or body rotation. The current geometry LOD is a first visual tier, not the final terrain system.
 - The planetary ephemeris remains a compact Keplerian approximation, not a precision JPL ephemeris.
-- N-body gravity, attitude, staging, aerodynamics, heating, collisions and surface physics are not implemented.
+- Rigid-body attitude, staging, aerodynamics and heating are not implemented. N-body gravity and collision-radius detection are active; collision handling is reject/rollback rather than impact resolution.
 
 
 ## Development-branch correction (2026-11-23)
@@ -67,4 +67,6 @@ The earlier statements in this audit that rotation, atmosphere, cloud layers and
 - The existing barycentric pairwise Newtonian system retains kick-drift-kick velocity Verlet as its base step.
 - `advanced_adaptive` now estimates local error by comparing one full KDK step with two half steps, accepts the two-half-step state only when normalized position/velocity error meets tolerance, and reduces the step when the estimate or collision checks require it.
 - PhysicsWorld uses this adaptive path for committed N-body advancement and arbitrary-time body snapshots.
-- The variable-step wrapper is not exactly symplectic, is not IAS15 and does not provide close-encounter regularization. J2, post-Newtonian corrections and DE440/Horizons initial states remain absent.
+- The variable-step wrapper is not exactly symplectic, is not IAS15 and does not provide close-encounter regularization. Catalogued J2 is now included in N-body pair forces and spacecraft gravity. Higher harmonics, post-Newtonian corrections and DE440/Horizons initial states remain absent.
+
+- J2 coefficients for the Sun, Mercury, Venus, Earth, Moon, Mars, Jupiter, Saturn, Uranus and Neptune are sourced from the MathWorks Aerospace Blockset planetary data table. The second-degree term is tested for equatorial/polar sign and pairwise linear-momentum reaction.

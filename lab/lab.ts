@@ -2,9 +2,6 @@ import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
 import { PhysicsWorldClient } from '../src/wasm/physics/physics-world-client.ts';
 import { AU } from '../src/physics/constants.ts';
 import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/physics/vector3.ts';
-import { thrustToWeightRatio } from '../src/physics/propulsion.ts';
-import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
-import { rotateStateToParentEquator } from '../src/physics/orbital-frame.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
 import { formatDisplayNumber } from './preferences.ts';
 
@@ -158,16 +155,17 @@ async function createScenario(name) {
   await world.initialize({fixedStepSeconds:60,maxSubSteps:2000});
   selectedBodyId='earth';selectedPlanetId='earth';
   const earth=world.getBodyState('earth'),moon=world.getBodyState('moon');
-  const earthMu=body('earth').mu,moonMu=body('moon').mu;
   if(name==='moon-approach'){
     const moonSoi=world.getSphereOfInfluence('moon')??0,offset=vector3(moonSoi*.72,0,0);
     vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(moon.position,offset),velocity:add(moon.velocity,vector3(0,180,0)),massKg:12000});
   }else if(name==='moon-orbit'){
     const radius=2_000_000;
-    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,Math.sqrt(moonMu/radius),0)),massKg:12000});
+    const circularSpeed=await world.circularOrbitSpeed('moon',radius);
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,circularSpeed,0)),massKg:12000});
   }else{
     const radius=7_000_000;
-    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,Math.sqrt(earthMu/radius),0)),massKg:12000});
+    const circularSpeed=await world.circularOrbitSpeed('earth',radius);
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,circularSpeed,0)),massKg:12000});
   }
   trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
   await updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
@@ -192,12 +190,12 @@ function label(ctx,text,x,y,color='#9aabc2',font='10px Segoe UI,Arial') {
 }
 function getOrbitPath(id){
   if(orbitPathCache.has(id))return orbitPathCache.get(id);
-  const celestial=body(id);
-  if(!celestial?.parentId||!celestial.orbitalElements){orbitPathCache.set(id,[]);return [];}
-  const parent=body(celestial.parentId),elements=celestial.orbitalElements,points=[],segments=128;
+  const source=world.orbitPaths.get(id);
+  if(!source){orbitPathCache.set(id,[]);return [];}
+  const points=[],segments=128,sourceSegments=source.length/3-1;
   for(let i=0;i<=segments;i++){
-    const sample=rotateStateToParentEquator(orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+2*Math.PI*i/segments},parent.mu+celestial.mu),celestial,parent);
-    points.push(sample.position);
+    const o=Math.round(i*sourceSegments/segments)*3;
+    points.push(vector3(source[o],source[o+1],source[o+2]));
   }
   orbitPathCache.set(id,points);
   return points;
@@ -519,17 +517,17 @@ document.querySelectorAll<HTMLElement>('.floating-window').forEach(win=>{
 async function updateTelemetry(){
   if(!vessel)return;
   const primary=currentPrimary(),state=currentPrimaryState(),relativePosition=subtract(vessel.position,state.position),relativeVelocity=subtract(vessel.velocity,state.velocity);
-  const r=magnitude(relativePosition),v=magnitude(relativeVelocity),raw=await world.stateToOrbitalElements(relativePosition,relativeVelocity,primary.mu);
-  const semiMajorAxis=raw[0],eccentricity=raw[1],energy=raw[6],energyScale=Math.max(v*v/2,primary.mu/r,Number.MIN_VALUE);
+  const r=magnitude(relativePosition),v=magnitude(relativeVelocity),mu=await world.gravitationalParameter(primary.id),raw=await world.stateToOrbitalElements(relativePosition,relativeVelocity,mu);
+  const semiMajorAxis=raw[0],eccentricity=raw[1],energy=raw[6],energyScale=Math.max(v*v/2,mu/r,Number.MIN_VALUE);
   const parabolic=Math.abs(energy)<=1e-12*energyScale,elliptic=!parabolic&&energy<0;
-  const period=elliptic?await world.orbitalPeriod(semiMajorAxis,primary.mu):null,soi=world.getSphereOfInfluence(primary.id);
+  const period=elliptic?await world.orbitalPeriod(semiMajorAxis,mu):null,soi=world.getSphereOfInfluence(primary.id);
   $('primary-badge').textContent=primary.name;$('distance-value').textContent=distanceLabel(r);$('speed-value').textContent=speedLabel(v);
   $('period-value').textContent=period?fmt(period/DAY,3)+' суток':'не замкнута';$('eccentricity-value').textContent=fmt(eccentricity,6);
   $('soi-value').textContent=soi?distanceLabel(soi):'—';
   $('switch-value').textContent=vessel.lastPrimarySwitch?body(vessel.lastPrimarySwitch.from).name+' → '+body(vessel.lastPrimarySwitch.to).name:'Не было';
   $('clock-value').textContent='J2000.0 + '+fmt(world.simulationTimeSeconds/DAY,5)+' суток';
   updatePlanetInformation();$('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
-  $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
+  $('twr-value').textContent=fmt(await world.thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
 }
 async function applyPoweredBurn(deltaVMS){
   await world.setTimeScale(1);$('time-scale').value='1';
@@ -543,7 +541,8 @@ async function applyPoweredBurn(deltaVMS){
   }catch(error){$('burn-status').textContent='ОТКАЗ ДВИГАТЕЛЯ: '+error.message;}
 }
 async function updateManeuverPlanner(){
-  const transfer=await world.hohmannTransfer(body('sun').mu,SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM,SOLAR_SYSTEM_DATA.mars.elements.semiMajorAxisM);
+  const sunMu=await world.gravitationalParameter('sun');
+  const transfer=await world.hohmannTransfer(sunMu,SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM,SOLAR_SYSTEM_DATA.mars.elements.semiMajorAxisM);
   $('hohmann-departure').textContent=fmt(transfer.departureDeltaVMS/1000,3)+' км/с';
   $('hohmann-arrival').textContent=fmt(transfer.arrivalDeltaVMS/1000,3)+' км/с';
   $('hohmann-total').textContent=fmt(transfer.totalDeltaVMS/1000,3)+' км/с';

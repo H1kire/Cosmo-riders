@@ -7,7 +7,7 @@ import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profi
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { executeIdealizedBurn } from '../src/physics/propulsion.ts';
-import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements, build_geodesic_stitch_indices } from '../src/wasm/pkg/cosmo_core.js';
+import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements, build_geodesic_stitch_indices, thrust_to_weight_ratio } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
@@ -240,4 +240,14 @@ test('Solar3DView uses precomputed Rust orbit paths instead of TypeScript Kepler
  assert.match(view,/world\.orbitPaths\?\.get\(body\.id\)/);
  assert.match(worker,/get_orbit_path\(command\.bodyId,command\.segments\)/);
  assert.match(client,/this\.bridge\.orbitPath\(id,1024\)/);
+});
+
+test('Rust owns circular-orbit speed and thrust-to-weight calculations',async()=>{
+ await initializeWasm();
+ const world=create_physics_world(JSON.stringify(createSolarSystemBodyCatalog()),JSON.stringify({fixedStepSeconds:60,maxSubSteps:10}));
+ const earth=world.get_gravitational_parameter('earth'),speed=world.get_circular_orbit_speed('earth',7_000_000);
+ assert.ok(Math.abs(speed-Math.sqrt(earth/7_000_000))<1e-10);
+ const twr=thrust_to_weight_ratio(20_000,1_000,9.80665);
+ assert.ok(Math.abs(twr-20_000/(1_000*9.80665))<1e-12);
+ world.dispose_physics_world();
 });

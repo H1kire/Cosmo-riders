@@ -1,4 +1,4 @@
-import init,{create_physics_world,state_to_orbital_elements,conic_elements_to_state,hohmann_transfer,plane_change_delta_v,orbital_period} from '../pkg/cosmo_core.js';
+import init,{create_physics_world,state_to_orbital_elements,conic_elements_to_state,thrust_to_weight_ratio,hohmann_transfer,plane_change_delta_v,orbital_period} from '../pkg/cosmo_core.js';
 import type {PhysicsRequest,PhysicsResponse,PhysicsSnapshot} from './physics-protocol.ts';
 type Handle=ReturnType<typeof create_physics_world>;
 const scope=self as unknown as {onmessage:((event:MessageEvent<PhysicsRequest>)=>void)|null;postMessage:(value:unknown,transfer?:Transferable[])=>void};
@@ -19,7 +19,7 @@ scope.onmessage=async(event:MessageEvent<PhysicsRequest>)=>{
  case'add-vessel':live().add_vessel(JSON.stringify(command.vessel));result=true;break;
  case'maneuver':live().apply_maneuver(command.vesselId,new Float64Array(command.direction),command.deltaVMS);result=true;break;
  case'burn':result=JSON.parse(live().apply_idealized_burn(command.vesselId,new Float64Array(command.direction),command.deltaVMS,command.vacuumThrustN,command.seaLevelThrustN,command.ispSeconds,command.ambientPressurePa,command.referencePressurePa,command.dryMassKg));break;
- case'orbit-path':result=live().get_orbit_path(command.bodyId,command.segments);break;
+ case'gravitational-parameter':result=live().get_gravitational_parameter(command.bodyId);break;\n case'circular-orbit-speed':result=live().get_circular_orbit_speed(command.bodyId,command.radiusM);break;\n case'thrust-to-weight':result=thrust_to_weight_ratio(command.thrustN,command.massKg,command.gravityMS2);break;\n case'orbit-path':result=live().get_orbit_path(command.bodyId,command.segments);break;
  case'snapshot':result=live().get_physics_snapshot();break;
  case'body-states-at':result=live().get_body_states_at(command.timeSeconds);break;
  case'vessel-state':result=JSON.parse(live().get_vessel_state(command.id));break;

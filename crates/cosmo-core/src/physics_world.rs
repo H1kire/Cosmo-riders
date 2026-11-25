@@ -74,6 +74,9 @@ impl PhysicsWorld{
   let i=self.bodies.len();self.indices.insert(b.id.clone(),i);self.bodies.push(b);self.initial.push(None);self.states.push(BodyState{position:[0.0;3],velocity:[0.0;3]});Ok(())
  }
  pub fn body_count(&self)->usize{self.bodies.len()}pub fn body_ids(&self)->Vec<String>{self.bodies.iter().map(|b|b.id.clone()).collect()}pub fn body(&self,id:&str)->Option<&BodyDefinition>{self.indices.get(id).map(|i|&self.bodies[*i])}
+ pub fn gravitational_parameter(&self,id:&str)->Result<f64,String>{let b=self.body(id).ok_or_else(||format!("Unknown body: {id}"))?;Ok(G*b.mass_kg)}
+ pub fn circular_orbit_speed(&self,id:&str,radius:f64)->Result<f64,String>{positive(radius,"orbitRadiusM")?;crate::maneuvers::circular_orbit_speed(self.gravitational_parameter(id)?,radius)}
+
  pub fn orbit_path(&self,id:&str,segments:u32)->Result<Vec<f64>,String>{
   if !(16..=4096).contains(&segments){return Err("Orbit path segments must be in [16, 4096].".into())}
   let i=*self.indices.get(id).ok_or_else(||format!("Unknown body: {id}"))?;

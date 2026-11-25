@@ -15,6 +15,8 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
  pub fn advance_simulation(&mut self,dt:f64)->Result<u32,JsValue>{self.wm()?.advance(dt).map_err(error)}
  pub fn step_simulation(&mut self)->Result<(),JsValue>{self.wm()?.step().map_err(error)}
  pub fn get_body_states_at(&mut self,t:f64)->Result<Float64Array,JsValue>{let a=self.wm()?.body_states_at(t).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
+ pub fn get_gravitational_parameter(&self,id:String)->Result<f64,JsValue>{self.w()?.gravitational_parameter(&id).map_err(error)}
+ pub fn get_circular_orbit_speed(&self,id:String,radius:f64)->Result<f64,JsValue>{self.w()?.circular_orbit_speed(&id,radius).map_err(error)}
  pub fn get_orbit_path(&self,id:String,segments:u32)->Result<Float64Array,JsValue>{let a=self.w()?.orbit_path(&id,segments).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
  pub fn get_body_states(&mut self)->Result<Float64Array,JsValue>{let t=self.w()?.simulation_time_seconds;self.get_body_states_at(t)}
  pub fn get_vessel_state(&self,id:String)->Result<String,JsValue>{serde_json::to_string(&self.w()?.vessel_state(&id).map_err(error)?).map_err(error)}
@@ -41,3 +43,6 @@ pub fn hohmann_transfer(primary_mu:f64,initial_radius_m:f64,target_radius_m:f64)
 pub fn plane_change_delta_v(speed_m_s:f64,angle_radians:f64)->Result<f64,JsValue>{
  crate::maneuvers::plane_change_delta_v(speed_m_s,angle_radians).map_err(error)
 }
+
+#[wasm_bindgen]
+pub fn thrust_to_weight_ratio(thrust_n:f64,mass_kg:f64,gravity_m_s2:f64)->Result<f64,JsValue>{crate::maneuvers::thrust_to_weight_ratio(thrust_n,mass_kg,gravity_m_s2).map_err(error)}

@@ -9,6 +9,8 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
 #[wasm_bindgen] impl PhysicsWorldHandle{
  pub fn add_celestial_body(&mut self,json:String)->Result<(),JsValue>{let b:BodyDefinition=serde_json::from_str(&json).map_err(error)?;self.wm()?.add_body(b).map_err(error)}
  pub fn initialize_ephemerides(&mut self)->Result<(),JsValue>{self.wm()?.initialize_ephemerides().map_err(error)}
+ pub fn enable_n_body(&mut self)->Result<(),JsValue>{self.wm()?.enable_n_body().map_err(error)}
+ pub fn is_n_body_enabled(&self)->bool{self.world.as_ref().map(|w|w.n_body_enabled()).unwrap_or(false)}
  pub fn add_vessel(&mut self,json:String)->Result<(),JsValue>{let v:VesselDefinition=serde_json::from_str(&json).map_err(error)?;self.wm()?.add_vessel(v).map_err(error)}
  pub fn set_time_scale(&mut self,x:f64)->Result<(),JsValue>{self.wm()?.set_time_scale(x).map_err(error)}
  pub fn set_paused(&mut self,x:bool){if let Some(w)=self.world.as_mut(){w.set_paused(x)}}

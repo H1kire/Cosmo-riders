@@ -162,11 +162,11 @@ async function createScenario(name) {
   }else if(name==='moon-orbit'){
     const radius=2_000_000;
     const circularSpeed=await world.circularOrbitSpeed('moon',radius);
-    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,circularSpeed,0)),massKg:12000});
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,circularSpeed,0)),massKg:7000});
   }else{
     const radius=7_000_000;
     const circularSpeed=await world.circularOrbitSpeed('earth',radius);
-    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,circularSpeed,0)),massKg:12000});
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,circularSpeed,0)),massKg:7000});
   }
   await world.addEngine('test-vessel',{id:'main-r200',name:'R-200 Chemical Engine',maxThrustN:200000,ispSeconds:340,direction:[0,1,0],mountPositionM:[0,0,0],throttle:1,enabled:false,propellantKg:5000});
   vessel=world.getVesselState('test-vessel');burnStopTimeSeconds=null;engineStopPending=false;
@@ -590,7 +590,7 @@ async function animate(timestamp){
   if(!paused){
     const oldPrimary=vessel.primaryBodyId,result=await world.advance(delta);
     vessel=world.getVesselState('test-vessel');renderedBodyStates=world.renderBodyStates;renderedVesselState=world.renderVessels.get('test-vessel')??vessel;
-    if(burnStopTimeSeconds!==null&&world.simulationTimeSeconds>=burnStopTimeSeconds&&!engineStopPending){void stopContinuousBurn('Burn завершён: заданная длительность достигнута.');}
+    if(burnStopTimeSeconds!==null&&!engineStopPending&&(world.simulationTimeSeconds>=burnStopTimeSeconds||vessel.massKg<=SHIP_DRY_MASS_KG+1e-9)){void stopContinuousBurn(vessel.massKg<=SHIP_DRY_MASS_KG+1e-9?'Тяга остановлена: топливо исчерпано.':'Burn завершён: заданная длительность достигнута.');}
     if(result.steps>0){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
       const p=world.getBodyState(vessel.primaryBodyId);trail.push({x:vessel.position.x-p.position.x,y:vessel.position.y-p.position.y,time:timestamp});
@@ -616,7 +616,7 @@ solar3D?.canvas.addEventListener('bodyselect',event=>{
   renderSystemNavigation();
 });
 $('pause-button').addEventListener('click',()=>{paused=!paused;void world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
-$('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(async()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;await updateTelemetry();drawAll();});});
+$('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(async()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;if(burnStopTimeSeconds!==null&&(world.simulationTimeSeconds>=burnStopTimeSeconds||vessel.massKg<=SHIP_DRY_MASS_KG+1e-9))await stopContinuousBurn(vessel.massKg<=SHIP_DRY_MASS_KG+1e-9?'Тяга остановлена: топливо исчерпано.':'Burn завершён: заданная длительность достигнута.');await updateTelemetry();drawAll();});});
 $('reset-button').addEventListener('click',()=>{paused=false;$('pause-button').textContent='Ⅱ Пауза';void createScenario($('scenario').value);});
 $('retro-button').addEventListener('click',()=>{engineDirectionSign=-1;$('retro-button').classList.add('active');$('pro-button').classList.remove('active');});
 $('pro-button').addEventListener('click',()=>{engineDirectionSign=1;$('pro-button').classList.add('active');$('retro-button').classList.remove('active');});

@@ -74,6 +74,24 @@ impl PhysicsWorld{
   let i=self.bodies.len();self.indices.insert(b.id.clone(),i);self.bodies.push(b);self.initial.push(None);self.states.push(BodyState{position:[0.0;3],velocity:[0.0;3]});Ok(())
  }
  pub fn body_count(&self)->usize{self.bodies.len()}pub fn body_ids(&self)->Vec<String>{self.bodies.iter().map(|b|b.id.clone()).collect()}pub fn body(&self,id:&str)->Option<&BodyDefinition>{self.indices.get(id).map(|i|&self.bodies[*i])}
+ pub fn orbit_path(&self,id:&str,segments:u32)->Result<Vec<f64>,String>{
+  if !(16..=4096).contains(&segments){return Err("Orbit path segments must be in [16, 4096].".into())}
+  let i=*self.indices.get(id).ok_or_else(||format!("Unknown body: {id}"))?;
+  let body=&self.bodies[i];
+  let parent_id=body.parent_id.as_ref().ok_or("A root body has no parent-relative orbit.")?;
+  let parent=&self.bodies[*self.indices.get(parent_id).ok_or("Orbit parent not found.")?];
+  let e=body.orbital_elements.as_ref().ok_or("Body has no classical orbital elements.")?;
+  let mu=G*(body.mass_kg+parent.mass_kg);
+  let mut out=Vec::with_capacity((segments as usize+1)*3);
+  for n in 0..=segments{
+   let mean=e.mean_anomaly+std::f64::consts::TAU*n as f64/segments as f64;
+   let(r,v)=orbital_elements_to_state(e.semi_major_axis_m,e.eccentricity,e.inclination,e.longitude_ascending_node,e.argument_of_periapsis,mean,mu)?;
+   let state=parent_equator(PropagatedState{position:r,velocity:v,iterations:0},body,parent);
+   out.extend_from_slice(&[state.position.x,state.position.y,state.position.z]);
+  }
+  Ok(out)
+ }
+
  pub fn initialize_ephemerides(&mut self)->Result<(),String>{if self.initialized{return Ok(())}for i in 0..self.bodies.len(){let b=&self.bodies[i];if let Some(pid)=&b.parent_id{let pi=*self.indices.get(pid).ok_or_else(||format!("Parent body not found: {pid}"))?;let p=&self.bodies[pi];let ps=self.states[pi];let rel=if let Some(e)=&b.orbital_elements{let(r,v)=orbital_elements_to_state(e.semi_major_axis_m,e.eccentricity,e.inclination,e.longitude_ascending_node,e.argument_of_periapsis,e.mean_anomaly,G*(b.mass_kg+p.mass_kg))?;parent_equator(PropagatedState{position:r,velocity:v,iterations:0},b,p)}else{PropagatedState{position:v(b.position)?.sub(v(p.position)?),velocity:v(b.velocity)?.sub(v(p.velocity)?),iterations:0}};self.initial[i]=Some(rel);self.states[i]=BodyState::new(ps.p().add(rel.position),ps.vel().add(rel.velocity));}else{self.states[i]=BodyState{position:b.position,velocity:b.velocity}}}self.initialized=true;Ok(())}
  fn ready(&mut self)->Result<(),String>{self.initialize_ephemerides()}
  pub fn sphere_of_influence(&self,id:&str)->Option<f64>{let i=*self.indices.get(id)?;let b=&self.bodies[i];let pi=*self.indices.get(b.parent_id.as_ref()?)?;let p=&self.bodies[pi];let a=b.semi_major_axis_m.or_else(||b.orbital_elements.as_ref().map(|e|e.semi_major_axis_m))?;if b.mass_kg>=p.mass_kg{return None}Some(a*(b.mass_kg/p.mass_kg).powf(0.4))}

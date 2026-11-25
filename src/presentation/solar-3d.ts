@@ -1,5 +1,3 @@
-import { orbitalElementsToState } from '../physics/orbital-state.ts';
-import { rotateStateToParentEquator } from '../physics/orbital-frame.ts';
 import { RingRenderer } from '../rendering/rings/ring-renderer.ts';
 import { AU } from '../physics/constants.ts';
 import { LightingSystem, focusedSolarExposureMultiplier, planetaryDisplayGain } from '../rendering/lighting/lighting-system.ts';
@@ -362,10 +360,11 @@ export class Solar3DView{
   let path=this.orbitCache.get(body.id);
   const elementsChanged=this.orbitElementRefs.get(body.id)!==elements;
   if(!path||path.length!==(segments+1)*3||elementsChanged){
-   path=new Float32Array((segments+1)*3);
+   const source=world.orbitPaths?.get(body.id);if(!source||source.length<6)return;
+   const sourceSegments=source.length/3-1;path=new Float32Array((segments+1)*3);
    for(let i=0;i<=segments;i++){
-    const state=rotateStateToParentEquator(orbitalElementsToState({...elements,meanAnomaly:elements.meanAnomaly+Math.PI*2*i/segments},parent.mu+body.mu),body,parent);
-    path[i*3]=state.position.x/AU;path[i*3+1]=state.position.z/AU;path[i*3+2]=state.position.y/AU;
+    const sourceIndex=Math.round(i*sourceSegments/segments),o=sourceIndex*3;
+    path[i*3]=source[o]/AU;path[i*3+1]=source[o+2]/AU;path[i*3+2]=source[o+1]/AU;
    }
    this.orbitCache.set(body.id,path);this.orbitElementRefs.set(body.id,elements);
   }

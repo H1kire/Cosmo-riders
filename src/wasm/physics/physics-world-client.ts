@@ -9,12 +9,24 @@ export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly
 type BodyMetadata=CelestialBody;
 const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[offset+2]});
 export class PhysicsWorldClient{
- readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();
+ readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
  simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly renderVessels=new Map<string,VesselSnapshot>();
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
-  for(const entry of this.catalog){const b=entry as Record<string,any>;const metadata=new CelestialBody({...b,id:String(b.id),name:String(b.name),massKg:Number(b.massKg),meanRadiusM:Number(b.meanRadiusM),position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,solarDaySeconds:b.solarDaySeconds??null});this.bodies.set(metadata.id,metadata);this.sphereOfInfluence.set(metadata.id,await this.bridge.sphereOfInfluence(metadata.id));const parent=metadata.parentId?this.bodies.get(metadata.parentId):null;const period=metadata.rotationPeriodSeconds??(metadata.tidalLock&&metadata.semiMajorAxisM&&parent?await this.bridge.orbitalPeriod(metadata.semiMajorAxisM,metadata.mu+parent.mu):null);this.orbitalPeriods.set(metadata.id,period);}
+  for(const entry of this.catalog){
+   const b=entry as Record<string,any>;
+   const metadata=new CelestialBody({...b,id:String(b.id),name:String(b.name),massKg:Number(b.massKg),meanRadiusM:Number(b.meanRadiusM),position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,solarDaySeconds:b.solarDaySeconds??null});
+   this.bodies.set(metadata.id,metadata);
+  }
+  await Promise.all(this.catalog.map(async entry=>{
+   const b=entry as Record<string,any>,id=String(b.id),metadata=this.bodies.get(id)!;
+   this.sphereOfInfluence.set(id,await this.bridge.sphereOfInfluence(id));
+   const parent=metadata.parentId?this.bodies.get(metadata.parentId):null;
+   const period=metadata.rotationPeriodSeconds??(metadata.tidalLock&&metadata.semiMajorAxisM&&parent?await this.bridge.orbitalPeriod(metadata.semiMajorAxisM,metadata.mu+parent.mu):null);
+   this.orbitalPeriods.set(id,period);
+   if(metadata.parentId&&metadata.orbitalElements)this.orbitPaths.set(id,await this.bridge.orbitPath(id,1024));
+  }));
   await this.refresh(await this.bridge.snapshot());
  }
  private async refresh(s:PhysicsSnapshot):Promise<void>{

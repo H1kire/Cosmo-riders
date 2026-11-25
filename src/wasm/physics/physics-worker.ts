@@ -19,6 +19,7 @@ scope.onmessage=async(event:MessageEvent<PhysicsRequest>)=>{
  case'add-vessel':live().add_vessel(JSON.stringify(command.vessel));result=true;break;
  case'maneuver':live().apply_maneuver(command.vesselId,new Float64Array(command.direction),command.deltaVMS);result=true;break;
  case'burn':result=JSON.parse(live().apply_idealized_burn(command.vesselId,new Float64Array(command.direction),command.deltaVMS,command.vacuumThrustN,command.seaLevelThrustN,command.ispSeconds,command.ambientPressurePa,command.referencePressurePa,command.dryMassKg));break;
+ case'orbit-path':result=live().get_orbit_path(command.bodyId,command.segments);break;
  case'snapshot':result=live().get_physics_snapshot();break;
  case'body-states-at':result=live().get_body_states_at(command.timeSeconds);break;
  case'vessel-state':result=JSON.parse(live().get_vessel_state(command.id));break;

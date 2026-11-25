@@ -453,9 +453,9 @@ mod tests {
         let sun_v = -speed * planet_mass / total;
         let planet_v = speed * sun_mass / total;
         NBodySystem::new(vec![
-            NBody { id: "sun".into(), mass_kg: sun_mass, collision_radius_m: 6.957e8,
+            NBody { id: "sun".into(), mass_kg: sun_mass, collision_radius_m: 6.957e8, equatorial_radius_m: 6.957e8, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(sun_r, 0.0, 0.0), velocity: Vec3::new(0.0, sun_v, 0.0) },
-            NBody { id: "earth".into(), mass_kg: planet_mass, collision_radius_m: 6.371e6,
+            NBody { id: "earth".into(), mass_kg: planet_mass, collision_radius_m: 6.371e6, equatorial_radius_m: 6.371e6, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(planet_r, 0.0, 0.0), velocity: Vec3::new(0.0, planet_v, 0.0) },
         ]).unwrap()
     }
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn adaptive_collision_failure_does_not_mutate_the_source_system() {
         let system = NBodySystem::new(vec![
-            NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+            NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0, equatorial_radius_m: 1.0, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(0.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
             NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0,
                 position: Vec3::new(1.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },

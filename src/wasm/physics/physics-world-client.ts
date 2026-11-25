@@ -4,6 +4,8 @@ import {vector3} from '../../physics/vector3.ts';
 import {PhysicsBridge} from './physics-bridge.ts';
 import type {PhysicsSnapshot} from './physics-protocol.ts';
 type V3=Readonly<{x:number;y:number;z:number}>;
+export interface EngineDefinition{readonly id:string;readonly name:string;readonly maxThrustN:number;readonly ispSeconds:number;readonly direction:readonly [number,number,number];readonly mountPositionM?:readonly [number,number,number];readonly throttle?:number;readonly enabled?:boolean;readonly propellantKg?:number}
+export interface PropulsionSnapshot{readonly vesselId:string;readonly massKg:number;readonly thrustN:number;readonly massFlowKgS:number;readonly accelerationMS2:number;readonly propellantRemainingKg:number;readonly engines:readonly EngineDefinition[]}
 export interface PhysicsState{readonly position:V3;readonly velocity:V3}
 export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly primaryBodyId:string;readonly relativePosition:V3;readonly relativeVelocity:V3;readonly massKg:number;readonly lastPrimarySwitch:{from:string;to:string;timeSeconds:number}|null;readonly primaryBodyHistory:readonly {from:string;to:string;timeSeconds:number}[]}
 type BodyMetadata=CelestialBody;
@@ -55,6 +57,10 @@ export class PhysicsWorldClient{
  hohmannTransfer(primaryMu:number,initialRadiusM:number,targetRadiusM:number):Promise<Record<string,number>>{return this.bridge.hohmannTransfer(primaryMu,initialRadiusM,targetRadiusM);}
  planeChangeDeltaV(speedMS:number,angleRadians:number):Promise<number>{return this.bridge.planeChangeDeltaV(speedMS,angleRadians);}
  orbitalPeriod(a:number,mu:number):Promise<number>{return this.bridge.orbitalPeriod(a,mu);}
+ async addEngine(vesselId:string,engine:EngineDefinition):Promise<void>{await this.bridge.addEngine(vesselId,{...engine,mountPositionM:engine.mountPositionM??[0,0,0],throttle:engine.throttle??0,enabled:engine.enabled??false,propellantKg:engine.propellantKg??0});}
+ async setEngineEnabled(vesselId:string,engineId:string,enabled:boolean):Promise<void>{await this.bridge.setEngineEnabled(vesselId,engineId,enabled);}
+ async setEngineThrottle(vesselId:string,engineId:string,throttle:number):Promise<void>{await this.bridge.setEngineThrottle(vesselId,engineId,throttle);}
+ propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as Promise<PropulsionSnapshot>;}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
  async dispose():Promise<void>{await this.bridge.dispose();}

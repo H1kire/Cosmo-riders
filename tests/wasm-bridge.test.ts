@@ -6,6 +6,7 @@ import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
+import { executeIdealizedBurn } from '../src/physics/propulsion.ts';
 import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
@@ -192,4 +193,33 @@ test('Rust PhysicsWorld accumulator preserves fractional time across pause and r
  world.set_paused(false);assert.equal(world.advance_simulation(15),1);s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,120);assert.equal(s.accumulatorSeconds,0);
  assert.throws(()=>world.advance_simulation(60*11),/maxSubSteps/i);s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,120);assert.equal(s.accumulatorSeconds,0);
  world.dispose_physics_world();
+});
+
+test('Rust vessel stepping and powered burns match the retained TypeScript reference',async()=>{
+ await initializeWasm();
+ const legacy=createSolarSystemWorld(),catalog=createSolarSystemBodyCatalog();
+ const rust=create_physics_world(JSON.stringify(catalog),JSON.stringify({fixedStepSeconds:60,maxSubSteps:100}));
+ const earth=legacy.getBodyState('earth'),radius=7_000_000,speed=Math.sqrt(legacy.bodies.get('earth')!.mu/radius);
+ const position={x:earth.position.x+radius,y:earth.position.y,z:earth.position.z};
+ const velocity={x:earth.velocity.x,y:earth.velocity.y+speed,z:earth.velocity.z};
+ legacy.addVessel({id:'parity-vessel',primaryBodyId:'earth',position,velocity,massKg:1000});
+ rust.add_vessel(JSON.stringify({id:'parity-vessel',primaryBodyId:'earth',position:[position.x,position.y,position.z],velocity:[velocity.x,velocity.y,velocity.z],massKg:1000}));
+ for(let i=0;i<10;i++){legacy.step();rust.step_simulation();}
+ const compare=()=>{
+  const expected=legacy.getVesselState('parity-vessel'),actual=JSON.parse(rust.get_vessel_state('parity-vessel'));
+  const pe=Math.hypot(expected.position.x-actual.position[0],expected.position.y-actual.position[1],expected.position.z-actual.position[2]);
+  const ve=Math.hypot(expected.velocity.x-actual.velocity[0],expected.velocity.y-actual.velocity[1],expected.velocity.z-actual.velocity[2]);
+  assert.ok(pe<.05,'vessel absolute position parity '+pe+' m');assert.ok(ve<1e-5,'vessel absolute velocity parity '+ve+' m/s');
+  assert.equal(expected.primaryBodyId,actual.primaryBodyId);
+ };
+ compare();
+ const engine={vacuumThrustN:20_000,seaLevelThrustN:18_000,ispSeconds:300};
+ const legacyBurn=executeIdealizedBurn(legacy,'parity-vessel',{direction:{x:0,y:1,z:0},deltaVMS:100,engine,ambientPressurePa:0,dryMassKg:700});
+ const rustBurn=JSON.parse(rust.apply_idealized_burn('parity-vessel',new Float64Array([0,1,0]),100,engine.vacuumThrustN,engine.seaLevelThrustN,engine.ispSeconds,0,101325,700));
+ assert.ok(Math.abs(legacyBurn.finalMassKg-rustBurn.finalMassKg)<1e-9);
+ assert.ok(Math.abs(legacyBurn.propellantUsedKg-rustBurn.propellantUsedKg)<1e-9);
+ compare();
+ for(let i=0;i<10;i++){legacy.step();rust.step_simulation();}
+ compare();
+ rust.dispose_physics_world();
 });

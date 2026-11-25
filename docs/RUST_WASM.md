@@ -23,3 +23,12 @@ The surface/mesh functions are called from the geodesic worker. The propagation 
 ## Memory and threading
 
 No SharedArrayBuffer, atomics or WASM threads are required. One worker is used by the current surface worker pool. The task queue remains bounded to avoid overwhelming the four-thread i5-4670K system. Large output buffers are transferred, not copied again by postMessage.
+
+
+## Additional computational exports
+
+- `build_geodesic_stitch_indices(resolution, coarseEdgeMask)` creates a conforming triangular index buffer for the three coarse-neighbor edges. The edge mask uses AB=1, BC=2 and CA=4. It is exposed through WASM as a `Uint32Array`.
+- `gravitational_acceleration(position, mu)` returns the point-mass acceleration in m/s² using f64 inputs and output.
+- `specific_orbital_energy(position, velocity, mu)` returns specific orbital energy in J/kg.
+
+These exports extend the Rust computational API. They do not yet replace the active TypeScript LOD balancer or the full PhysicsWorld; those integrations remain separate migration work.

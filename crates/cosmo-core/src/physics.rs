@@ -136,3 +136,21 @@ mod tests {
   assert!(back.position.sub(r).norm()<1e-3);assert!(back.velocity.sub(v).norm()<1e-6);
  }
 }
+
+
+#[cfg(test)]
+mod force_tests{
+ use super::*;
+ #[test]
+ fn point_mass_acceleration_is_inverse_square_and_inward(){
+  let mu=3.986004418e14;let p=Vec3::new(7.0e6,0.0,0.0);
+  let a=p.scale(-mu/p.norm().powi(3));
+  assert!(a.x<0.0);assert_eq!(a.y,0.0);assert!((a.x+mu/(7.0e6_f64.powi(2))).abs()<1e-12);
+ }
+ #[test]
+ fn circular_orbit_specific_energy_is_negative(){
+  let mu=3.986004418e14;let radius=7.0e6;let speed=(mu/radius).sqrt();
+  let energy=0.5*speed*speed-mu/radius;
+  assert!((energy+mu/(2.0*radius)).abs()<1e-8);
+ }
+}

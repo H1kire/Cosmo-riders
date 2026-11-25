@@ -58,3 +58,11 @@ test('Rust/WASM surface pages match the retained TypeScript reference channels',
   assert.deepEqual(actual.materialId,expected.materialId,body.id+' material parity');
  }
 });
+
+
+test('Rust WASM exports stitching and point-mass diagnostics',async()=>{
+ const wasm=await read('crates/cosmo-core/src/wasm.rs');
+ for(const symbol of ['build_geodesic_stitch_indices','gravitational_acceleration','specific_orbital_energy'])assert.ok(wasm.includes('fn '+symbol+'('),symbol+' export is missing');
+ const geometry=await read('crates/cosmo-core/src/geometry.rs');
+ assert.ok(geometry.includes('pub fn build_stitch_indices'));
+});

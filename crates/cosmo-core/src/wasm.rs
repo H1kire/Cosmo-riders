@@ -60,3 +60,34 @@ pub fn build_geodesic_tile_mesh(face:u32,path:String,resolution:u32,radius_m:f64
  set(&object,"indices",&Uint32Array::from(mesh.indices.as_slice()).into())?;
  Ok(object.into())
 }
+
+
+/// Build a conforming index buffer for a triangular geodesic tile.
+#[wasm_bindgen]
+pub fn build_geodesic_stitch_indices(resolution:u32,coarse_edge_mask:u32)->Result<Uint32Array,JsValue>{
+ let indices=geometry::build_stitch_indices(resolution,coarse_edge_mask).map_err(js_error)?;
+ Ok(Uint32Array::from(indices.as_slice()))
+}
+
+/// Point-mass gravitational acceleration. Inputs use SI units.
+#[wasm_bindgen]
+pub fn gravitational_acceleration(position:Float64Array,mu:f64)->Result<Float64Array,JsValue>{
+ if position.length()!=3{return Err(js_error("Position array must contain exactly three values."));}
+ let mut p=[0.0;3];position.copy_to(&mut p);
+ let vector=Vec3::new(p[0],p[1],p[2]);
+ if !vector.finite()||!mu.is_finite()||mu<=0.0{return Err(js_error("Position and gravitational parameter must be finite; mu must be positive."));}
+ let radius=vector.norm();if radius==0.0{return Err(js_error("Acceleration is undefined at the point-mass centre."));}
+ let acceleration=vector.scale(-mu/(radius*radius*radius));
+ Ok(Float64Array::from(&[acceleration.x,acceleration.y,acceleration.z][..]))
+}
+
+/// Specific orbital energy in joules per kilogram.
+#[wasm_bindgen]
+pub fn specific_orbital_energy(position:Float64Array,velocity:Float64Array,mu:f64)->Result<f64,JsValue>{
+ if position.length()!=3||velocity.length()!=3{return Err(js_error("Position and velocity arrays must contain exactly three values."));}
+ let mut p=[0.0;3];let mut v=[0.0;3];position.copy_to(&mut p);velocity.copy_to(&mut v);
+ let r=Vec3::new(p[0],p[1],p[2]);let speed=Vec3::new(v[0],v[1],v[2]);
+ if !r.finite()||!speed.finite()||!mu.is_finite()||mu<=0.0{return Err(js_error("State and gravitational parameter must be finite; mu must be positive."));}
+ let radius=r.norm();if radius==0.0{return Err(js_error("Orbital energy is undefined at the point-mass centre."));}
+ Ok(0.5*speed.norm2()-mu/radius)
+}

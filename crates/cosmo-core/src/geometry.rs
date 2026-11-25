@@ -69,3 +69,81 @@ mod tests {
   assert_eq!(mesh.directions.len()/3,153);assert_eq!(mesh.indices.len(),16*16*3);assert!(mesh.positions.iter().all(|v|v.is_finite()));
  }
 }
+
+
+/// Generates a conforming triangular-grid index buffer for coarse-neighbor edges.
+/// Edge bits: AB=row 0, BC=row+column=resolution, CA=column 0.
+pub fn build_stitch_indices(resolution:u32,mask:u32)->Result<Vec<u32>,String>{
+ use std::collections::HashMap;
+ type Point=(i32,i32);
+ type Tri=[Point;3];
+ fn orient(a:Point,b:Point,p:Point)->i64{
+  ((b.1-a.1) as i64)*((p.0-a.0) as i64)-((b.0-a.0) as i64)*((p.1-a.1) as i64)
+ }
+ fn key(p:Point)->String{format!("{}:{}",p.0,p.1)}
+ fn edge_key(a:Point,b:Point)->String{let ka=key(a);let kb=key(b);if ka<kb{format!("{}|{}",ka,kb)}else{format!("{}|{}",kb,ka)}}
+ fn vertex_index(resolution:u32,row:u32,column:u32)->u32{
+  row*(resolution+1)-row*(row.saturating_sub(1))/2+column
+ }
+ if resolution<2||resolution%2!=0||resolution>64{return Err("Stitching resolution must be an even integer in [2, 64].".into());}
+ if mask>7{return Err("Stitch edge mask must be in [0, 7].".into());}
+ if mask==0{
+  let mut indices=Vec::with_capacity((resolution*resolution*3) as usize);
+  for row in 0..resolution{for column in 0..resolution-row{
+   let a=vertex_index(resolution,row,column);let b=vertex_index(resolution,row,column+1);let c=vertex_index(resolution,row+1,column);
+   indices.extend([a,b,c]);
+   if row+column<resolution-1{let d=vertex_index(resolution,row+1,column+1);indices.extend([b,d,c]);}
+  }}
+  return Ok(indices);
+ }
+ let r=resolution as i32;
+ let mut triangles:Vec<Tri>=vec![[(0,0),(0,r),(r,0)]];
+ for row in 0..=r{for column in 0..=r-row{
+  let removed=((mask&1)!=0&&row==0&&column%2==1)
+   ||((mask&2)!=0&&row+column==r&&row%2==1)
+   ||((mask&4)!=0&&column==0&&row%2==1);
+  if removed||((row==0&&column==0)||(row==0&&column==r)||(row==r&&column==0)){continue;}
+  let point=(row,column);
+  let mut containing:Vec<Tri>=Vec::new();
+  for tri in &triangles{
+   if orient(tri[0],tri[1],point)>=0&&orient(tri[1],tri[2],point)>=0&&orient(tri[2],tri[0],point)>=0{containing.push(*tri);}
+  }
+  if containing.is_empty(){return Err("Stitch triangulation could not locate an interior grid point.".into());}
+  let mut boundary:HashMap<String,(Point,Point,u32)>=HashMap::new();
+  for tri in &containing{for edge in 0..3{
+   let from=tri[edge];let to=tri[(edge+1)%3];let k=edge_key(from,to);
+   boundary.entry(k).and_modify(|value|value.2+=1).or_insert((from,to,1));
+  }}
+  triangles.retain(|tri|!containing.contains(tri));
+  for (_, (from,to,count)) in boundary{if count!=1{continue;}let winding=orient(from,to,point);
+   if winding>0{triangles.push([from,to,point]);}else if winding<0{triangles.push([to,from,point]);}
+  }
+ }}
+ let mut indices=Vec::with_capacity(triangles.len()*3);
+ for tri in triangles{
+  if orient(tri[0],tri[1],tri[2])<=0{return Err("Stitch triangulation produced invalid winding.".into());}
+  for point in tri{indices.push(vertex_index(resolution,point.0 as u32,point.1 as u32));}
+ }
+ Ok(indices)
+}
+
+#[cfg(test)]
+mod stitching_tests{
+ use super::*;
+ #[test]
+ fn all_stitch_masks_produce_valid_triangles(){
+  for resolution in [8,16,32,48,64]{for mask in 0..8{
+   let indices=build_stitch_indices(resolution,mask).unwrap();
+   assert!(!indices.is_empty());assert_eq!(indices.len()%3,0);
+   let vertex_count=(resolution+1)*(resolution+2)/2;
+   assert!(indices.iter().all(|index|*index<vertex_count));
+  }}
+ }
+ #[test]
+ fn zero_mask_matches_regular_grid_topology(){
+  for resolution in [8,16,32,64]{
+   let indices=build_stitch_indices(resolution,0).unwrap();
+   assert_eq!(indices.len(),(resolution*resolution*3) as usize);
+  }
+ }
+}

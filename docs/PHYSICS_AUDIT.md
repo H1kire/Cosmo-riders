@@ -61,3 +61,10 @@ The earlier statements in this audit that rotation, atmosphere, cloud layers and
 - The active flight-control window now starts and stops a finite-duration prograde or retrograde burn and displays mass, thrust, mass flow, remaining propellant and acceleration.
 - Fractional render snapshots include engine thrust while predicting the remaining part of a frame.
 - The integration is not a full attitude/rigid-body propulsion model: engine mount offsets do not create torque, thrust direction is inertial and held fixed during a physics step, and body gravity is sampled at step-end positions.
+
+## Adaptive N-body update (2026-11-25)
+
+- The existing barycentric pairwise Newtonian system retains kick-drift-kick velocity Verlet as its base step.
+- `advanced_adaptive` now estimates local error by comparing one full KDK step with two half steps, accepts the two-half-step state only when normalized position/velocity error meets tolerance, and reduces the step when the estimate or collision checks require it.
+- PhysicsWorld uses this adaptive path for committed N-body advancement and arbitrary-time body snapshots.
+- The variable-step wrapper is not exactly symplectic, is not IAS15 and does not provide close-encounter regularization. J2, post-Newtonian corrections and DE440/Horizons initial states remain absent.

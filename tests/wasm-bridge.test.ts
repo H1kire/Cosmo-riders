@@ -173,6 +173,8 @@ test('Solar3DView consumes Rust worker snapshots in the live application',async(
  assert.match(view,/render\(world,states,timeSeconds/);
  assert.match(view,/bodies=\[\.\.\.world\.bodies\.values\(\)\]/);
  assert.match(view,/const bodyState=states\.get\(body\.id\)/);
+ assert.doesNotMatch(lab,/orbitalElementsToState|rotateStateToParentEquator/);
+ assert.match(lab,/world\.circularOrbitSpeed\(/);assert.match(lab,/world\.gravitationalParameter\(/);
 });
 
 test('Rust/WASM conic element conversion supports elliptic parabolic and hyperbolic states',async()=>{

@@ -11,7 +11,7 @@
 
 The root flight-deck page loads lab/main.ts, which starts the browser application. lab/lab.ts creates a single PhysicsWorldClient; its PhysicsBridge owns one dedicated physics-worker.ts. The Worker initializes wasm-bindgen and creates exactly one Rust PhysicsWorld from the declarative catalogue.
 
-Rust owns celestial ephemerides, the fixed-step accumulator, vessel state, patched-conic primary transitions, SOI hysteresis and idealized propulsion/maneuver calculations. It also precomputes orbital paths. The Worker returns packed Float64Array snapshots and orbit-path buffers.
+Rust owns the default hierarchical Kepler ephemeris mode and the optional barycentric N-body mode inside the same PhysicsWorld. Dynamic mode uses pairwise Newtonian gravity with velocity-Verlet integration; spacecraft are massless test particles in the same field. SOI hysteresis changes primary-body metadata without changing absolute spacecraft state. Idealized impulsive propulsion remains the only burn execution model. It also precomputes orbital paths. The Worker returns packed Float64Array snapshots and orbit-path buffers.
 
 PhysicsWorldClient is a DTO/cache adapter. It creates CelestialBody presentation metadata, stores the Rust snapshots and makes body/orbit data available to the view. It does not independently propagate bodies or vessels. Solar3DView consumes those states, Rust-computed spin angles and Rust-generated orbit paths; the 2D map uses the same orbit-path cache. Render-origin subtraction and coordinate conversion are visual transforms only.
 
@@ -36,4 +36,4 @@ The physics Worker uses one worker thread and does not require SharedArrayBuffer
 
 ## Remaining migration
 
-The complete 3D renderer still uses WebGL2: planet materials, atmosphere, clouds, rings, lighting/shadows, HDR, bloom and tone mapping. A future WebGPU backend must preserve the one-scene camera, global/local projection, tracking, render origin and all existing visual passes, with WebGL2 retained as fallback until parity is demonstrated.
+The N-body mode is opt-in through the PhysicsWorldClient/Worker API; the flight deck currently starts in the approximate J2000 Kepler ephemeris mode. Its initial conditions are not DE440/Horizons precision states, and close-encounter adaptive integration is not implemented. Continuous-thrust integration remains outstanding.\n\nThe complete 3D renderer still uses WebGL2: planet materials, atmosphere, clouds, rings, lighting/shadows, HDR, bloom and tone mapping. A future WebGPU backend must preserve the one-scene camera, global/local projection, tracking, render origin and all existing visual passes, with WebGL2 retained as fallback until parity is demonstrated.

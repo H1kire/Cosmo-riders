@@ -171,7 +171,7 @@ async function createScenario(name) {
   await world.addEngine('test-vessel',{id:'main-r200',name:'R-200 Chemical Engine',maxThrustN:200000,ispSeconds:340,direction:[0,1,0],mountPositionM:[0,0,0],throttle:1,enabled:false,propellantKg:5000});
   vessel=world.getVesselState('test-vessel');burnStopTimeSeconds=null;engineStopPending=false;
   $('burn-status').textContent='Двигатель выключен · запас топлива 5 000 кг';
-  $('engine-start').disabled=false;$('engine-stop').disabled=true;
+  ($('engine-start') as HTMLButtonElement).disabled=false;($('engine-stop') as HTMLButtonElement).disabled=true;
   trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
   await updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
 }
@@ -548,7 +548,7 @@ async function startContinuousBurn(){
     await world.setEngineThrottle('test-vessel','main-r200',throttle);
     await world.startEngineBurn('test-vessel','main-r200',duration);
     burnStopTimeSeconds=world.simulationTimeSeconds+duration;
-    $('engine-start').disabled=true;$('engine-stop').disabled=false;
+    ($('engine-start') as HTMLButtonElement).disabled=true;($('engine-stop') as HTMLButtonElement).disabled=false;
     $('burn-status').textContent='Тяга включена · '+(engineDirectionSign<0?'ретроградно':'проградно')+' · '+fmt(duration,1)+' с';
     await updateTelemetry();
   }catch(error){burnStopTimeSeconds=null;$('burn-status').textContent='ОТКАЗ ДВИГАТЕЛЯ: '+(error instanceof Error?error.message:String(error));}
@@ -558,7 +558,7 @@ async function stopContinuousBurn(reason='Остановлено вручную'
   burnStopTimeSeconds=null;engineStopPending=true;
   try{
     await world.setEngineEnabled('test-vessel','main-r200',false);
-    $('burn-status').textContent=reason;$('engine-start').disabled=false;$('engine-stop').disabled=true;
+    $('burn-status').textContent=reason;($('engine-start') as HTMLButtonElement).disabled=false;($('engine-stop') as HTMLButtonElement).disabled=true;
     await updateTelemetry();
   }catch(error){$('burn-status').textContent='ОШИБКА ОСТАНОВКИ: '+(error instanceof Error?error.message:String(error));}
   finally{engineStopPending=false;}

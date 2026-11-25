@@ -60,6 +60,8 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (renderer.includes('createSurfaceProfile') || renderer.includes('SurfaceMapCache') || renderer.includes('requestSurfaceMaps') || renderer.includes('processSurfaceUploads')) throw new Error('Legacy CPU cubemap generation must not be active in the solar renderer.');
     for (const feature of ['domainWarp3','ridged3','float land=smoothstep(0.486,0.516,continentField)','float softBelts=smoothstep(-0.48,0.58,belts)']) if (!shader.includes(feature)) throw new Error('Shader terrain feature is missing: '+feature);
     if (shader.includes('samplerCube') || shader.includes('uGeneratedAlbedo') || shader.includes('uPreviousAlbedo')) throw new Error('Planet surfaces must not depend on generated cube-map textures.');
+    const albedoStart=shader.indexOf('vec3 surfaceAlbedo'),albedoEnd=shader.indexOf('float distributionGGX',albedoStart),albedo=shader.slice(albedoStart,albedoEnd),common=albedo.slice(0,albedo.indexOf('if(uKind<0.5)'));
+    if(/fbm3|ridged3|domainWarp3/.test(common)||albedo.includes('float tectonics=')||albedo.includes('float ridges='))throw new Error('Material noise must be evaluated inside only the material branch that consumes it.');
     const body = await readFile(new URL('../src/physics/celestial-body.ts', import.meta.url), 'utf8');
     if (!body.includes('surfaceSeed') || !body.includes('Number.isSafeInteger(surfaceSeed)')) throw new Error('Celestial bodies must support persisted deterministic surface seeds.');
   }],

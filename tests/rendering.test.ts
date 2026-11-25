@@ -188,6 +188,13 @@ test('planet surfaces are generated directly from continuous spherical shader fi
  assert.ok(!source.includes('uGeneratedAlbedo'));
 });
 
+test('planet material noise is branch-local and avoids redundant FBM evaluation for every fragment',()=>{
+ const source=PLANET_SURFACE_FRAGMENT,begin=source.indexOf('vec3 surfaceAlbedo'),end=source.indexOf('float distributionGGX',begin),block=source.slice(begin,end),common=block.slice(0,block.indexOf('if(uKind<0.5)'));
+ assert.ok(!/fbm3|ridged3|domainWarp3/.test(common));
+ assert.ok(!block.includes('float tectonics='));assert.ok(!block.includes('float ridges='));
+ assert.ok(block.includes('float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7))'));
+});
+
 test('focused-body exposure compensates inverse-square solar dimming without changing the light law',()=>{
  assert.equal(focusedSolarExposureMultiplier(1),1);
  assert.equal(focusedSolarExposureMultiplier(5.2),1);

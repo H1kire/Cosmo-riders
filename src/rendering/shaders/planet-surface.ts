@@ -152,26 +152,21 @@ float shadowVisibility(vec3 point){
   return clamp(visibility,0.0,1.0);
 }
 vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
-  vec3 warped=domainWarp3(n*3.1+uSeed);
-  float broad=fbm3(warped);
-  float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
-  float fine=fbm3Filtered(n*8.0+uSeed*5.1);
-  float ridges=ridged3(warped*9.0);
-  float tectonics=ridged3(domainWarp3(n*14.0+uSeed*3.1))*uTectonicActivity*(1.0-uErosion*0.55);
-  float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;
-  float cells=fbm3(n*47.0+uSeed*11.7);
   float latitude=abs(n.y);
   vec3 albedo=pow(uColor,vec3(2.2));
   roughness=0.82;
   specular=0.035;
 
   if(uKind<0.5){
+    float broad=fbm3(domainWarp3(n*3.1+uSeed));
     float granulation=fbm3Filtered(n*95.0+uSeed*7.0);
     float cells=sin((n.y*32.0+broad*4.0)*PI)*0.5+0.5;
     albedo=mix(vec3(0.30,0.075,0.018),vec3(1.0,0.53,0.16),0.55+0.35*cells+0.1*granulation);
     roughness=0.42;
     specular=0.0;
   }else if(uKind<1.5){
+    float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
+    float fine=fbm3Filtered(n*8.0+uSeed*5.1);
     vec3 continentWarp=domainWarp3(n*2.15+uSeed*0.013);
     float continentField=0.5+(fbm3(continentWarp)-0.492)*1.18+0.28*(fbm3(continentWarp*2.1+uSeed*0.07)-0.492)+0.09*(fbm3(n*11.0+uSeed*0.11)-0.492);
     float land=smoothstep(0.486,0.516,continentField);
@@ -192,6 +187,11 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     roughness=mix(0.075,0.88,land);    roughness=mix(0.075,0.88,land);
     specular=mix(0.72,0.035,land);
   }else if(uKind<2.5){
+    float broad=fbm3(domainWarp3(n*3.1+uSeed));
+    float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
+    float fine=fbm3Filtered(n*8.0+uSeed*5.1);
+    float volcanic=fbm3(n*19.0+uSeed*7.3)*uVolcanicActivity;
+    float cells=fbm3(n*47.0+uSeed*11.7);
     bool mars=uColor.r>0.6&&uColor.g<0.4;
     bool mercury=uColor.r<0.55&&uColor.g<0.55;
     bool io=uColor.r>uColor.g&&uColor.g>uColor.b*1.2;
@@ -240,6 +240,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.022;    specular=0.045;
   }else if(uKind<4.5){
     if(uColor.g>uColor.b*0.85){
+      float broad=fbm3(domainWarp3(n*3.1+uSeed));
+      float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
       float bands=sin((n.y+0.018*(broad-0.5))*72.0);
       albedo=mix(vec3(0.22,0.48,0.53),vec3(0.46,0.78,0.79),smoothstep(-0.2,0.55,bands)*0.38);
       albedo*=0.94+0.12*medium;
@@ -254,6 +256,8 @@ vec3 surfaceAlbedo(vec3 n,out float roughness,out float specular){
     specular=0.035;
   }else if(uKind<5.5){
     if(uKind<5.2){
+      float broad=fbm3(domainWarp3(n*3.1+uSeed));
+      float medium=fbm3(domainWarp3(n*7.0+uSeed*2.7));
       float cloudBands=fbm3(domainWarp3(n*vec3(7.0,24.0,7.0)+vec3(uSeed,broad*3.0,medium*2.0)));
       float haze=fbm3(n*vec3(18.0,42.0,18.0)+uSeed*2.0);
       float bands=sin((n.y+0.025*(cloudBands-0.5))*46.0+medium*1.8);

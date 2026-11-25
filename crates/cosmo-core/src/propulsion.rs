@@ -147,6 +147,7 @@ pub fn integrate_engines(
             next_event = next_event.min(engine.propellant_kg / engine_flow);
         }
         let h = next_event.max(0.0).min(remaining);
+        peak_acceleration = peak_acceleration.max(gravity(*position)?.add(force.scale(1.0 / *mass)).norm());
         if h <= 0.0 {
             for engine in engines.iter_mut() {
                 if engine.propellant_kg <= FUEL_EPSILON_KG { engine.propellant_kg = 0.0; }
@@ -194,7 +195,7 @@ pub fn integrate_engines(
         }
         peak_thrust = peak_thrust.max(force.norm());
         peak_flow = peak_flow.max(flow);
-        peak_acceleration = peak_acceleration.max(force.norm() / m0);
+
         remaining = (remaining - h).max(0.0);
     }
 

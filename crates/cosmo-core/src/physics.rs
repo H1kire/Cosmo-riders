@@ -90,7 +90,7 @@ pub fn state_to_elements(r:Vec3,v:Vec3,mu:f64)->Result<OrbitalElements,String>{
     let inclination=clamp(h.z/hm).acos();let n=Vec3::new(-h.y,h.x,0.0);let nm=n.norm();
     let equatorial=nm<1e-12*hm;let circular=e<1e-10;
     let node=if equatorial{0.0}else{n.y.atan2(n.x)};
-    let mut peri=0.0;let mut nu=0.0;
+    let mut peri=0.0;let nu;
     if !circular&&!equatorial{peri=clamp(n.dot(ev)/(nm*e)).acos();if ev.z<0.0{peri=2.0*PI-peri;}}
     else if !circular{peri=ev.y.atan2(ev.x);}
     if !circular{nu=clamp(ev.dot(r)/(e*rn)).acos();if r.dot(v)<0.0{nu=2.0*PI-nu;}}
@@ -123,7 +123,7 @@ mod tests {
  use super::*;
  #[test]
  fn circular_kepler_orbit_closes_after_one_period() {
-  let mu=3.986004418e14;let radius=7_000_000.0;let speed=(mu/radius).sqrt();
+  let mu:f64=3.986004418e14;let radius:f64=7_000_000.0;let speed=(mu/radius).sqrt();
   let period=2.0*std::f64::consts::PI*(radius.powi(3)/mu).sqrt();
   let state=propagate_kepler(Vec3::new(radius,0.0,0.0),Vec3::new(0.0,speed,0.0),mu,period,1e-10,100).unwrap();
   assert!((state.position.x-radius).abs()/radius<1e-8);assert!(state.position.y.abs()/radius<1e-8);assert!((state.velocity.y-speed).abs()/speed<1e-8);

@@ -20,7 +20,7 @@ fn smooth(a:f64,b:f64,x:f64)->f64{let t=clamp((x-a)/(b-a),0.0,1.0);t*t*(3.0-2.0*
 fn normalize(v:Vec3)->Vec3{v.normalized().unwrap_or(Vec3::new(0.0,1.0,0.0))}
 fn hash(x:i32,y:i32,z:i32,seed:u32)->f64{
  let mut h=x.wrapping_mul(374761393).wrapping_add(y.wrapping_mul(668265263)).wrapping_add(z.wrapping_mul(2147483647)).wrapping_add((seed as i32).wrapping_mul(1274126177));
- h=(h^(h>>13)).wrapping_mul(1274126177);h^=h>>16;(h as u32) as f64/4294967295.0
+ h=((h as u32)^((h as u32)>>13)) as i32;h=h.wrapping_mul(1274126177);h=((h as u32)^((h as u32)>>16)) as i32;(h as u32) as f64/4294967295.0
 }
 fn value_noise(p:Vec3,seed:u32)->f64{
  let(ix,iy,iz)=(p.x.floor() as i32,p.y.floor() as i32,p.z.floor() as i32);let(fx,fy,fz)=(p.x-ix as f64,p.y-iy as f64,p.z-iz as f64);
@@ -106,11 +106,11 @@ pub fn generate_tile(face:u32,path:&str,resolution:u32,gutter:u32,p:&SurfaceProf
  let height_fraction=|v:f64|if p.body_id=="earth"{clamp(v,-11000.0/p.mean_radius_m,9000.0/p.mean_radius_m)}else{v};
  for row in -(gutter as i32)..(resolution as i32+gutter as i32){for col in -(gutter as i32)..(resolution as i32+gutter as i32){
   let px=(col as f64+0.5)/resolution as f64;let py=(row as f64+0.5)/resolution as f64;
-  let q=px.sqrt();let u=q*(1.0-py);let v=q*py;
+  let q=px.signum()*px.abs().sqrt();let u=q*(1.0-py);let v=q*py;
   let d=barycentric_direction(tile.triangle,u,v)?;let s=sample(d,p,&plate_set);
   let height_at=|direction:Vec3|->f64{if p.kind=="gas-giant"||p.kind=="ice-giant"{0.0}else if p.kind=="oceanic"||p.water_fraction>0.45{ocean_height(direction,p,&plate_set)}else{geology(direction,p,&plate_set).height}};
   let reference=if d.y.abs()<0.85{Vec3::new(0.0,1.0,0.0)}else{Vec3::new(1.0,0.0,0.0)};
-  let tu=normalize(cross(reference,d));let tv=normalize(cross(d,tu));
+  let tu=normalize(reference.cross(d));let tv=normalize(d.cross(tu));
   let pu=normalize(d.add(tu.scale(step)));let mu=normalize(d.sub(tu.scale(step)));let pv=normalize(d.add(tv.scale(step)));let mv=normalize(d.sub(tv.scale(step)));
   let su=(height_fraction(height_at(pu))-height_fraction(height_at(mu)))/(2.0*step);
   let sv=(height_fraction(height_at(pv))-height_fraction(height_at(mv)))/(2.0*step);

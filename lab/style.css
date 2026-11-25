@@ -100,3 +100,10 @@
 .start-footnote{margin-top:28px;color:#617d9b;font-size:8px;letter-spacing:.24em}
 .graphics-diagnostics{max-height:220px;overflow:auto;margin:12px 0;padding:10px;border:1px solid #263c55;border-radius:7px;background:#081321;color:#9db8d4;font:10px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:520px){.start-content{padding:34px 20px}.start-emblem{width:64px;height:64px;font-size:36px}.start-description{font-size:12px}.start-button{width:100%;min-width:0}.graphics-diagnostics{font-size:9px}}
+
+.engine-control{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;margin:10px 0;color:var(--muted);font-size:9px;letter-spacing:.08em}
+.engine-control input[type=range]{grid-column:1/2;width:100%;accent-color:#70b7ff}
+.engine-control output{grid-column:2;grid-row:1/3;color:#dcecff;font-variant-numeric:tabular-nums}
+.engine-control input[type=number]{grid-column:2;width:76px;background:#0c1725;border:1px solid #31465e;border-radius:5px;color:#e4efff;padding:5px}
+.engine-button.active{border-color:#70b7ff;color:#d9edff;background:#17304a}
+.engine-button:disabled{opacity:.45;cursor:not-allowed}

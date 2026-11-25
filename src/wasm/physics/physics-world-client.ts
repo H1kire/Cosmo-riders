@@ -1,11 +1,12 @@
 import {createSolarSystemBodyCatalog} from '../../physics/solar-system.ts';
-import {G} from '../../physics/constants.ts';
+import {CelestialBody} from '../../physics/celestial-body.ts';
+import {vector3} from '../../physics/vector3.ts';
 import {PhysicsBridge} from './physics-bridge.ts';
 import type {PhysicsSnapshot} from './physics-protocol.ts';
 type V3=Readonly<{x:number;y:number;z:number}>;
 export interface PhysicsState{readonly position:V3;readonly velocity:V3}
 export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly primaryBodyId:string;readonly relativePosition:V3;readonly relativeVelocity:V3;readonly massKg:number;readonly lastPrimarySwitch:{from:string;to:string;timeSeconds:number}|null}
-type BodyMetadata=Record<string,any>&{id:string;mu:number;parentId:string|null;rotationAngleAt:(time:number)=>number|null};
+type BodyMetadata=CelestialBody;
 const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[offset+2]});
 export class PhysicsWorldClient{
  readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();
@@ -13,7 +14,7 @@ export class PhysicsWorldClient{
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
-  for(const entry of this.catalog){const b=entry as Record<string,any>,period=b.rotationPeriodSeconds??null,tidal=Boolean(b.tidalLock);this.bodies.set(String(b.id),{...b,mu:G*Number(b.massKg),orbitalElements:b.orbitalElements??null,rotationAngleAt:(time:number)=>period===null||tidal?null:Number(b.primeMeridianRad??0)+Number(b.rotationDirection??1)*Math.PI*2*(time-Number(b.rotationEpochSeconds??0))/period});this.sphereOfInfluence.set(String(b.id),await this.bridge.sphereOfInfluence(String(b.id)));}
+  for(const entry of this.catalog){const b=entry as Record<string,any>;const metadata=new CelestialBody({...b,position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,solarDaySeconds:b.solarDaySeconds??null});this.bodies.set(metadata.id,metadata);this.sphereOfInfluence.set(metadata.id,await this.bridge.sphereOfInfluence(metadata.id));}
   await this.refresh(await this.bridge.snapshot());
  }
  private async refresh(s:PhysicsSnapshot):Promise<void>{
@@ -30,7 +31,7 @@ export class PhysicsWorldClient{
  getSphereOfInfluence(id:string):number|null{return this.sphereOfInfluence.get(id)??null;}
  async setTimeScale(v:number):Promise<void>{await this.bridge.setTimeScale(v);this.timeScale=v;}
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}
- async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}
+ async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as unknown as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}
  async step():Promise<void>{await this.bridge.step();await this.refresh(await this.bridge.snapshot());}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}

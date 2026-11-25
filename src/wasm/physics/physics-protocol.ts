@@ -4,7 +4,8 @@ export type PhysicsCommand=
  |{type:'advance';realDeltaSeconds:number}|{type:'step'}|{type:'set-time-scale';value:number}|{type:'set-paused';value:boolean}
  |{type:'add-vessel';vessel:Record<string,unknown>}|{type:'maneuver';vesselId:string;direction:readonly [number,number,number];deltaVMS:number}
  |{type:'burn';vesselId:string;direction:readonly [number,number,number];deltaVMS:number;vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number;ambientPressurePa:number;referencePressurePa:number;dryMassKg:number}
- |{type:'gravitational-parameter';bodyId:string}|{type:'circular-orbit-speed';bodyId:string;radiusM:number}|{type:'thrust-to-weight';thrustN:number;massKg:number;gravityMS2:number}\n |{type:'orbit-path';bodyId:string;segments:number}|{type:'snapshot'}|{type:'body-states-at';timeSeconds:number}|{type:'vessel-state';id:string}
+ |{type:'gravitational-parameter';bodyId:string}|{type:'circular-orbit-speed';bodyId:string;radiusM:number}|{type:'thrust-to-weight';thrustN:number;massKg:number;gravityMS2:number}
+ |{type:'orbit-path';bodyId:string;segments:number}|{type:'snapshot'}|{type:'body-states-at';timeSeconds:number}|{type:'vessel-state';id:string}
  |{type:'vessel-state-at';id:string;timeSeconds:number;bodyStates:Float64Array}
  |{type:'sphere-of-influence';bodyId:string}|{type:'rotation-angle';bodyId:string;timeSeconds:number}
  |{type:'state-to-elements';position:readonly [number,number,number];velocity:readonly [number,number,number];mu:number}

@@ -166,7 +166,7 @@ test('Solar3DView consumes Rust worker snapshots in the live application',async(
  assert.match(lab,/import \{ PhysicsWorldClient \} from '\.\.\/src\/wasm\/physics\/physics-world-client\.ts'/);
  assert.match(lab,/world=new PhysicsWorldClient\(\)/);
  assert.match(lab,/await world\.initialize\(/);
- assert.match(lab,/solar3D\.render\(world,renderedBodyStates/);
+ assert.match(lab,/solar3D\.render\(world,\s*renderedBodyStates/);
  assert.match(client,/this\.bridge\.initialize\(this\.catalog,options\)/);
  assert.match(client,/result\.renderBodyStates/);
  assert.match(view,/render\(world,states,timeSeconds/);

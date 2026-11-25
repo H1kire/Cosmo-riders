@@ -40,6 +40,50 @@ fn normalized_step_error(coarse: &NBodySystem, fine: &NBodySystem, relative_tole
     if maximum.is_finite() { maximum } else { f64::INFINITY }
 }
 
+fn interpolated_particle_acceleration(
+    start: &NBodySystem,
+    end: &NBodySystem,
+    position: Vec3,
+    fraction: f64,
+) -> Result<Vec3, String> {
+    let mut result = Vec3::new(0.0, 0.0, 0.0);
+    for (a, b) in start.bodies.iter().zip(end.bodies.iter()) {
+        let body_position = a.position.add(b.position.sub(a.position).scale(fraction));
+        let delta = body_position.sub(position);
+        let r2 = delta.norm2();
+        if !r2.is_finite() || r2 <= a.collision_radius_m.powi(2) {
+            return Err(format!("Test particle intersects {}.", a.id));
+        }
+        result = result.add(delta.scale(G * a.mass_kg / (r2 * r2.sqrt())));
+    }
+    if result.finite() { Ok(result) } else { Err("Test-particle acceleration became non-finite.".into()) }
+}
+
+fn rk4_test_particle_step(
+    start: &NBodySystem,
+    end: &NBodySystem,
+    position: Vec3,
+    velocity: Vec3,
+    elapsed: f64,
+    step: f64,
+    total_duration: f64,
+) -> Result<(Vec3, Vec3), String> {
+    let acceleration = |p: Vec3, t: f64| interpolated_particle_acceleration(start, end, p, t / total_duration);
+    let k1p = velocity;
+    let k1v = acceleration(position, elapsed)?;
+    let k2p = velocity.add(k1v.scale(step * 0.5));
+    let k2v = acceleration(position.add(k1p.scale(step * 0.5)), elapsed + step * 0.5)?;
+    let k3p = velocity.add(k2v.scale(step * 0.5));
+    let k3v = acceleration(position.add(k2p.scale(step * 0.5)), elapsed + step * 0.5)?;
+    let k4p = velocity.add(k3v.scale(step));
+    let k4v = acceleration(position.add(k3p.scale(step)), elapsed + step)?;
+    let weighted = |a: Vec3, b: Vec3, c: Vec3, d: Vec3| a.add(b.scale(2.0)).add(c.scale(2.0)).add(d).scale(step / 6.0);
+    let next_position = position.add(weighted(k1p, k2p, k3p, k4p));
+    let next_velocity = velocity.add(weighted(k1v, k2v, k3v, k4v));
+    if next_position.finite() && next_velocity.finite() { Ok((next_position, next_velocity)) }
+    else { Err("Test-particle RK4 integration became non-finite.".into()) }
+}
+
 impl NBodySystem {
     pub fn new(bodies: Vec<NBody>) -> Result<Self, String> {
         if bodies.is_empty() {
@@ -246,6 +290,99 @@ impl NBodySystem {
         Ok((accepted, stats))
     }
 
+    /// Adaptive RK4 integration for a massless spacecraft in the linearly interpolated
+    /// massive-body field spanning the committed N-body step.
+    pub fn integrate_test_particle_adaptive(
+        start: &Self,
+        end: &Self,
+        position: Vec3,
+        velocity: Vec3,
+        duration_seconds: f64,
+        max_step_seconds: f64,
+        relative_tolerance: f64,
+        min_step_seconds: f64,
+        max_substeps: usize,
+    ) -> Result<(Vec3, Vec3, AdaptiveAdvanceStats), String> {
+        if !duration_seconds.is_finite() || !position.finite() || !velocity.finite()
+            || !max_step_seconds.is_finite() || max_step_seconds <= 0.0
+            || !relative_tolerance.is_finite() || relative_tolerance <= 0.0
+            || !min_step_seconds.is_finite() || min_step_seconds <= 0.0 || max_substeps == 0
+            || start.bodies.len() != end.bodies.len()
+        {
+            return Err("Invalid adaptive test-particle integration parameters.".into());
+        }
+        if duration_seconds == 0.0 {
+            let mut stats = AdaptiveAdvanceStats::default();
+            stats.minimum_step_seconds = 0.0;
+            return Ok((position, velocity, stats));
+        }
+
+        let direction = duration_seconds.signum();
+        let mut elapsed = 0.0;
+        let mut remaining = duration_seconds;
+        let mut h = direction * max_step_seconds.min(duration_seconds.abs());
+        let mut p = position;
+        let mut v = velocity;
+        let mut stats = AdaptiveAdvanceStats::default();
+        let mut attempts = 0_usize;
+        let max_attempts = max_substeps.saturating_mul(24).max(max_substeps);
+        let epsilon = duration_seconds.abs().max(1.0) * 1.0e-14;
+
+        while remaining.abs() > epsilon {
+            attempts += 1;
+            if attempts > max_attempts {
+                return Err("Adaptive test-particle integration exceeded its attempt budget.".into());
+            }
+            if h.abs() > remaining.abs() { h = remaining; }
+            let coarse = rk4_test_particle_step(start, end, p, v, elapsed, h, duration_seconds);
+            let half = rk4_test_particle_step(start, end, p, v, elapsed, h * 0.5, duration_seconds)
+                .and_then(|(p_half, v_half)| rk4_test_particle_step(start, end, p_half, v_half, elapsed + h * 0.5, h * 0.5, duration_seconds));
+            let ((coarse_p, coarse_v), (fine_p, fine_v)) = match (coarse, half) {
+                (Ok(coarse), Ok(fine)) => (coarse, fine),
+                (Err(error), _) | (_, Err(error)) => {
+                    stats.rejected_steps += 1;
+                    if h.abs() <= min_step_seconds * (1.0 + 1.0e-12) { return Err(error); }
+                    h = direction * (h.abs() * 0.5).max(min_step_seconds);
+                    continue;
+                }
+            };
+            let body_length = start.bodies.iter().chain(end.bodies.iter())
+                .map(|body| body.position.norm()).fold(1.0_f64, f64::max);
+            let body_speed = start.bodies.iter().chain(end.bodies.iter())
+                .map(|body| body.velocity.norm()).fold(1.0_f64, f64::max);
+            let p_scale = 1.0e-3 + relative_tolerance * body_length.max(p.norm()).max(fine_p.norm());
+            let v_scale = 1.0e-9 + relative_tolerance * body_speed.max(v.norm()).max(fine_v.norm());
+            let error = (fine_p.sub(coarse_p).norm() / p_scale)
+                .max(fine_v.sub(coarse_v).norm() / v_scale);
+            if !error.is_finite() {
+                return Err("Adaptive test-particle error estimate became non-finite.".into());
+            }
+            if error <= 1.0 {
+                p = fine_p;
+                v = fine_v;
+                elapsed += h;
+                remaining = (remaining - h).abs().max(0.0) * direction;
+                stats.accepted_steps += 1;
+                stats.minimum_step_seconds = if stats.minimum_step_seconds == 0.0 { h.abs() } else { stats.minimum_step_seconds.min(h.abs()) };
+                stats.maximum_normalized_error = stats.maximum_normalized_error.max(error);
+                if stats.accepted_steps > max_substeps {
+                    return Err("Adaptive test-particle integration exceeded its substep budget.".into());
+                }
+                let factor = if error <= 1.0e-16 { 2.0 } else { (0.9 * (1.0 / error).powf(1.0 / 3.0)).clamp(0.5, 2.0) };
+                h = direction * (h.abs() * factor).min(max_step_seconds);
+            } else {
+                stats.rejected_steps += 1;
+                if h.abs() <= min_step_seconds * (1.0 + 1.0e-12) {
+                    return Err("Adaptive test-particle error remains above tolerance at the minimum step.".into());
+                }
+                let factor = (0.9 * (1.0 / error).powf(1.0 / 3.0)).clamp(0.1, 0.5);
+                h = direction * (h.abs() * factor).max(min_step_seconds);
+            }
+        }
+        if stats.accepted_steps == 0 { stats.minimum_step_seconds = 0.0; }
+        Ok((p, v, stats))
+    }
+
     /// Integrate a massless spacecraft in the same time-dependent N-body field.
     pub fn integrate_test_particle(
         start: &Self, end: &Self, position: Vec3, velocity: Vec3, dt_seconds: f64
@@ -326,6 +463,22 @@ mod tests {
         assert!(stats.maximum_normalized_error <= 1.0);
         assert!(stats.minimum_step_seconds < 5.0e6);
         assert!(adaptive.bodies().iter().all(|body| body.position.finite() && body.velocity.finite()));
+    }
+
+    #[test]
+    fn adaptive_test_particle_reduces_steps_in_the_dynamic_gravity_field() {
+        let start = circular_pair();
+        let end = start.advanced_adaptive(5.0e6, 5.0e6, 1.0e-8, 1.0, 10_000).unwrap().0;
+        let earth = start.bodies().iter().find(|body| body.id == "earth").unwrap();
+        let position = earth.position.add(Vec3::new(7.0e6, 0.0, 0.0));
+        let velocity = earth.velocity.add(Vec3::new(0.0, 7.5e3, 0.0));
+        let (p, v, stats) = NBodySystem::integrate_test_particle_adaptive(
+            &start, &end, position, velocity, 5.0e6, 5.0e6, 1.0e-8, 1.0, 10_000
+        ).unwrap();
+        assert!(stats.rejected_steps > 0);
+        assert!(stats.accepted_steps > 1);
+        assert!(stats.maximum_normalized_error <= 1.0);
+        assert!(p.finite() && v.finite());
     }
 
     #[test]

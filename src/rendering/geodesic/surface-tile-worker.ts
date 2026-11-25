@@ -26,7 +26,7 @@ scope.onmessage=async event=>{
    const arrays=build_geodesic_tile_mesh(task.tile.id.face,task.tile.id.path,task.resolution,task.radiusM) as unknown as WasmGeodesicMeshArrays;
    const indices=build_geodesic_stitch_indices(task.resolution,task.coarseEdgeMask);
    const mesh:GeodesicTileMesh={...arrays,indices,tileKey:task.tile.id.key,generationMs:Math.max(0,performance.now()-started)};
-   scope.postMessage({id:task.id,mesh},transferables(arrays));
+   scope.postMessage({id:task.id,mesh},transferables({...arrays,indices}));
    return;
   }
   const started=performance.now();

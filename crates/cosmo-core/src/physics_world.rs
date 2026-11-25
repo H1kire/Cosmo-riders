@@ -191,7 +191,7 @@ impl PhysicsWorld{
  let mut w=PhysicsWorld::new(Options{fixed_step_seconds:1.0,max_sub_steps:10,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();
  w.add_body(body()).unwrap();
  w.add_vessel(VesselDefinition{id:"ship".into(),primary_body_id:"earth".into(),position:[7_000_000.0,0.0,0.0],velocity:[0.0,0.0,0.0],mass_kg:1000.0,engines:Vec::new()}).unwrap();
- w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:10_000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0}).unwrap();
+ w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:10_000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0,burn_remaining_seconds:None}).unwrap();
  let before=w.vessel_state("ship").unwrap();w.step().unwrap();let after=w.vessel_state("ship").unwrap();
  assert!(after.velocity[1]>before.velocity[1]);
  assert!(after.mass_kg<before.mass_kg);
@@ -203,7 +203,7 @@ impl PhysicsWorld{
  let mut w=PhysicsWorld::new(Options{fixed_step_seconds:1.0,max_sub_steps:10,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();
  w.add_body(body()).unwrap();
  w.add_vessel(VesselDefinition{id:"ship".into(),primary_body_id:"earth".into(),position:[7_000_000.0,0.0,0.0],velocity:[0.0,0.0,0.0],mass_kg:1000.0,engines:Vec::new()}).unwrap();
- w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:1000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0}).unwrap();
+ w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:1000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0,burn_remaining_seconds:None}).unwrap();
  let states=w.body_states_at(0.5).unwrap();let predicted=w.vessel_state_at("ship",0.5,&states).unwrap();
  assert!(predicted.velocity[1]>0.0);assert!(predicted.mass_kg<1010.0);assert_eq!(w.simulation_time_seconds,0.0);
 }
@@ -211,7 +211,7 @@ impl PhysicsWorld{
  let mut w=PhysicsWorld::new(Options{fixed_step_seconds:1.0,max_sub_steps:10,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();
  w.add_body(body()).unwrap();
  w.add_vessel(VesselDefinition{id:"ship".into(),primary_body_id:"earth".into(),position:[7_000_000.0,0.0,0.0],velocity:[0.0,0.0,0.0],mass_kg:1000.0,engines:Vec::new()}).unwrap();
- w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:1000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:0.5,enabled:true,propellant_kg:10.0}).unwrap();
+ w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:1000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:0.5,enabled:true,propellant_kg:10.0,burn_remaining_seconds:None}).unwrap();
  w.step().unwrap();let running=w.vessel_state("ship").unwrap();
  w.set_engine_enabled("ship","main",false).unwrap();w.step().unwrap();let stopped=w.vessel_state("ship").unwrap();
  assert!(running.mass_kg>stopped.mass_kg);

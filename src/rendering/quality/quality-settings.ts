@@ -55,14 +55,14 @@ export const GRAPHICS_PRESETS: Readonly<Record<QualityLevel,GraphicsSettings>> =
     atmosphere:true,atmosphereIntensity:0.92,atmosphereSamples:10,clouds:true,cloudDetail:3,
     bloom:true,bloomThreshold:1.45,bloomStrength:0.42,bloomIterations:4,
     glare:true,glareStrength:0.28,lensFlare:true,lensFlareStrength:0.32,
-    hdr:true,exposure:1.0,renderScale:1,msaaSamples:4,maxMeshLod:3,textureQuality:'high'
+    hdr:true,exposure:1.0,renderScale:1,msaaSamples:2,maxMeshLod:3,textureQuality:'high'
   },
   ultra:{
     preset:'ultra',geodesic:GEODESIC_QUALITY_PRESETS.ultra,shadows:true,shadowMapSize:2048,shadowOccluders:8,
     atmosphere:true,atmosphereIntensity:1.0,atmosphereSamples:16,clouds:true,cloudDetail:4,
     bloom:true,bloomThreshold:1.32,bloomStrength:0.56,bloomIterations:6,
     glare:true,glareStrength:0.42,lensFlare:true,lensFlareStrength:0.46,
-    hdr:true,exposure:1.08,renderScale:1,msaaSamples:4,maxMeshLod:3,textureQuality:'ultra'
+    hdr:true,exposure:1.08,renderScale:1,msaaSamples:2,maxMeshLod:3,textureQuality:'ultra'
   }
 });
 

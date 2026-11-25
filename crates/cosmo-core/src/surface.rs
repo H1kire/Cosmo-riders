@@ -89,7 +89,8 @@ fn atmosphere(d:Vec3,p:&SurfaceProfile)->Sample{
   "uranus"=>[0.12+bands*0.08+cloud*0.08,0.36+bands*0.2+cloud*0.08,0.48+bands*0.24+cloud*0.1],
   _=>[0.045+bands*0.1+storm*0.12,0.12+bands*0.18+storm*0.14,0.32+bands*0.3+storm*0.2]
  };
- Sample{color,height:0.0,rough:0.68,material:10}
+ let rough=match p.body_id.as_str(){"saturn"=>0.76,"jupiter"=>0.72,"uranus"=>0.7,_=>0.68};
+ Sample{color,height:0.0,rough,material:10}
 }
 fn sample(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->Sample{
  if p.kind=="gas-giant"||p.kind=="ice-giant"{atmosphere(d,p)}else{geology(d,p,plate_set)}

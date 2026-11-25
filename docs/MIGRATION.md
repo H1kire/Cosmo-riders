@@ -16,7 +16,7 @@
 - Solar3DView and all active scene passes remain WebGL2/GLSL.
 - HDR, bloom, atmosphere, clouds, rings, shadows and tone mapping have not yet been ported to WGSL/WebGPU.
 - Runtime WebGPU device-loss/reinitialization and WebGL2 fallback orchestration are not implemented.
-- A committed Cargo.lock still needs to be generated from the selected Rust toolchain/dependency graph.
+- Cargo.lock is committed from the resolved CI dependency graph and the Rust test step uses --locked.
 
 ## Verification boundary
 

@@ -30,7 +30,7 @@ jobs:
         with:
           tool: wasm-pack@0.13.1
       - name: Test Rust computational core
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Build Rust/WASM browser package
         run: wasm-pack build crates/cosmo-core --target web --out-dir ../../src/wasm/pkg --out-name cosmo_core --release
       - name: Preserve the resolved Cargo lockfile

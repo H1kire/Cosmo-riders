@@ -251,7 +251,7 @@ mod tests {
         let mut engines = vec![Engine {
             id: "ion".into(), name: "Ion".into(), max_thrust_n: 10.0,
             isp_seconds: 1000.0, direction: [0.0, 1.0, 0.0],
-            mount_position_m: [0.0; 3], throttle: 1.0, enabled: true, propellant_kg: 0.1,
+            mount_position_m: [0.0; 3], throttle: 1.0, enabled: true, propellant_kg: 0.1, burn_remaining_seconds: None,
         }];
         integrate_engines(&mut p, &mut v, &mut mass, &mut engines, 100.0, |_| Ok(Vec3::new(0.0, 0.0, 0.0))).unwrap();
         assert_eq!(engines[0].propellant_kg, 0.0);

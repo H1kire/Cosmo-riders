@@ -41,6 +41,8 @@ export class PhysicsWorldClient{
  getBodyState(id:string):PhysicsState{const s=this.bodyStates.get(id);if(!s)throw new Error('Unknown body state: '+id);return s;}
  getVesselState(id:string):VesselSnapshot{const s=this.vessels.get(id);if(!s)throw new Error('Unknown vessel: '+id);return s;}
  getSphereOfInfluence(id:string):number|null{return this.sphereOfInfluence.get(id)??null;}
+ async enableNBody():Promise<void>{await this.bridge.enableNBody();await this.refresh(await this.bridge.snapshot());this.renderBodyStates.clear();for(const [id,state] of this.bodyStates)this.renderBodyStates.set(id,state);}
+ async nBodyEnabled():Promise<boolean>{return this.bridge.nBodyEnabled();}
  async setTimeScale(v:number):Promise<void>{await this.bridge.setTimeScale(v);this.timeScale=v;}
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}
  async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderRotationAngles.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderRotationAngles.set(id,Number.isFinite(result.renderRotationAngles[i])?result.renderRotationAngles[i]:null));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as unknown as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}

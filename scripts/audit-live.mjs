@@ -32,4 +32,8 @@ for(const path of ['','lab/']){
  for(const ref of styles)await resource(page,ref,'text/css');
  process.stdout.write('PASS live page '+page.href+'\n');
 }
-process.stdout.write('LIVE DEPLOYMENT AUDIT PASSED: both pages and JS/CSS MIME types are reachable.\n');
+const wasmManifestResponse=await fetchRetry(new URL('wasm-assets.json',base).href);
+const wasmAssets=await wasmManifestResponse.json();
+if(!Array.isArray(wasmAssets)||wasmAssets.length===0)throw new Error('Published WASM asset manifest is empty or invalid.');
+for(const ref of wasmAssets)await resource(base,ref,'application/wasm');
+process.stdout.write('LIVE DEPLOYMENT AUDIT PASSED: both pages, JS/CSS MIME types and '+wasmAssets.length+' WASM asset(s) are reachable.\n');

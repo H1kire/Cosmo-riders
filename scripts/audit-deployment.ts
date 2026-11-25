@@ -5,7 +5,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),dist=join(root,
 const vite=await readFile(join(root,'vite.config.ts'),'utf8');
 const workflow=await readFile(join(root,'.github/workflows/pages.yml'),'utf8');
 if(!/base:\s*['"]\.\/['"]/.test(vite))throw new Error('Vite base must be relative for GitHub Pages project paths.');
-if(!workflow.includes('branches: [test]')||!workflow.includes('npm run audit')||!workflow.includes('actions/upload-pages-artifact')||!workflow.includes('actions/deploy-pages')||!workflow.includes('needs: build'))throw new Error('Pages workflow is missing its quality gate or build dependency.');
+if(!workflow.includes('branches: [test]')||!workflow.includes('npm run audit')||!workflow.includes('wasm-pack build')||!workflow.includes('cargo test --workspace')||!workflow.includes('actions/upload-pages-artifact')||!workflow.includes('actions/deploy-pages')||!workflow.includes('needs: build'))throw new Error('Pages workflow is missing its quality gate or build dependency.');
 async function isFile(path:string){try{return(await stat(path)).isFile();}catch{return false;}}
 for(const page of ['index.html','lab/index.html']){
  const html=await readFile(join(dist,page),'utf8'),base=dirname(join(dist,page));
@@ -22,6 +22,9 @@ for(const page of ['index.html','lab/index.html']){
  }
 }
 if(!await isFile(join(dist,'.nojekyll')))throw new Error('dist/.nojekyll is missing.');
+const wasmManifest=JSON.parse(await readFile(join(dist,'wasm-assets.json'),'utf8')) as string[];
+if(!wasmManifest.length)throw new Error('WASM deployment manifest is empty.');
+for(const asset of wasmManifest)if(!await isFile(join(dist,asset)))throw new Error('Missing deployed WASM asset: '+asset);
 async function checkNoTs(dir:string):Promise<void>{
  for(const entry of await readdir(dir,{withFileTypes:true})){
   const path=join(dir,entry.name);
@@ -30,4 +33,4 @@ async function checkNoTs(dir:string):Promise<void>{
  }
 }
 await checkNoTs(dist);
-process.stdout.write('DEPLOYMENT AUDIT PASSED: both pages, JS/CSS references, .nojekyll, and compiled-only output verified.\n');
+process.stdout.write('DEPLOYMENT AUDIT PASSED: both pages, JS/CSS references, .nojekyll, generated WASM assets and compiled-only output verified.\n');

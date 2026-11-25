@@ -39,7 +39,7 @@ const checks: Array<[string, () => Promise<void>]> = [
       const source = await readFile(file, 'utf8');
       for (const match of source.matchAll(/^\s*import\s+(?:[^;\n]*?\s+from\s*)?["'](\.{1,2}\/[^"']+)["']/gm)) {
         const target = resolve(dirname(file), match[1]);
-        const candidates = /\.[cm]?tsx?$/.test(target) ? [target] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
+        const candidates = /\.[cm]?tsx?$/.test(target) ? [target] : target.endsWith('.js') ? [target.replace(/\.js$/, '.ts'), target.replace(/\.js$/, '.d.ts')] : [target + '.ts', target + '.tsx', join(target, 'index.ts')];
         if (!candidates.some(candidate => known.has(resolve(candidate)))) throw new Error('Unresolved import in ' + file.replace(root.pathname, '') + ': ' + match[1]);
       }
     }

@@ -13,10 +13,11 @@
     "audit:build": "vite build && tsx scripts/verify-dist.ts",
     "audit:deployment": "tsx scripts/audit-deployment.ts",
     "audit:live": "node scripts/audit-live.mjs",
-    "audit": "npm run test && npm run audit:static && npm run audit:types && npm run audit:imports && npm run audit:assets && npm run audit:build && npm run audit:deployment",
+    "audit": "npm run test && npm run audit:static && npm run audit:types && npm run audit:imports && npm run audit:assets && npm run audit:wasm && npm run audit:build && npm run audit:deployment",
     "audit:all": "npm run audit",
     "build": "vite build && tsx scripts/verify-dist.ts",
-    "check": "npm run audit"
+    "check": "npm run audit",
+    "audit:wasm": "tsx scripts/audit-wasm.ts"
   },
   "devDependencies": {
     "tsx": "^4.20.6",

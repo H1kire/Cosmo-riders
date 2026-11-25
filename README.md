@@ -46,3 +46,22 @@ See [docs/FOUNDATION_FIXES.md](docs/FOUNDATION_FIXES.md) for the active renderin
 ## Foundation fixes
 
 The development branch records the current implementation of adaptive camera clipping, screen-space body picking, distance-independent frame exposure, corrected atmosphere/cloud light normalization, satellite orbital reference frames, combined two-body gravity, 0×–100× time controls and restored utility-window navigation in [docs/FOUNDATION_FIXES.md](docs/FOUNDATION_FIXES.md). The satellite catalogue remains a modeled subset, not a complete list of natural satellites.
+
+## Architecture migration: TypeScript + Rust + WebAssembly + WebGPU
+
+The Rust/WASM migration has started on the test branch. The current geodesic tile Worker now initializes the wasm-bindgen package and delegates triangular mesh and five-channel surface-page generation to Rust. The existing TypeScript worker pool continues to provide bounded scheduling, task deduplication, cancellation, and transferable buffers.
+
+The Rust core currently contains f64 vector/orbital mathematics, universal-variable Kepler propagation, orbital-element conversions, icosahedron tile subdivision, triangular mesh generation, and deterministic geodesic surface-page generation. Surface height remains in metres.
+
+**The migration is not yet complete:** the active PhysicsWorld remains TypeScript, and Solar3DView plus its HDR, lighting, atmosphere, clouds, rings, shadows, and post-processing passes remain on WebGL2/GLSL. The legacy renderer is deliberately retained until a complete WebGPU scene backend can preserve the existing single-scene camera and visual features.
+
+See:
+- [Architecture](docs/ARCHITECTURE.md)
+- [Rust/WASM](docs/RUST_WASM.md)
+- [Physics migration](docs/PHYSICS.md)
+- [Procedural surface migration](docs/PROCEDURAL_SURFACE.md)
+- [WebGPU migration status](docs/WEBGPU_RENDERING.md)
+- [Migration checklist](docs/MIGRATION.md)
+
+GitHub Actions builds the Rust/WASM package before running the TypeScript audit and Vite deployment. A successful CI build is not a substitute for visual/runtime testing on the target browser and GPU.
+

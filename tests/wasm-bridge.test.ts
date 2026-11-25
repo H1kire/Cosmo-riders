@@ -6,7 +6,7 @@ import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog } from '../src/physics/solar-system.ts';
-import { create_physics_world } from '../src/wasm/pkg/cosmo_core.js';
+import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
@@ -84,6 +84,19 @@ test('Rust PhysicsWorld WASM owns the canonical 50-body J2000 catalogue',async()
  assert.equal(snapshot.bodyIds.length,50);assert.equal(snapshot.simulationTimeSeconds,0);assert.equal(snapshot.bodyStates.length,300);
  const day=world.get_body_states_at(86400);assert.equal(day.length,300);assert.ok(Array.from(day).every(Number.isFinite));
  world.dispose_physics_world();assert.throws(()=>world.get_physics_snapshot(),/disposed/i);
+});
+test('Rust WASM owns powered burns, Hohmann transfers and orbital periods',async()=>{
+ await initializeWasm();
+ const world=create_physics_world(JSON.stringify(createSolarSystemBodyCatalog()),JSON.stringify({fixedStepSeconds:60,maxSubSteps:2000}));
+ const snapshot=world.get_physics_snapshot() as {bodyIds:string[];bodyStates:Float64Array};
+ const index=snapshot.bodyIds.indexOf('earth'),o=index*6;
+ world.add_vessel(JSON.stringify({id:'wasm-probe',primaryBodyId:'earth',position:[snapshot.bodyStates[o]+7000000,snapshot.bodyStates[o+1],snapshot.bodyStates[o+2]],velocity:[snapshot.bodyStates[o+3],snapshot.bodyStates[o+4]+7500,snapshot.bodyStates[o+5]],massKg:1000}));
+ const burn=JSON.parse(world.apply_idealized_burn('wasm-probe',new Float64Array([0,1,0]),100,20000,18000,300,0,101325,700));
+ assert.ok(burn.propellantUsedKg>0);assert.ok(JSON.parse(world.get_vessel_state('wasm-probe')).massKg<1000);
+ const transfer=JSON.parse(hohmann_transfer(1.32712440018e20,149597870700,227939200000));
+ assert.ok(transfer.departureDeltaVMS>0&&transfer.arrivalDeltaVMS>0);
+ assert.ok(orbital_period(149597870700,1.32712440018e20)>0);assert.ok(plane_change_delta_v(7500,Math.PI/2)>0);
+ world.dispose_physics_world();
 });
 test('dedicated physics worker delegates interpolation and simulation to its single WASM handle',async()=>{
  const [worker,bridge,client,protocol,core]=await Promise.all([read('src/wasm/physics/physics-worker.ts'),read('src/wasm/physics/physics-bridge.ts'),read('src/wasm/physics/physics-world-client.ts'),read('src/wasm/physics/physics-protocol.ts'),read('crates/cosmo-core/src/physics_world.rs')]);

@@ -30,3 +30,13 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
 pub fn orbital_period(semi_major_axis_m:f64,mu:f64)->Result<f64,JsValue>{
  crate::maneuvers::orbital_period(semi_major_axis_m,mu).map_err(error)
 }
+
+#[wasm_bindgen]
+pub fn hohmann_transfer(primary_mu:f64,initial_radius_m:f64,target_radius_m:f64)->Result<String,JsValue>{
+ let result=crate::maneuvers::hohmann_transfer(primary_mu,initial_radius_m,target_radius_m).map_err(error)?;
+ serde_json::to_string(&result).map_err(error)
+}
+#[wasm_bindgen]
+pub fn plane_change_delta_v(speed_m_s:f64,angle_radians:f64)->Result<f64,JsValue>{
+ crate::maneuvers::plane_change_delta_v(speed_m_s,angle_radians).map_err(error)
+}

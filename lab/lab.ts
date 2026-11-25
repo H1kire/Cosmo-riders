@@ -113,13 +113,12 @@ function updatePlanetInformation(){
   if(!host||!vessel||!world)return;
   const item=(selectedBodyId?world.bodies.get(selectedBodyId):null)??world.bodies.get('earth')??currentPrimary();
   if(!item){host.textContent='Нет данных о выбранном небесном теле.';return;}
-  const parent=item.parentId?body(item.parentId):null;
   const children=[...world.bodies.values()].filter(candidate=>candidate.parentId===item.id);
   const volume=4*Math.PI*Math.pow(item.meanRadiusM,3)/3;
   const density=item.massKg/volume;
   const gravity=item.mu/(item.meanRadiusM*item.meanRadiusM);
   const elements=item.orbitalElements;
-  const period=elements&&parent?orbitalPeriod(elements.semiMajorAxisM,parent.mu+item.mu):null;
+  const period=world.orbitalPeriods.get(item.id)??null;
   const environment=item.surface??null;
   const rotationPeriod=item.rotationPeriodSeconds??(item.tidalLock&&period?period:null);
   const formatPeriod=(seconds:number|null)=>seconds===null?'Нет достоверных данных':seconds>=DAY?fmt(seconds/DAY,4)+' суток':fmt(seconds/3600,3)+' ч';

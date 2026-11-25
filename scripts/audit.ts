@@ -197,7 +197,9 @@ const checks: Array<[string, () => Promise<void>]> = [
     const physics = await readFile(new URL('../src/physics/physics-world.ts', import.meta.url), 'utf8');
     const lab = await readFile(new URL('../lab/lab.ts', import.meta.url), 'utf8');
     if (!physics.includes('getBodyStatesAt(') || !physics.includes('getVesselStateAt(')) throw new Error('Fractional state snapshot APIs are missing.');
-    if (!lab.includes('getBodyStatesAt(renderTime)') || !lab.includes("getVesselStateAt('test-vessel',renderTime,renderedBodyStates)")) throw new Error('Renderer is not using synchronized snapshots.');
+    const worker = await readFile(new URL('../src/wasm/physics/physics-worker.ts', import.meta.url), 'utf8');
+    const client = await readFile(new URL('../src/wasm/physics/physics-world-client.ts', import.meta.url), 'utf8');
+    if (!worker.includes('get_body_states_at(renderTime)') || !worker.includes('get_vessel_state_at(id,renderTime,renderBodyStates)') || !client.includes('result.renderBodyStates') || !lab.includes('await world.advance(delta)') || !lab.includes('world.renderBodyStates')) throw new Error('Renderer is not consuming synchronized Rust/WASM interpolation snapshots from its single physics worker.');
   }]
 ];
 

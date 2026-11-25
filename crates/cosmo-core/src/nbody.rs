@@ -116,7 +116,7 @@ impl NBodySystem {
             return Err("N-body system must contain at least one body.".into());
         }
         let mut ids = std::collections::HashSet::with_capacity(bodies.len());
-        for body in &bodies {
+        for body in &mut bodies {
             if body.id.trim().is_empty() || !ids.insert(body.id.clone()) {
                 return Err("N-body identifiers must be non-empty and unique.".into());
             }
@@ -543,7 +543,7 @@ mod tests {
         let system = NBodySystem::new(vec![
             NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0, equatorial_radius_m: 1.0, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(0.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
-            NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+            NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0, equatorial_radius_m: 1.0, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(1.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
         ]).unwrap();
         let before = system.bodies()[0].position;
@@ -554,9 +554,9 @@ mod tests {
     #[test]
     fn collision_is_reported_instead_of_softened_or_silently_clamped() {
         let system = NBodySystem::new(vec![
-            NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+            NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0, equatorial_radius_m: 1.0, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(0.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
-            NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+            NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0, equatorial_radius_m: 1.0, j2: 0.0, pole_axis: Vec3::new(0.0,0.0,1.0),
                 position: Vec3::new(1.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
         ]).unwrap();
         assert!(system.total_energy().is_err());

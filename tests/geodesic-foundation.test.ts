@@ -455,7 +455,8 @@ test('geodesic renderer source connects Worker, CPU cache, GPU arrays and indexe
  assert.ok(renderer.includes('VirtualSurfaceManager'));
  assert.ok(renderer.includes('SurfaceGpuPageCache'));
  assert.ok(manager.includes('SurfaceTileWorkerPool'));
- assert.ok(worker.includes('generateSurfaceTile'));
+ assert.ok(worker.includes('generate_surface_tile('));
+ assert.ok(worker.includes('await ensureWasm()'));
  assert.ok(renderer.includes('this.pages.size!==20'));
  assert.ok(renderer.includes('gl.drawElements(gl.TRIANGLES,page.mesh.count,gl.UNSIGNED_INT,0)'));
  assert.ok(renderer.includes('markUploadPending'));
@@ -505,7 +506,8 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
  assert.ok(pool.includes('maxPendingTasks=Math.max(this.concurrency,Math.min(2'));
  assert.ok(!pool.includes('this.spawn();this.pump()'));
  assert.ok(worker.includes("kind:'mesh'"));
- assert.ok(worker.includes('mesh.indices.buffer'));
+ assert.ok(worker.includes('build_geodesic_tile_mesh('));
+ assert.ok(worker.includes('transferables(arrays)'));
  assert.ok(renderer.includes('this.manager.requestMesh('));
  assert.ok(renderer.includes('scheduleWorkerTasks()'));
  assert.ok(renderer.includes('this.manager.pendingCount<2'));

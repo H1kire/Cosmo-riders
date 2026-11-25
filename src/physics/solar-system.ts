@@ -4,6 +4,12 @@ import { PhysicsWorld } from './physics-world.ts';
 import { orbitalPeriod } from './orbital-elements.ts';
 
 const deg = (value: number) => value * Math.PI / 180;
+// Zonal J2 coefficients from the cited gravity-field parameter tables (dimensionless).
+const J2_COEFFICIENTS:Record<string,number> = {
+  sun:1.0e-7,mercury:50.3e-6,venus:4.458e-6,earth:1082.62617385222e-6,
+  moon:202.7e-6,mars:1960.45e-6,jupiter:14736e-6,saturn:16298e-6,
+  uranus:3343.43e-6,neptune:3411e-6
+};
 const ENVIRONMENT:Record<string,{temperatureK:number;pressurePa:number}> = {
  mercury:{temperatureK:440,pressurePa:0},venus:{temperatureK:737,pressurePa:9.2e6},earth:{temperatureK:288,pressurePa:101325},
  mars:{temperatureK:210,pressurePa:610},jupiter:{temperatureK:165,pressurePa:1e5},saturn:{temperatureK:134,pressurePa:1e5},
@@ -18,7 +24,7 @@ const ATMOSPHERES:Record<string,readonly string[]> = {
  titan:['N₂','CH₄'],triton:['N₂','CH₄']
 };
 const planet = (id: string, name: string, massKg: number, meanRadiusM: number, aAU: number, eccentricity: number, inclination: number, meanLongitude: number, longitudePerihelion: number, longitudeAscendingNode: number, rotationDays:number, axialTiltDeg:number, equatorialRadiusKm:number, solarDayHours:number, hasRings=false, poleRaDeg=0, poleDecDeg=90, primeMeridianDeg=0, rotationDirection:1|-1=1) => ({
-  id, name, massKg, meanRadiusM, parentId: 'sun',
+  id, name, massKg, meanRadiusM, parentId: 'sun',j2:J2_COEFFICIENTS[id]??0,
   rotationPeriodSeconds:rotationDays*DAY,axialTiltRad:deg(axialTiltDeg),poleRightAscensionRad:deg(poleRaDeg),poleDeclinationRad:deg(poleDecDeg),primeMeridianRad:deg(primeMeridianDeg),rotationEpochSeconds:0,rotationDirection,
   equatorialRadiusM:equatorialRadiusKm*1000,solarDaySeconds:solarDayHours*3600,hasRings,
   surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
@@ -41,7 +47,7 @@ const satellite = (
   aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true
 ) => ({
   id, name, parentId,
-  massKg: gmKm3S2 * 1e9 / G,
+  massKg: gmKm3S2 * 1e9 / G,j2:J2_COEFFICIENTS[id]??0,
   meanRadiusM: radiusKm * 1000,
   rotationPeriodSeconds:null,tidalLock,
   orbitalReferenceFrame:(parentId==='earth'?'ecliptic':'parent-equator') as 'ecliptic'|'parent-equator',
@@ -111,11 +117,11 @@ const satellites = [
  */
 export const SOLAR_SYSTEM_DATA = Object.freeze({
   epoch: 'J2000.0',
-  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000, equatorialRadiusM:695700000, rotationPeriodSeconds:25.38*DAY, axialTiltRad:deg(7.25), poleRightAscensionRad:deg(286.13),poleDeclinationRad:deg(63.87),primeMeridianRad:deg(84.176),rotationEpochSeconds:0,rotationDirection:1 as const },
+  sun: { id: 'sun', name: 'Sun', massKg: 1.98847e30, meanRadiusM: 695700000, equatorialRadiusM:695700000,j2:J2_COEFFICIENTS.sun, rotationPeriodSeconds:25.38*DAY, axialTiltRad:deg(7.25), poleRightAscensionRad:deg(286.13),poleDeclinationRad:deg(63.87),primeMeridianRad:deg(84.176),rotationEpochSeconds:0,rotationDirection:1 as const },
   mercury: planet('mercury', 'Mercury', 3.3011e23, 2439700, 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593,58.6462,.034,2440.53,4222.6,false,281.0097,61.4143,329.5469,1),
   venus: planet('venus', 'Venus', 4.8675e24, 6051800, 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255,243.018,177.36,6051.8,2802,false,272.76,67.16,160.20,-1),
   earth: {
-    id: 'earth', name: 'Earth', massKg: 5.9722e24, meanRadiusM: 6371008.4, parentId: 'sun', rotationPeriodSeconds:.99726968*DAY,axialTiltRad:deg(23.4393),poleRightAscensionRad:deg(0),poleDeclinationRad:deg(90),primeMeridianRad:deg(190.147),rotationEpochSeconds:0,rotationDirection:1,equatorialRadiusM:6378136.6,solarDaySeconds:86400,surface:ENVIRONMENT.earth,atmosphereComposition:ATMOSPHERES.earth,
+    id: 'earth', name: 'Earth', massKg: 5.9722e24, meanRadiusM: 6371008.4, parentId: 'sun', rotationPeriodSeconds:.99726968*DAY,axialTiltRad:deg(23.4393),poleRightAscensionRad:deg(0),poleDeclinationRad:deg(90),primeMeridianRad:deg(190.147),rotationEpochSeconds:0,rotationDirection:1,equatorialRadiusM:6378136.6,j2:J2_COEFFICIENTS.earth,solarDaySeconds:86400,surface:ENVIRONMENT.earth,atmosphereComposition:ATMOSPHERES.earth,
     elements: { semiMajorAxisM: 1.00000011 * AU, eccentricity: 0.01671022, inclination: deg(0.00005), longitudeAscendingNode: deg(-11.26064), argumentOfPeriapsis: deg(102.94719 - (-11.26064)), meanAnomaly: deg(100.46435 - 102.94719) }
   },
   mars: planet('mars', 'Mars', 6.4171e23, 3389500, 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891,1.02595676,25.19,3396.19,24.7,false,317.68143,52.88650,176.630,1),
@@ -157,6 +163,7 @@ export function createSolarSystemBodyCatalog(): readonly Record<string, unknown>
         rotationEpochSeconds: body.rotationEpochSeconds ?? 0,
         tidalLock: body.tidalLock ?? false,
         equatorialRadiusM: body.equatorialRadiusM ?? null,
+        j2: body.j2 ?? 0,
         solarDaySeconds: body.solarDaySeconds ?? null,
         atmosphereComposition: body.atmosphereComposition ?? [],
         hasRings: body.hasRings ?? false,

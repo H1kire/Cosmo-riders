@@ -23,8 +23,9 @@ export class SurfaceTileWorkerPool {
  constructor(options:{concurrency?:number;maxPendingTasks?:number;workerFactory?:()=>Worker}={}){
   const cores=typeof navigator!=='undefined'&&Number.isFinite(navigator.hardwareConcurrency)?navigator.hardwareConcurrency:4;
   const requested=Math.max(1,Math.floor(options.concurrency??1));
-  this.concurrency=Math.max(1,Math.min(2,Math.max(1,cores-3),requested));
-  this.maxPendingTasks=Math.max(this.concurrency,Math.min(8,Math.floor(options.maxPendingTasks??4)));
+  // One CPU worker is the hard ceiling: leave remaining logical capacity to Edge and rendering.
+  this.concurrency=Math.max(1,Math.min(1,Math.max(1,cores-2),requested));
+  this.maxPendingTasks=Math.max(this.concurrency,Math.min(2,Math.floor(options.maxPendingTasks??2)));
   this.hasWorkerFactory=Boolean(options.workerFactory);
   this.workerFactory=options.workerFactory??(()=>new Worker(new URL('./surface-tile-worker.ts',import.meta.url),{type:'module'}));
   this.start();
@@ -45,7 +46,13 @@ export class SurfaceTileWorkerPool {
     else{this.workerRuntimeErrorsValue++;this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker failed outside an active task: '+(event.message||'unknown worker error'));}
     this.removeSlot(slot);
    };
-   worker.onmessageerror=()=>{this.workerRuntimeErrorsValue++;const task=slot.task;if(task)this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker returned a message that could not be deserialized.'));this.removeSlot(slot);};
+   worker.onmessageerror=()=>{
+    const task=slot.task;
+    if(task){this.workerRuntimeErrorsValue++;this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker returned a message that could not be deserialized.'));}
+    else if(!slot.ready){this.workerStartupErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-startup','worker:'+slot.id,'startup','Surface worker startup message could not be deserialized.');}
+    else{this.workerRuntimeErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker returned an unreadable message outside an active task.');}
+    this.removeSlot(slot);
+   };
    this.slots.push(slot);
   }catch(error){this.workerStartupErrorsValue++;this.startupError=error instanceof Error?error:new Error(String(error));}
  }
@@ -86,7 +93,7 @@ export class SurfaceTileWorkerPool {
   });
  }
  private enqueue<T extends WorkerValue>(key:string,payload:TaskPayload,priority:number,signal?:AbortSignal):Promise<T>{
-  if(this.disposed)return Promise.reject(new DOMException('Surface worker pool is disposed.','AbortError'));
+  if(this.disposed)return Promise.reject(new SurfaceWorkerTaskError(payload.kind,key,'disposed','Surface worker pool is disposed; task was not accepted.'));
   if(signal?.aborted)return Promise.reject(new DOMException('Surface request aborted.','AbortError'));
   const existing=this.pending.get(key);if(existing){existing.priority=Math.max(existing.priority,priority);this.pump();return this.subscribe<T>(existing,signal);}
   if(this.slots.length===0)return Promise.reject(new SurfaceWorkerTaskError('worker-startup',key,'startup',this.startupError?.message??'No healthy surface workers remain.'));

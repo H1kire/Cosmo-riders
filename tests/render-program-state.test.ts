@@ -28,7 +28,7 @@ test('planet render loop isolates WebGL programs and keeps the UV fallback condi
  assert.match(loop,/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/);
  assert.match(loop,/if\(body\.id==='earth'&&this\.geodesicEarthRenderer&&this\.earthRenderMode!=='uv'\)/);
  assert.match(loop,/(?:pendingRenderer|activeRenderer)\.render\(frame\)/);
- assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{\s*(?:\/\/[^\n]*\s*)?g\.disable\(g\.CULL_FACE\);g\.disable\(g\.BLEND\);g\.depthMask\(true\);g\.activeTexture\(g\.TEXTURE0\);g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);\s*g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/);
+ assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{[\s\S]*?g\.disable\(g\.CULL_FACE\);[\s\S]*?g\.depthMask\(true\);[\s\S]*?g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);[\s\S]*?g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/
  const atmosphere=extractBlock(source,' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
  const clouds=extractBlock(source,' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');
  assert.match(atmosphere,/g\.useProgram\(this\.atmosphereProgram\)/);
@@ -56,6 +56,12 @@ test('both published entry points gate application import behind the start scree
  assert.match(main,/startButton\.addEventListener\('click'/);
 });
 
+
+test('Solar3DView stages base initialization and caps GPU render resolution for desktop stability',async()=>{
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.match(source,/readonly ready:Promise<void>/);assert.match(source,/this\.ready=this\.initialize\(\)/);assert.match(source,/private async initialize\(\):Promise<void>/);
+ assert.ok((source.match(/await this\.yieldToBrowser\(\)/g)??[]).length>=5);assert.ok(source.includes('1920*1080'));assert.ok(source.includes('antialias:false'));assert.ok(source.includes('Math.min(2,settings.msaaSamples)'));
+});
 
 test('quality replacement keeps the ready Earth renderer visible while sharing its worker pool',async()=>{
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');

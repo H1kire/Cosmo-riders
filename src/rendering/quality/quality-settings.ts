@@ -5,8 +5,8 @@ export interface GeodesicQualitySettings {pageResolution:number;meshResolution:n
 export const GEODESIC_QUALITY_PRESETS:Readonly<Record<QualityLevel,GeodesicQualitySettings>>=Object.freeze({
  low:{pageResolution:64,meshResolution:32,gpuBudgetBytes:8*1024*1024,cpuBudgetBytes:24*1024*1024,workerCount:1,uploadsPerFrame:1},
  medium:{pageResolution:96,meshResolution:48,gpuBudgetBytes:16*1024*1024,cpuBudgetBytes:48*1024*1024,workerCount:1,uploadsPerFrame:2},
- high:{pageResolution:128,meshResolution:64,gpuBudgetBytes:32*1024*1024,cpuBudgetBytes:96*1024*1024,workerCount:2,uploadsPerFrame:2},
- ultra:{pageResolution:160,meshResolution:64,gpuBudgetBytes:48*1024*1024,cpuBudgetBytes:128*1024*1024,workerCount:1,uploadsPerFrame:2}
+ high:{pageResolution:128,meshResolution:64,gpuBudgetBytes:32*1024*1024,cpuBudgetBytes:96*1024*1024,workerCount:1,uploadsPerFrame:1},
+ ultra:{pageResolution:160,meshResolution:64,gpuBudgetBytes:48*1024*1024,cpuBudgetBytes:128*1024*1024,workerCount:1,uploadsPerFrame:1}
 });
 export interface GraphicsSettings {
   preset: QualityLevel;

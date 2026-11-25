@@ -97,44 +97,40 @@ function loadGraphicsSettings():GraphicsSettings{
 }
 export class Solar3DView{
  [key: string]: any;
+ readonly ready:Promise<void>;
  constructor(canvas){
-  this.canvas=canvas;
-  this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
-  if(!this.gl)throw Error('WebGL2 недоступен');
-  const g=this.gl;
-  this.graphics=loadGraphicsSettings();
+  this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
+  if(!this.gl)throw Error('WebGL2 недоступен');this.disposed=false;this.ready=this.initialize();
+ }
+ private yieldToBrowser():Promise<void>{return new Promise(resolve=>requestAnimationFrame(()=>resolve()));}
+ private async initialize():Promise<void>{
+  const g=this.gl,canvas=this.canvas;this.graphics=loadGraphicsSettings();
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
-  this.shaderLibrary=createDefaultShaderLibrary();
-  this.hdr=new HDRPipeline(g,Math.max(1,canvas.width),Math.max(1,canvas.height),this.graphics.msaaSamples);
-  this.applyGraphicsSettings(this.graphics);
-  this.graphicsChangeHandler=(event:Event)=>{
-    const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{};const previousPreset=this.graphics.preset;
-    this.graphics={...this.graphics,...value};this.applyGraphicsSettings(this.graphics);
-    if(this.graphics.preset!==previousPreset)this.rebuildGeodesicRenderer(this.graphics);
-  };
-  window.addEventListener('graphics-settings-change',this.graphicsChangeHandler);
-  this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);
-  this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));
-  this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
-  this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);
-  this.ringRenderer=new RingRenderer(g);
-  this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.geodesicGeneration=0;this.geodesicWorkerPool=null;this.geodesicPendingRenderer=null;this.geodesicEarthInitFailureTaskKind=null;this.geodesicEarthInitFailureTaskKey=null;this.geodesicEarthInitFailureTimestamp=null;this.rebuildGeodesicRenderer(this.graphics);
-  this.meshes=[makeSphere(g,10,14),makeSphere(g,22,30),makeSphere(g,44,60),makeSphere(g,128,192)];
+  this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.geodesicGeneration=0;this.geodesicWorkerPool=null;this.geodesicPendingRenderer=null;this.geodesicEarthInitFailureTaskKind=null;this.geodesicEarthInitFailureTaskKey=null;this.geodesicEarthInitFailureTimestamp=null;
   this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();this.orbitViewProjection=new Float32Array(16);this.orbitModelMatrix=new Float32Array(16);
+  this.orbitCache=new Map();this.stellarSourceDefinitions=new Map();this.projected=[];this.labelNodes=new Map();
+  await this.yieldToBrowser();
+  this.shaderLibrary=createDefaultShaderLibrary();this.hdr=new HDRPipeline(g,1,1,Math.min(2,this.graphics.msaaSamples));this.applyGraphicsSettings(this.graphics);
+  this.graphicsChangeHandler=(event:Event)=>{const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{},previousPreset=this.graphics.preset;this.graphics={...this.graphics,...value};this.applyGraphicsSettings(this.graphics);if(this.graphics.preset!==previousPreset)this.rebuildGeodesicRenderer(this.graphics);};
+  window.addEventListener('graphics-settings-change',this.graphicsChangeHandler);
+  await this.yieldToBrowser();this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);
+  await this.yieldToBrowser();this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));
+  await this.yieldToBrowser();this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));
+  await this.yieldToBrowser();this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);this.ringRenderer=new RingRenderer(g);
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
   this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uModel','uColor']);
-  this.atmosphereSystem=new AtmosphereSystem();
-  this.cloudSystem=new CloudSystem();
-  this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];
-  this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.lighting=new LightingSystem();this.stellarSourceDefinitions=new Map();
-  this.drag=null;this.projected=[];this.orbitCache=new Map();this.focusId=null;this.focusTransition=null;
-  this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);
-  this.labelNodes=new Map();this.bind();
-  g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);
+  this.atmosphereSystem=new AtmosphereSystem();this.cloudSystem=new CloudSystem();this.lighting=new LightingSystem();
+  this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.drag=null;this.focusId=null;this.focusTransition=null;this.meshes=[];
+  this.meshes.push(makeSphere(g,10,14));await this.yieldToBrowser();
+  this.meshes.push(makeSphere(g,22,30));await this.yieldToBrowser();
+  this.meshes.push(makeSphere(g,44,60));await this.yieldToBrowser();
+  this.meshes.push(makeSphere(g,128,192));await this.yieldToBrowser();
+  this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);this.bind();
+  g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);this.rebuildGeodesicRenderer(this.graphics);
  }
-
+}
  setEarthRenderMode(mode:PlanetSurfaceMode):void{this.earthRenderMode=mode;}
  rebuildGeodesicRenderer(settings:GraphicsSettings):void{
   if(this.disposed)return;
@@ -165,7 +161,7 @@ export class Solar3DView{
  }
  applyGraphicsSettings(settings){
   this.hdr.setHDREnabled(settings.hdr);
-  this.hdr.setMultisampleSamples(settings.msaaSamples);
+  this.hdr.setMultisampleSamples(Math.min(2,settings.msaaSamples));
   const h=this.hdr.settings;
   h.bloom=settings.bloom;h.bloomThreshold=settings.bloomThreshold;h.bloomStrength=settings.bloomStrength;
   h.bloomIterations=settings.bloomIterations;h.glare=settings.glare;h.glareStrength=settings.glareStrength;
@@ -386,8 +382,10 @@ export class Solar3DView{
    this.distance=this.focusTransition.from+(this.focusTransition.to-this.focusTransition.from)*eased;
    if(progress>=1)this.focusTransition=null;
   }
-  const g=this.gl,c=this.canvas,r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
-  const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
+  const g=this.gl,c=this.canvas,r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,1.5);
+  const rawWidth=Math.max(1,Math.round(r.width*dpr)),rawHeight=Math.max(1,Math.round(r.height*dpr));
+  const rawPixels=rawWidth*rawHeight,pixelScale=rawPixels>1920*1080?Math.sqrt((1920*1080)/rawPixels):1;
+  const w=Math.max(1,Math.round(rawWidth*pixelScale)),h=Math.max(1,Math.round(rawHeight*pixelScale));
   if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
   const renderScale=this.graphics?.renderScale??1,renderWidth=Math.max(1,Math.round(w*renderScale)),renderHeight=Math.max(1,Math.round(h*renderScale));
   this.hdr.begin(renderWidth,renderHeight);
@@ -495,7 +493,10 @@ export class Solar3DView{
     }
    if(!renderedGeodesicEarth){
     // Повертаємо стан WebGL перед процедурним UV-матеріалом після помилки Geodesic.
-    g.disable(g.CULL_FACE);g.disable(g.BLEND);g.depthMask(true);g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D_ARRAY,null);
+    g.disable(g.CULL_FACE);g.disable(g.BLEND);g.depthMask(true);g.depthFunc(g.LESS);g.colorMask(true,true,true,true);
+    g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D_ARRAY,null);
+    for(let unit=1;unit<5;unit++){g.activeTexture(g.TEXTURE0+unit);g.bindTexture(g.TEXTURE_2D_ARRAY,null);}
+    g.activeTexture(g.TEXTURE0);
     g.useProgram(this.bodyProgram);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    }
    if(body.hasRings)this.ringRenderer.render(vp,scaleModelMatrix(model,this.ringRenderer.outerScale(body.id)),body.id);

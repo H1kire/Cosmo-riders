@@ -276,6 +276,12 @@ test('one subscriber abort does not cancel another subscriber to the same worker
 });
 
 
+test('surface worker pool hard-caps CPU concurrency and queued work for interactive browsers',async()=>{
+ class IdleWorker{onmessage:((event:MessageEvent)=>void)|null=null;onerror:((event:ErrorEvent)=>void)|null=null;constructor(){queueMicrotask(()=>this.onmessage?.({data:{type:'ready'}} as MessageEvent));}postMessage(){}terminate(){}}
+ const pool=new SurfaceTileWorkerPool({concurrency:4,maxPendingTasks:12,workerFactory:()=>new IdleWorker() as unknown as Worker});
+ assert.equal(pool.concurrency,1);assert.equal(pool.maxPendingTasks,2);pool.dispose();
+});
+
 test('worker startup failure is reported once without an automatic respawn loop',async()=>{
  let creations=0;
  class StartupFailWorker{
@@ -496,7 +502,7 @@ test('worker pool protocol supports transferable geodesic mesh jobs without main
  assert.ok(pool.includes('requestMesh(tile:GeoTile'));
  assert.ok(pool.includes("reply?.type==='ready'"));
  assert.ok(pool.includes('workerStartupErrorsValue++'));
- assert.ok(pool.includes('maxPendingTasks=Math.max(this.concurrency,Math.min(8'));
+ assert.ok(pool.includes('maxPendingTasks=Math.max(this.concurrency,Math.min(2'));
  assert.ok(!pool.includes('this.spawn();this.pump()'));
  assert.ok(worker.includes("kind:'mesh'"));
  assert.ok(worker.includes('mesh.indices.buffer'));

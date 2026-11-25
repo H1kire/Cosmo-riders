@@ -51,8 +51,10 @@ function activateSolarFallback(error: unknown) {
 }
 try {
   solar3D = new Solar3DView(canvases.solar);
+  await solar3D.ready;
   reportLoading('webgl',true);reportLoading('solar-system');reportLoading('renderer',true);
 } catch (error) {
+  solar3D?.dispose();solar3D=null;
   activateSolarFallback(error);
 }
 const DAY = 86400;

@@ -4,7 +4,7 @@
 
 The loading overlay is present in both the root and `/lab/` entrypoints. `lab/main.ts` yields a frame before the dynamic import, and `lab/lab.ts` yields again before constructing the WebGL scene so the browser can paint the overlay first.
 
-The Solar3DView still creates its base WebGL programs, HDR pipeline and UV sphere meshes synchronously. The expensive geodesic work no longer runs in that constructor or in the first scene frame:
+Solar3DView now exposes an initialization promise. Its base WebGL programs and UV sphere meshes are prepared in separate animation-frame slices, so the loading overlay can be painted and the browser event loop can run between expensive stages. The initial HDR target is 1×1 and the first resize is capped to 1920×1080 render pixels (before the selected render scale). Hardware MSAA is disabled because the HDR pipeline owns its own multisample target, and the pipeline is capped at 2× samples. The expensive geodesic work also remains outside the constructor and first scene frame:
 
 - Geodesic renderer creation is deferred until after the first scene frame.
 - GPU texture arrays are allocated one array per frame.
@@ -38,5 +38,7 @@ Import and initialization failures are logged and shown in the overlay. Worker, 
 
 - WebGL context-loss recovery is not yet implemented.
 - Shader compilation still uses the synchronous WebGL compile/link path; parallel shader compilation is not yet wired.
-- Base WebGL program/HDR/sphere initialization is still synchronous, though geodesic mesh and page work has been moved off the main thread and GPU allocations are spread across frames.
+- Individual shader compilation/link calls and each individual sphere allocation remain synchronous within their own frame slice; WebGL does not provide a general non-blocking compile API here.
+- The render target pixel ceiling limits framebuffer and post-processing cost, but it cannot prove that a particular Edge/GPU driver will not stall.
+- The procedural surface worker pool is intentionally limited to one CPU worker and at most two pending tasks, leaving CPU capacity for Edge and the render loop.
 - Actual first-frame and phase durations still need browser instrumentation and visual confirmation on the target GPU.

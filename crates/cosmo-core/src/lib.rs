@@ -1,5 +1,6 @@
 pub mod geometry;
 pub mod physics;
+pub mod physics_world;
 pub mod surface;
 pub mod wasm;
 

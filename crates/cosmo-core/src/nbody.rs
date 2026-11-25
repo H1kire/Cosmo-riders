@@ -16,6 +16,26 @@ pub struct NBodySystem {
     bodies: Vec<NBody>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AdaptiveAdvanceStats {
+    pub accepted_steps: usize,
+    pub rejected_steps: usize,
+    pub minimum_step_seconds: f64,
+    pub maximum_normalized_error: f64,
+}
+
+fn normalized_step_error(coarse: &NBodySystem, fine: &NBodySystem, relative_tolerance: f64) -> f64 {
+    let mut maximum: f64 = 0.0;
+    for (a, b) in coarse.bodies.iter().zip(fine.bodies.iter()) {
+        let position_scale = 1.0e-3 + relative_tolerance * a.position.norm().max(b.position.norm()).max(1.0);
+        let velocity_scale = 1.0e-9 + relative_tolerance * a.velocity.norm().max(b.velocity.norm()).max(1.0);
+        let position_error = b.position.sub(a.position).norm() / position_scale;
+        let velocity_error = b.velocity.sub(a.velocity).norm() / velocity_scale;
+        maximum = maximum.max(position_error).max(velocity_error);
+    }
+    if maximum.is_finite() { maximum } else { f64::INFINITY }
+}
+
 impl NBodySystem {
     pub fn new(bodies: Vec<NBody>) -> Result<Self, String> {
         if bodies.is_empty() {
@@ -135,6 +155,90 @@ impl NBodySystem {
         Ok(next)
     }
 
+    /// Step-doubling adaptive wrapper around the existing kick-drift-kick integrator.
+    /// The accepted state is always the two-half-step solution; the full-step solution
+    /// supplies a local error estimate. Variable step sizes are not exactly symplectic.
+    pub fn advanced_adaptive(
+        &self,
+        duration_seconds: f64,
+        max_step_seconds: f64,
+        relative_tolerance: f64,
+        min_step_seconds: f64,
+        max_substeps: usize,
+    ) -> Result<(Self, AdaptiveAdvanceStats), String> {
+        if !duration_seconds.is_finite()
+            || !max_step_seconds.is_finite() || max_step_seconds <= 0.0
+            || !relative_tolerance.is_finite() || relative_tolerance <= 0.0
+            || !min_step_seconds.is_finite() || min_step_seconds <= 0.0
+            || max_substeps == 0
+        {
+            return Err("Adaptive N-body parameters must be finite and positive.".into());
+        }
+        let mut stats = AdaptiveAdvanceStats::default();
+        if duration_seconds == 0.0 {
+            stats.minimum_step_seconds = 0.0;
+            return Ok((self.clone(), stats));
+        }
+
+        let direction = duration_seconds.signum();
+        let mut remaining = duration_seconds;
+        let mut h = direction * max_step_seconds.min(duration_seconds.abs());
+        let mut accepted = self.clone();
+        let max_attempts = max_substeps.saturating_mul(24).max(max_substeps);
+        let time_epsilon = duration_seconds.abs().max(1.0) * 1.0e-14;
+        let mut attempts = 0_usize;
+
+        while remaining.abs() > time_epsilon {
+            attempts += 1;
+            if attempts > max_attempts {
+                return Err("Adaptive N-body integration exceeded its attempt budget.".into());
+            }
+            if h.abs() > remaining.abs() { h = remaining; }
+
+            let mut coarse = accepted.clone();
+            let coarse_result = coarse.step(h);
+            let mut fine = accepted.clone();
+            let fine_result = fine.step(h * 0.5).and_then(|_| fine.step(h * 0.5));
+            if let Err(error) = coarse_result.and(fine_result) {
+                stats.rejected_steps += 1;
+                if h.abs() <= min_step_seconds * (1.0 + 1.0e-12) {
+                    return Err(error);
+                }
+                h = direction * (h.abs() * 0.5).max(min_step_seconds);
+                continue;
+            }
+
+            let error = normalized_step_error(&coarse, &fine, relative_tolerance);
+            if error <= 1.0 || h.abs() <= min_step_seconds * (1.0 + 1.0e-12) {
+                accepted = fine;
+                remaining = (remaining - h).abs().max(0.0) * direction;
+                stats.accepted_steps += 1;
+                stats.minimum_step_seconds = if stats.minimum_step_seconds == 0.0 {
+                    h.abs()
+                } else {
+                    stats.minimum_step_seconds.min(h.abs())
+                };
+                stats.maximum_normalized_error = stats.maximum_normalized_error.max(error);
+                if stats.accepted_steps > max_substeps {
+                    return Err("Adaptive N-body integration exceeded its substep budget.".into());
+                }
+                let factor = if error <= 1.0e-16 {
+                    2.0
+                } else {
+                    (0.9 * (1.0 / error).powf(1.0 / 3.0)).clamp(0.5, 2.0)
+                };
+                h = direction * (h.abs() * factor).min(max_step_seconds);
+            } else {
+                stats.rejected_steps += 1;
+                let factor = (0.9 * (1.0 / error).powf(1.0 / 3.0)).clamp(0.1, 0.5);
+                h = direction * (h.abs() * factor).max(min_step_seconds);
+            }
+        }
+
+        if stats.accepted_steps == 0 { stats.minimum_step_seconds = 0.0; }
+        Ok((accepted, stats))
+    }
+
     /// Integrate a massless spacecraft in the same time-dependent N-body field.
     pub fn integrate_test_particle(
         start: &Self, end: &Self, position: Vec3, velocity: Vec3, dt_seconds: f64
@@ -202,6 +306,32 @@ mod tests {
             assert!(actual.position.sub(expected.position).norm() < 0.05);
             assert!(actual.velocity.sub(expected.velocity).norm() < 1.0e-6);
         }
+    }
+
+    #[test]
+    fn adaptive_step_doubling_reduces_large_trial_steps_and_controls_error() {
+        let system = circular_pair();
+        let (adaptive, stats) = system.advanced_adaptive(
+            5.0e6, 5.0e6, 1.0e-8, 1.0, 10_000
+        ).unwrap();
+        assert!(stats.rejected_steps > 0);
+        assert!(stats.accepted_steps > 1);
+        assert!(stats.maximum_normalized_error <= 1.0);
+        assert!(stats.minimum_step_seconds < 5.0e6);
+        assert!(adaptive.bodies().iter().all(|body| body.position.finite() && body.velocity.finite()));
+    }
+
+    #[test]
+    fn adaptive_collision_failure_does_not_mutate_the_source_system() {
+        let system = NBodySystem::new(vec![
+            NBody { id: "a".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+                position: Vec3::new(0.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
+            NBody { id: "b".into(), mass_kg: 1.0, collision_radius_m: 1.0,
+                position: Vec3::new(1.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
+        ]).unwrap();
+        let before = system.bodies()[0].position;
+        assert!(system.advanced_adaptive(1.0, 1.0, 1.0e-8, 1.0e-3, 100).is_err());
+        assert_eq!(system.bodies()[0].position, before);
     }
 
     #[test]

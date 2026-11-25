@@ -109,7 +109,7 @@ pub fn build_stitch_indices(resolution:u32,mask:u32)->Result<Vec<u32>,String>{
    if orient(tri[0],tri[1],point)>=0&&orient(tri[1],tri[2],point)>=0&&orient(tri[2],tri[0],point)>=0{containing.push(*tri);}
   }
   if containing.is_empty(){return Err("Stitch triangulation could not locate an interior grid point.".into());}
-  let mut boundary:HashMap<String,(Point,Point,u32)>=HashMap::new();
+  let mut boundary:HashMap<String,(Point,Point,u32)> = HashMap::new();
   for tri in &containing{for edge in 0..3{
    let from=tri[edge];let to=tri[(edge+1)%3];let k=edge_key(from,to);
    boundary.entry(k).and_modify(|value|value.2+=1).or_insert((from,to,1));

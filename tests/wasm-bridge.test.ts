@@ -72,5 +72,5 @@ test('geodesic mesh worker requests Rust-generated stitch indices with an explic
  const [worker,pool]=await Promise.all([read('src/rendering/geodesic/surface-tile-worker.ts'),read('src/rendering/geodesic/surface-worker-pool.ts')]);
  assert.match(worker,/build_geodesic_stitch_indices\(task\.resolution,task\.coarseEdgeMask\)/);
  assert.match(pool,/coarseEdgeMask=0/);
- assert.match(pool,/radiusM\+': '\+coarseEdgeMask/);
+ assert.match(pool,/radiusM\+':'\+coarseEdgeMask/);
 });

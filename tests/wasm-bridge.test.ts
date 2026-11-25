@@ -5,7 +5,7 @@ import init, { generate_surface_tile } from '../src/wasm/pkg/cosmo_core.js';
 import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
-import { createSolarSystemBodyCatalog } from '../src/physics/solar-system.ts';
+import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
@@ -103,4 +103,40 @@ test('dedicated physics worker delegates interpolation and simulation to its sin
  assert.match(worker,/create_physics_world\(/);assert.match(worker,/get_body_states_at\(renderTime\)/);assert.match(worker,/get_vessel_state_at\(id,renderTime,renderBodyStates\)/);
  assert.match(worker,/apply_idealized_burn\(/);assert.match(bridge,/new Worker\(new URL\('\.\/physics-worker\.ts'/);assert.match(client,/result\.renderBodyStates/);
  assert.match(protocol,/vesselPrimaryIds/);assert.match(core,/pub fn advance\(/);assert.match(core,/pub fn apply_idealized_burn\(/);
+});
+
+test('Rust ephemerides match the TypeScript reference at J2000, one day, 30 days and one year',async()=>{
+ await initializeWasm();
+ const catalog=createSolarSystemBodyCatalog(),legacy=createSolarSystemWorld();
+ const rust=create_physics_world(JSON.stringify(catalog),JSON.stringify({fixedStepSeconds:60,maxSubSteps:2000}));
+ const ids=rust.get_physics_snapshot().bodyIds as string[];
+ const times=[0,86400,30*86400,365.25*86400];
+ for(const time of times){
+  const expected=legacy.getBodyStatesAt(time),actual=rust.get_body_states_at(time);
+  for(const [id,state] of expected){
+   const i=ids.indexOf(id);assert.notEqual(i,-1,'missing '+id);
+   const o=i*6,dx=actual[o]-state.position.x,dy=actual[o+1]-state.position.y,dz=actual[o+2]-state.position.z;
+   const dvx=actual[o+3]-state.velocity.x,dvy=actual[o+4]-state.velocity.y,dvz=actual[o+5]-state.velocity.z;
+   const positionError=Math.hypot(dx,dy,dz),velocityError=Math.hypot(dvx,dvy,dvz);
+   const positionScale=Math.hypot(state.position.x,state.position.y,state.position.z),velocityScale=Math.hypot(state.velocity.x,state.velocity.y,state.velocity.z);
+   assert.ok(positionError<=Math.max(0.05,positionScale*1e-11),id+' position error at '+time+': '+positionError+' m');
+   assert.ok(velocityError<=Math.max(1e-7,velocityScale*1e-11),id+' velocity error at '+time+': '+velocityError+' m/s');
+  }
+ }
+ assert.equal(legacy.simulationTimeSeconds,0,'reference snapshots must not mutate simulation time');
+ assert.equal(rust.get_physics_snapshot().simulationTimeSeconds,0,'Rust snapshots must not mutate simulation time');
+ rust.dispose_physics_world();
+});
+test('Rust patched-conics entry preserves absolute vessel position and velocity',async()=>{
+ await initializeWasm();
+ const rust=create_physics_world(JSON.stringify(createSolarSystemBodyCatalog()),JSON.stringify({fixedStepSeconds:60,maxSubSteps:100}));
+ const snapshot=rust.get_physics_snapshot() as {bodyIds:string[];bodyStates:Float64Array};
+ const moon=snapshot.bodyIds.indexOf('moon'),m=moon*6;
+ const soi=rust.get_sphere_of_influence('moon');assert.ok(soi&&soi>0);
+ rust.add_vessel(JSON.stringify({id:'soi-probe',primaryBodyId:'earth',position:[snapshot.bodyStates[m]+soi*.5,snapshot.bodyStates[m+1],snapshot.bodyStates[m+2]],velocity:[snapshot.bodyStates[m+3],snapshot.bodyStates[m+4],snapshot.bodyStates[m+5]],massKg:1000}));
+ rust.step_simulation();
+ const vessel=JSON.parse(rust.get_vessel_state('soi-probe')),states=rust.get_body_states(),mo=moon*6;
+ assert.equal(vessel.primaryBodyId,'moon');assert.equal(vessel.lastPrimarySwitch.to,'moon');
+ for(let axis=0;axis<3;axis++){assert.ok(Math.abs(vessel.position[axis]-states[mo+axis]-vessel.relativePosition[axis])<1e-5);assert.ok(Math.abs(vessel.velocity[axis]-states[mo+3+axis]-vessel.relativeVelocity[axis])<1e-8);}
+ rust.dispose_physics_world();
 });

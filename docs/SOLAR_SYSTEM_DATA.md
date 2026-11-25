@@ -31,3 +31,25 @@ The eight planets use the JPL Solar System Dynamics *Approximate Positions of th
 
 ## Accuracy policy
 The two-body hierarchy intentionally approximates the Solar System. The Moon's orbit is perturbed by the Sun; planetary mutual perturbations are not integrated. For high-fidelity validation and mission design, replace this fixture with timestamped JPL Horizons/DE440 states and a suitable numerical integrator.
+
+
+## Zonal gravity coefficients
+
+The single TypeScript body catalog now carries dimensionless (J_2), equatorial reference radius and J2000 spin-pole direction into the Rust/WASM physics DTO. The values below are taken from the MathWorks Aerospace Blockset planetary-data table, rather than inferred from visual shape or invented from the mean radius.
+
+| Body | (J_2) |
+|---|---:|
+| Sun | (1.0\times10^{-7}) |
+| Mercury | (50.3\times10^{-6}) |
+| Venus | (4.458\times10^{-6}) |
+| Earth | (1082.62617385222\times10^{-6}) |
+| Moon | (202.7\times10^{-6}) |
+| Mars | (1960.45\times10^{-6}) |
+| Jupiter | (14736\times10^{-6}) |
+| Saturn | (16298\times10^{-6}) |
+| Uranus | (3343.43\times10^{-6}) |
+| Neptune | (3411\times10^{-6}) |
+
+Bodies without a sourced coefficient remain point masses ((J_2=0)); no value is extrapolated to small satellites. The Moon uses the catalogued J2000 pole orientation. The other bodies use their catalogued pole RA/Dec transformed into the catalog's ecliptic inertial basis.
+
+Source: MathWorks, [Spacecraft Dynamics — planetary data and J2 definition](https://www.mathworks.com/help/aeroblks/spacecraftdynamics.html). The table also provides equatorial reference radii. The model implemented here is the second-degree zonal term only; higher harmonics, time-varying pole orientation and libration corrections are not included.

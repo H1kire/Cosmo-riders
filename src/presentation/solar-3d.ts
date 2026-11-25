@@ -130,7 +130,6 @@ export class Solar3DView{
   this.labels=document.createElement('div');this.labels.className='body-label-layer';canvas.parentElement.append(this.labels);this.bind();
   g.enable(g.DEPTH_TEST);g.disable(g.CULL_FACE);g.clearColor(.008,.016,.033,1);this.rebuildGeodesicRenderer(this.graphics);
  }
-}
  setEarthRenderMode(mode:PlanetSurfaceMode):void{this.earthRenderMode=mode;}
  rebuildGeodesicRenderer(settings:GraphicsSettings):void{
   if(this.disposed)return;

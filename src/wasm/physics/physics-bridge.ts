@@ -15,6 +15,7 @@ export class PhysicsBridge{
  addEngine(vesselId:string,engine:Record<string,unknown>):Promise<void>{return this.request({type:'add-engine',vesselId,engine});}
  setEngineEnabled(vesselId:string,engineId:string,enabled:boolean):Promise<void>{return this.request({type:'engine-enabled',vesselId,engineId,enabled});}
  setEngineThrottle(vesselId:string,engineId:string,throttle:number):Promise<void>{return this.request({type:'engine-throttle',vesselId,engineId,throttle});}
+ setEngineDirection(vesselId:string,engineId:string,direction:readonly [number,number,number]):Promise<void>{return this.request({type:'engine-direction',vesselId,engineId,direction});}
  propulsionState(vesselId:string):Promise<Record<string,unknown>>{return this.request({type:'propulsion-state',vesselId});}
  applyManeuver(vesselId:string,direction:readonly [number,number,number],deltaVMS:number):Promise<void>{return this.request({type:'maneuver',vesselId,direction,deltaVMS});}
  applyBurn(vesselId:string,direction:readonly [number,number,number],deltaVMS:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number,ambientPressurePa=0,referencePressurePa=101325):Promise<Record<string,number>>{return this.request({type:'burn',vesselId,direction,deltaVMS,vacuumThrustN:engine.vacuumThrustN,seaLevelThrustN:engine.seaLevelThrustN,ispSeconds:engine.ispSeconds,ambientPressurePa,referencePressurePa,dryMassKg});}

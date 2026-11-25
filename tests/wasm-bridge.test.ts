@@ -7,7 +7,7 @@ import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profi
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { executeIdealizedBurn } from '../src/physics/propulsion.ts';
-import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements } from '../src/wasm/pkg/cosmo_core.js';
+import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements, build_geodesic_stitch_indices } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 

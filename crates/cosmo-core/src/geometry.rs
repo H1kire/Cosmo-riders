@@ -74,14 +74,13 @@ mod tests {
 /// Generates a conforming triangular-grid index buffer for coarse-neighbor edges.
 /// Edge bits: AB=row 0, BC=row+column=resolution, CA=column 0.
 pub fn build_stitch_indices(resolution:u32,mask:u32)->Result<Vec<u32>,String>{
- use std::collections::HashMap;
+ use std::collections::BTreeMap;
  type Point=(i32,i32);
  type Tri=[Point;3];
  fn orient(a:Point,b:Point,p:Point)->i64{
   ((b.1-a.1) as i64)*((p.0-a.0) as i64)-((b.0-a.0) as i64)*((p.1-a.1) as i64)
  }
- fn key(p:Point)->String{format!("{}:{}",p.0,p.1)}
- fn edge_key(a:Point,b:Point)->String{let ka=key(a);let kb=key(b);if ka<kb{format!("{}|{}",ka,kb)}else{format!("{}|{}",kb,ka)}}
+ fn edge_key(a:Point,b:Point)->(Point,Point){if a<=b{(a,b)}else{(b,a)}}
  fn vertex_index(resolution:u32,row:u32,column:u32)->u32{
   row*(resolution+1)-row*(row.saturating_sub(1))/2+column
  }
@@ -109,7 +108,7 @@ pub fn build_stitch_indices(resolution:u32,mask:u32)->Result<Vec<u32>,String>{
    if orient(tri[0],tri[1],point)>=0&&orient(tri[1],tri[2],point)>=0&&orient(tri[2],tri[0],point)>=0{containing.push(*tri);}
   }
   if containing.is_empty(){return Err("Stitch triangulation could not locate an interior grid point.".into());}
-  let mut boundary:HashMap<String,(Point,Point,u32)> = HashMap::new();
+  let mut boundary:BTreeMap<(Point,Point),(Point,Point,u32)> = BTreeMap::new();
   for tri in &containing{for edge in 0..3{
    let from=tri[edge];let to=tri[(edge+1)%3];let k=edge_key(from,to);
    boundary.entry(k).and_modify(|value|value.2+=1).or_insert((from,to,1));
@@ -137,6 +136,44 @@ mod stitching_tests{
    assert!(!indices.is_empty());assert_eq!(indices.len()%3,0);
    let vertex_count=(resolution+1)*(resolution+2)/2;
    assert!(indices.iter().all(|index|*index<vertex_count));
+  }}
+ }
+ #[test]
+ fn all_masks_have_conforming_boundary_and_complete_manifold_topology(){
+  use std::collections::HashMap;
+  for resolution in [8,16,32,64]{for mask in 0..8{
+   let mut coordinates=vec![(0_i32,0_i32);((resolution+1)*(resolution+2)/2) as usize];
+   for row in 0..=resolution{for column in 0..=resolution-row{
+    let index=row*(resolution+1)-row*row.saturating_sub(1)/2+column;
+    coordinates[index as usize]=(row as i32,column as i32);
+   }}
+   let indices=build_stitch_indices(resolution,mask).unwrap();
+   let r=resolution as i32;let mut total_area=0_i64;
+   let mut edges:HashMap<(u32,u32),u32>=HashMap::new();
+   for triangle in indices.chunks_exact(3){
+    let a=coordinates[triangle[0] as usize];let b=coordinates[triangle[1] as usize];let c=coordinates[triangle[2] as usize];
+    let area=((b.1-a.1) as i64)*((c.0-a.0) as i64)-((b.0-a.0) as i64)*((c.1-a.1) as i64);
+    assert!(area>0,"mask {mask} resolution {resolution}: degenerate or reversed triangle");
+    total_area+=area;
+    for (x,y) in [(triangle[0],triangle[1]),(triangle[1],triangle[2]),(triangle[2],triangle[0])]{
+     let key=if x<y{(x,y)}else{(y,x)};*edges.entry(key).or_insert(0)+=1;
+    }
+   }
+   assert_eq!(total_area,(r*r) as i64,"mask {mask} resolution {resolution}: missing or overlapping area");
+   let mut boundary_length=0_i32;
+   for ((ia,ib),count) in edges{
+    assert!(count<=2,"non-manifold edge in mask {mask} resolution {resolution}");
+    if count==2{continue;}
+    let a=coordinates[ia as usize];let b=coordinates[ib as usize];
+    let on_ab=a.0==0&&b.0==0;
+    let on_bc=a.0+a.1==r&&b.0+b.1==r;
+    let on_ca=a.1==0&&b.1==0;
+    assert!(on_ab||on_bc||on_ca,"boundary edge is not on the tile perimeter");
+    let (length,coarse)=if on_ab{((a.1-b.1).abs(),mask&1!=0)}else if on_bc{((a.0-b.0).abs(),mask&2!=0)}else{((a.0-b.0).abs(),mask&4!=0)};
+    assert_eq!(length,if coarse{2}else{1},"boundary edge has a T-junction for mask {mask} resolution {resolution}");
+    boundary_length+=length;
+   }
+   assert_eq!(boundary_length,3*r,"tile perimeter has a gap or duplicate boundary segment");
   }}
  }
  #[test]

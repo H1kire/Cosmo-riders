@@ -44,12 +44,12 @@ const planet = (id: string, name: string, massKg: number, meanRadiusM: number, a
  */
 const satellite = (
   id: string, name: string, parentId: string, gmKm3S2: number, radiusKm: number,
-  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true
+  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true, poleRaDeg:number|null=null, poleDecDeg:number|null=null
 ) => ({
   id, name, parentId,
   massKg: gmKm3S2 * 1e9 / G,j2:J2_COEFFICIENTS[id]??0,
   meanRadiusM: radiusKm * 1000,
-  rotationPeriodSeconds:null,tidalLock,
+  rotationPeriodSeconds:null,tidalLock,poleRightAscensionRad:poleRaDeg===null?null:deg(poleRaDeg),poleDeclinationRad:poleDecDeg===null?null:deg(poleDecDeg),
   orbitalReferenceFrame:(parentId==='earth'?'ecliptic':'parent-equator') as 'ecliptic'|'parent-equator',
   surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
@@ -63,7 +63,7 @@ const satellite = (
 });
 
 const satellites = [
-  satellite('moon','Moon','earth',4902.800,1737.4,384400,.0554,5.16,318.15,135.27,125.08),
+  satellite('moon','Moon','earth',4902.800,1737.4,384400,.0554,5.16,318.15,135.27,125.08,true,269.9949,66.5392),
   satellite('phobos','Phobos','mars',.0007087,11.08,9375,.015,1.1,216.3,189.7,169.2),
   satellite('deimos','Deimos','mars',.0000962,6.2,23457,.0002,1.8,0,205,54.3),
 

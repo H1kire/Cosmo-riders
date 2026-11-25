@@ -12,7 +12,10 @@ export class PhysicsBridge{
  addVessel(vessel:Record<string,unknown>):Promise<void>{return this.request({type:'add-vessel',vessel});}
  applyManeuver(vesselId:string,direction:readonly [number,number,number],deltaVMS:number):Promise<void>{return this.request({type:'maneuver',vesselId,direction,deltaVMS});}
  applyBurn(vesselId:string,direction:readonly [number,number,number],deltaVMS:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number,ambientPressurePa=0,referencePressurePa=101325):Promise<Record<string,number>>{return this.request({type:'burn',vesselId,direction,deltaVMS,vacuumThrustN:engine.vacuumThrustN,seaLevelThrustN:engine.seaLevelThrustN,ispSeconds:engine.ispSeconds,ambientPressurePa,referencePressurePa,dryMassKg});}
- gravitationalParameter(bodyId:string):Promise<number>{return this.request({type:'gravitational-parameter',bodyId});}\n circularOrbitSpeed(bodyId:string,radiusM:number):Promise<number>{return this.request({type:'circular-orbit-speed',bodyId,radiusM});}\n thrustToWeightRatio(thrustN:number,massKg:number,gravityMS2:number):Promise<number>{return this.request({type:'thrust-to-weight',thrustN,massKg,gravityMS2});}\n orbitPath(bodyId:string,segments:number):Promise<Float64Array>{return this.request({type:'orbit-path',bodyId,segments});}
+ gravitationalParameter(bodyId:string):Promise<number>{return this.request({type:'gravitational-parameter',bodyId});}
+ circularOrbitSpeed(bodyId:string,radiusM:number):Promise<number>{return this.request({type:'circular-orbit-speed',bodyId,radiusM});}
+ thrustToWeightRatio(thrustN:number,massKg:number,gravityMS2:number):Promise<number>{return this.request({type:'thrust-to-weight',thrustN,massKg,gravityMS2});}
+ orbitPath(bodyId:string,segments:number):Promise<Float64Array>{return this.request({type:'orbit-path',bodyId,segments});}
  snapshot():Promise<PhysicsSnapshot>{return this.request({type:'snapshot'});}
  bodyStatesAt(timeSeconds:number):Promise<Float64Array>{return this.request({type:'body-states-at',timeSeconds});}
  vesselState(id:string):Promise<Record<string,unknown>>{return this.request({type:'vessel-state',id});}

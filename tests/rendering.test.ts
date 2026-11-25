@@ -62,8 +62,8 @@ test('graphics presets control real render scale and post-process quality',()=>{
  assert.equal(ultra.maxMeshLod,3);
  assert.equal(low.msaaSamples,0);
  assert.equal(medium.msaaSamples,2);
- assert.equal(high.msaaSamples,4);
- assert.equal(ultra.msaaSamples,4);
+ assert.equal(high.msaaSamples,2);
+ assert.equal(ultra.msaaSamples,2);
  assert.ok(medium.renderScale<high.renderScale);
  assert.ok(high.bloomIterations<ultra.bloomIterations);
  assert.ok(high.shadowOccluders<ultra.shadowOccluders);

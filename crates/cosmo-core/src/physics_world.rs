@@ -1,7 +1,7 @@
 use crate::physics::{orbital_elements_to_state,propagate_kepler,PropagatedState,Vec3};
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
-const G:f64=6.67430e-11;
+const G:f64=6.67430e-11;const STANDARD_G:f64=9.80665;
 fn v(a:[f64;3])->Result<Vec3,String>{let x=Vec3::new(a[0],a[1],a[2]);if x.finite(){Ok(x)}else{Err("Vector must be finite.".into())}}
 fn arr(x:Vec3)->[f64;3]{[x.x,x.y,x.z]}
 fn positive(x:f64,n:&str)->Result<(),String>{if x.is_finite()&&x>0.0{Ok(())}else{Err(format!("{n} must be finite and positive."))}}
@@ -53,6 +53,9 @@ fn parent_equator(s:PropagatedState,b:&BodyDefinition,p:&BodyDefinition)->Propag
  let x=Vec3::new(1.0-pole.x*pole.x,-pole.y*pole.x,-pole.z*pole.x).normalized().unwrap_or(Vec3::new(1.0,0.0,0.0));let y=pole.cross(x).normalized().unwrap_or(Vec3::new(0.0,1.0,0.0));
  let f=|q:Vec3|x.scale(q.x).add(y.scale(q.y)).add(pole.scale(q.z));PropagatedState{position:f(s.position),velocity:f(s.velocity),iterations:s.iterations}
 }
+#[derive(Clone,Copy,Debug,Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct BurnResult{pub initial_mass_kg:f64,pub final_mass_kg:f64,pub propellant_used_kg:f64,pub burn_duration_seconds:f64,pub mass_flow_kg_s:f64,pub delta_v_m_s:f64,pub thrust_n:f64,pub thrust_to_weight_ratio:f64}
 pub struct PhysicsWorld{
  options:Options,bodies:Vec<BodyDefinition>,indices:HashMap<String,usize>,initial:Vec<Option<PropagatedState>>,states:Vec<BodyState>,
  vessels:Vec<Vessel>,vessel_indices:HashMap<String,usize>,pub simulation_time_seconds:f64,pub accumulator_seconds:f64,pub time_scale:f64,pub paused:bool,initialized:bool
@@ -85,6 +88,19 @@ impl PhysicsWorld{
  pub fn vessel_states(&self)->Vec<VesselState>{self.vessels.iter().map(Vessel::snapshot).collect()}
  pub fn vessel_state_at(&self,id:&str,t:f64,body_states:&[f64])->Result<VesselState,String>{if !t.is_finite(){return Err("timeSeconds must be finite.".into())}let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let vessel=&self.vessels[i];let pi=self.indices[&vessel.primary];if body_states.len()!=self.bodies.len()*6{return Err("Invalid body snapshot length.".into())}let k=pi*6;let p=Vec3::new(body_states[k],body_states[k+1],body_states[k+2]);let vel=Vec3::new(body_states[k+3],body_states[k+4],body_states[k+5]);let rel=propagate_kepler(vessel.r,vessel.v,G*self.bodies[pi].mass_kg,t-self.simulation_time_seconds,1e-10,100)?;Ok(VesselState{position:arr(p.add(rel.position)),velocity:arr(vel.add(rel.velocity)),relative_position:arr(rel.position),relative_velocity:arr(rel.velocity),..vessel.snapshot()})}
  pub fn apply_impulse(&mut self,id:&str,direction:[f64;3],dv:f64)->Result<(),String>{if !dv.is_finite()||dv<0.0{return Err("deltaVMS must be non-negative.".into())}let dir=v(direction)?.normalized()?;let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let pi=self.indices[&self.vessels[i].primary];self.vessels[i].v=self.vessels[i].v.add(dir.scale(dv));self.vessels[i].vel=self.states[pi].vel().add(self.vessels[i].v);Ok(())}
+ pub fn apply_idealized_burn(&mut self,id:&str,direction:[f64;3],dv:f64,vacuum:f64,sea:f64,isp:f64,ambient:f64,reference:f64,dry:f64)->Result<BurnResult,String>{
+  positive(vacuum,"vacuumThrustN")?;positive(isp,"ispSeconds")?;positive(reference,"referencePressurePa")?;positive(dry,"dryMassKg")?;
+  if !sea.is_finite()||sea<0.0||sea>vacuum{return Err("seaLevelThrustN must be between zero and vacuum thrust.".into())}
+  if !ambient.is_finite()||ambient<0.0{return Err("ambientPressurePa must be non-negative.".into())}
+  if !dv.is_finite()||dv<0.0{return Err("deltaVMS must be non-negative.".into())}
+  let i=*self.vessel_indices.get(id).ok_or_else(||format!("Unknown vessel: {id}"))?;let initial=self.vessels[i].mass;
+  if dry>=initial{return Err("Dry mass must be smaller than initial mass.".into())}
+  let thrust=vacuum+(sea-vacuum)*(ambient/reference).min(1.0);let final_mass=initial/((dv/(isp*STANDARD_G)).exp());
+  if final_mass<dry{return Err("Requested burn exceeds available propellant.".into())}
+  let flow=thrust/(isp*STANDARD_G);let used=initial-final_mass;
+  self.apply_impulse(id,direction,dv)?;self.vessels[i].mass=final_mass;
+  Ok(BurnResult{initial_mass_kg:initial,final_mass_kg:final_mass,propellant_used_kg:used,burn_duration_seconds:used/flow,mass_flow_kg_s:flow,delta_v_m_s:dv,thrust_n:thrust,thrust_to_weight_ratio:thrust/(final_mass*STANDARD_G)})
+ }
  pub fn rotation_angle_at(&self,id:&str,t:f64)->Result<Option<f64>,String>{let b=self.body(id).ok_or_else(||format!("Unknown body: {id}"))?;if !t.is_finite(){return Err("time must be finite.".into())}Ok(b.rotation_period_seconds.filter(|_|!b.tidal_lock).map(|p|b.prime_meridian_rad+b.rotation_direction as f64*std::f64::consts::TAU*((t-b.rotation_epoch_seconds)/p)))}
 }
 #[cfg(test)]mod tests{use super::*;fn body()->BodyDefinition{serde_json::from_str(r#"{"id":"earth","name":"Earth","massKg":5.9722e24,"meanRadiusM":6371000}"#).unwrap()}#[test]fn clock_pause_scale(){let mut w=PhysicsWorld::new(Options{fixed_step_seconds:1.0,max_sub_steps:100,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();w.add_body(body()).unwrap();w.set_time_scale(2.0).unwrap();assert_eq!(w.advance(1.5).unwrap(),3);assert_eq!(w.simulation_time_seconds,3.0);w.set_paused(true);assert_eq!(w.advance(10.0).unwrap(),0)}#[test]fn rejects_duplicate_and_missing_parent(){let mut w=PhysicsWorld::new(Options::default()).unwrap();w.add_body(body()).unwrap();assert!(w.add_body(body()).is_err());let moon:BodyDefinition=serde_json::from_str(r#"{"id":"moon","name":"Moon","massKg":7e22,"meanRadiusM":1e6,"parentId":"missing"}"#).unwrap();assert!(w.add_body(moon).is_err())}#[test]fn fractional_snapshots_do_not_mutate_world(){let mut w=PhysicsWorld::new(Options::default()).unwrap();w.add_body(body()).unwrap();let a=w.body_states_at(30.0).unwrap();let b=w.body_states_at(30.0).unwrap();assert_eq!(a,b);assert_eq!(w.simulation_time_seconds,0.0)}}

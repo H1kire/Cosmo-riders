@@ -1,8 +1,9 @@
-import { createSolarSystemWorld, SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
+import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
+import { PhysicsWorldClient } from '../src/wasm/physics/physics-world-client.ts';
 import { AU } from '../src/physics/constants.ts';
 import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/physics/vector3.ts';
 import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-elements.ts';
-import { executeIdealizedBurn, thrustToWeightRatio } from '../src/physics/propulsion.ts';
+import { thrustToWeightRatio } from '../src/physics/propulsion.ts';
 import { hohmannTransfer } from '../src/physics/maneuvers.ts';
 import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
 import { rotateStateToParentEquator } from '../src/physics/orbital-frame.ts';
@@ -60,7 +61,7 @@ try {
 const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;
-let world, vessel, paused = false, lastFrame = 0, trail = [];
+let world:PhysicsWorldClient = null as unknown as PhysicsWorldClient, vessel, paused = false, lastFrame = 0, trail = [];
 let renderedBodyStates = null, renderedVesselState = null;
 let focusBodyId = null, pendingGlobalTransition = false;
 let selectedBodyId: string|null = null;
@@ -153,32 +154,26 @@ function updatePlanetInformation(){
   for(const [label,value] of rows){const row=document.createElement('div');const a=document.createElement('span'),b=document.createElement('b');a.textContent=label;b.textContent=value;row.append(a,b);grid.append(row);}
   host.append(grid);
 }
-function createScenario(name) {
-  // Кеплеровская пропагация аналитическая, поэтому для лабораторной сцены
-  // используем шаг 60 с: это резко сокращает число одинаковых пересчётов эфемерид.
-  world = createSolarSystemWorld({fixedStepSeconds:60,maxSubSteps:2000});
+async function createScenario(name) {
+  if(world)await world.dispose();
+  world=new PhysicsWorldClient();
+  await world.initialize({fixedStepSeconds:60,maxSubSteps:2000});
   selectedBodyId='earth';selectedPlanetId='earth';
-  const earth = getBody('earth'), moon = getBody('moon');
-  const earthMu = body('earth').mu, moonMu = body('moon').mu;
-  if (name === 'moon-approach') {
-    const moonSoi = world.getSphereOfInfluence('moon');
-    const offset = vector3(moonSoi*0.72,0,0);
-    vessel = world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(moon.position,offset),velocity:add(moon.velocity,vector3(0,180,0)),massKg:12000});
-  } else if (name === 'moon-orbit') {
-    const radius = 2_000_000;
-    vessel = world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,Math.sqrt(moonMu/radius),0)),massKg:12000});
-  } else {
-    const radius = 7_000_000;
-    vessel = world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,Math.sqrt(earthMu/radius),0)),massKg:12000});
+  const earth=world.getBodyState('earth'),moon=world.getBodyState('moon');
+  const earthMu=body('earth').mu,moonMu=body('moon').mu;
+  if(name==='moon-approach'){
+    const moonSoi=world.getSphereOfInfluence('moon')??0,offset=vector3(moonSoi*.72,0,0);
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(moon.position,offset),velocity:add(moon.velocity,vector3(0,180,0)),massKg:12000});
+  }else if(name==='moon-orbit'){
+    const radius=2_000_000;
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'moon',position:add(moon.position,vector3(radius,0,0)),velocity:add(moon.velocity,vector3(0,Math.sqrt(moonMu/radius),0)),massKg:12000});
+  }else{
+    const radius=7_000_000;
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,Math.sqrt(earthMu/radius),0)),massKg:12000});
   }
-  trail = [];
-  renderedBodyStates=null;renderedVesselState=null;
-  updateTelemetry();
-  renderSystemNavigation();
-  updatePlanetInformation();
-  drawAll();
+  trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
+  updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
 }
-
 function resizeCanvas(canvas) {
   const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
   const width=Math.max(1,Math.round(rect.width*dpr)),height=Math.max(1,Math.round(rect.height*dpr));
@@ -537,14 +532,13 @@ function updateTelemetry(){
   $('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
   $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
 }
-function applyPoweredBurn(deltaVMS){
-  // Ручной импульс разрешён только на штатной скорости симуляции.
-  world.setTimeScale(1);
-  $('time-scale').value='1';
+async function applyPoweredBurn(deltaVMS){
+  await world.setTimeScale(1);$('time-scale').value='1';
   const primaryState=currentPrimaryState(),relativeVelocity=subtract(vessel.velocity,primaryState.velocity);
   let direction=normalize(relativeVelocity);if(deltaVMS<0)direction=scale(direction,-1);
   try{
-    const result=executeIdealizedBurn(world,'test-vessel',{direction,deltaVMS:Math.abs(deltaVMS),engine:ENGINE,dryMassKg:SHIP_DRY_MASS_KG});
+    const result=await world.applyBurn('test-vessel',[direction.x,direction.y,direction.z],Math.abs(deltaVMS),ENGINE,SHIP_DRY_MASS_KG);
+    vessel=world.getVesselState('test-vessel');renderedVesselState=vessel;
     $('burn-status').textContent='Включение: '+fmt(result.burnDurationSeconds,2)+' с · топливо: '+fmt(result.propellantUsedKg,2)+' кг · Δv '+fmt(Math.abs(deltaVMS),1)+' м/с';
     updateTelemetry();drawAll();
   }catch(error){$('burn-status').textContent='ОТКАЗ ДВИГАТЕЛЯ: '+error.message;}
@@ -557,79 +551,43 @@ function updateManeuverPlanner(){
   $('hohmann-time').textContent=fmt(transfer.transferTimeSeconds/DAY,1)+' суток';
 }
 let lastTelemetryUpdate=0,firstFrameReported=false;
-function animate(timestamp){
+async function animate(timestamp){
   if(!lastFrame)lastFrame=timestamp;
-  const delta=Math.min((timestamp-lastFrame)/1000,.1);
-  lastFrame=timestamp;
-  const oldLength=trail.length;
+  const delta=Math.min((timestamp-lastFrame)/1000,.1);lastFrame=timestamp;
   trail=trail.filter(point=>timestamp-point.time<=1000);
-  const expired=oldLength!==trail.length;
-  let advanced=false;
   if(!paused){
-    const oldPrimary=vessel.primaryBodyId,steps=world.advance(delta);
-    if(steps>0){
+    const oldPrimary=vessel.primaryBodyId,result=await world.advance(delta);
+    vessel=world.getVesselState('test-vessel');renderedBodyStates=world.renderBodyStates;renderedVesselState=world.renderVessels.get('test-vessel')??vessel;
+    if(result.steps>0){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
-      const s=world.getVesselState('test-vessel'),p=world.getBodyState(vessel.primaryBodyId);
-      trail.push({x:s.position.x-p.position.x,y:s.position.y-p.position.y,time:timestamp});
+      const p=world.getBodyState(vessel.primaryBodyId);trail.push({x:vessel.position.x-p.position.x,y:vessel.position.y-p.position.y,time:timestamp});
       if(timestamp-lastTelemetryUpdate>=250){updateTelemetry();lastTelemetryUpdate=timestamp;}
-      advanced=true;
     }
-  }
-
-  const renderTime=world.simulationTimeSeconds+(!paused?world.accumulator:0);
-  renderedBodyStates=world.getBodyStatesAt(renderTime);
-  renderedVesselState=world.getVesselStateAt('test-vessel',renderTime,renderedBodyStates);
-
-  const previousZoom=cameraZoom.solar;
-  const cameraEase=1-Math.exp(-12*delta);
-  const zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
+  }else{renderedBodyStates=world.bodyStates;renderedVesselState=vessel;}
+  const previousZoom=cameraZoom.solar,cameraEase=1-Math.exp(-12*delta),zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
   cameraZoom.solar+=(cameraTargetZoom.solar-cameraZoom.solar)*cameraEase;
-  if(focusBodyId&&previousZoom<LOCAL_VIEW_START_ZOOM&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM){
-    cameraPan.x=cameraPan.y=0;cameraTargetPan.x=cameraTargetPan.y=0;
-  }
-  if(focusBodyId&&pendingGlobalTransition&&cameraZoom.solar<LOCAL_VIEW_START_ZOOM){
-    const point=globalPointForBody(focusBodyId,cameraZoom.solar);
-    cameraTargetPan.x=canvases.solar.clientWidth*.5-point.x;
-    cameraTargetPan.y=canvases.solar.clientHeight*.5-point.y;
-    cameraPan.x=cameraTargetPan.x;cameraPan.y=cameraTargetPan.y;
-    focusBodyId=null;pendingGlobalTransition=false;
-  }
-  if(trackingTargetId){
-    const target=solarMapPoint(trackingTargetId,false,cameraTargetZoom.solar);
-    if(target){
-      cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;
-      cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;
-    }
-  }
-  cameraPan.x+=(cameraTargetPan.x-cameraPan.x)*cameraEase;
-  cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;
+  if(focusBodyId&&previousZoom<LOCAL_VIEW_START_ZOOM&&cameraZoom.solar>=LOCAL_VIEW_START_ZOOM){cameraPan.x=cameraPan.y=0;cameraTargetPan.x=cameraTargetPan.y=0;}
+  if(focusBodyId&&pendingGlobalTransition&&cameraZoom.solar<LOCAL_VIEW_START_ZOOM){const point=globalPointForBody(focusBodyId,cameraZoom.solar);cameraTargetPan.x=canvases.solar.clientWidth*.5-point.x;cameraTargetPan.y=canvases.solar.clientHeight*.5-point.y;cameraPan.x=cameraTargetPan.x;cameraPan.y=cameraTargetPan.y;focusBodyId=null;pendingGlobalTransition=false;}
+  if(trackingTargetId){const target=solarMapPoint(trackingTargetId,false,cameraTargetZoom.solar);if(target){cameraTargetPan.x=canvases.solar.clientWidth*.5-target.x;cameraTargetPan.y=canvases.solar.clientHeight*.5-target.y;}}
+  cameraPan.x+=(cameraTargetPan.x-cameraPan.x)*cameraEase;cameraPan.y+=(cameraTargetPan.y-cameraPan.y)*cameraEase;
   for(const view of ['lunar','vessel'])cameraZoom[view]+=(cameraTargetZoom[view]-cameraZoom[view])*cameraEase;
-  const cameraMoving=zoomDifference>1e-5||Math.abs(cameraTargetPan.x-cameraPan.x)>.05||Math.abs(cameraTargetPan.y-cameraPan.y)>.05;
-  drawAll();
-  if(!firstFrameReported){firstFrameReported=true;reportLoading('first-frame',true);}
-
-  renderedBodyStates=null;
-  renderedVesselState=null;
-  requestAnimationFrame(animate);
-reportLoading('solar-system',true);
+  drawAll();if(!firstFrameReported){firstFrameReported=true;reportLoading('first-frame',true);}
+  requestAnimationFrame(animate);reportLoading('solar-system',true);
 }
-$('scenario').addEventListener('change',event=>{createScenario((event.target as HTMLInputElement).value);});
-$('time-scale').addEventListener('change',event=>world.setTimeScale(Number((event.target as HTMLInputElement).value)));
+$('scenario').addEventListener('change',event=>{void createScenario((event.target as HTMLInputElement).value);});
+$('time-scale').addEventListener('change',event=>{void world.setTimeScale(Number((event.target as HTMLInputElement).value));});
 solar3D?.canvas.addEventListener('bodyselect',event=>{
   selectedBodyId=(event as CustomEvent<{id:string}>).detail?.id??null;
   selectedPlanetId=selectedBodyId;
   updatePlanetInformation();
   renderSystemNavigation();
 });
-$('pause-button').addEventListener('click',()=>{paused=!paused;world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
-$('step-button').addEventListener('click',()=>{if(!paused){paused=true;world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}world.step();updateTelemetry();drawAll();});
-$('reset-button').addEventListener('click',()=>{paused=false;world.setPaused(false);$('pause-button').textContent='Ⅱ Пауза';createScenario($('scenario').value);});
+$('pause-button').addEventListener('click',()=>{paused=!paused;void world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
+$('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;updateTelemetry();drawAll();});});
+$('reset-button').addEventListener('click',()=>{paused=false;$('pause-button').textContent='Ⅱ Пауза';void createScenario($('scenario').value);});
 $('retro-button').addEventListener('click',()=>applyPoweredBurn(-10));
 $('pro-button').addEventListener('click',()=>applyPoweredBurn(10));
 window.addEventListener('resize',drawAll);
 
 window.addEventListener('number-format-change',()=>{updateTelemetry();drawAll();});
-createScenario('earth-orbit');
-world.setTimeScale(Number($('time-scale').value));
-updateManeuverPlanner();
-requestAnimationFrame(animate);
+void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));updateManeuverPlanner();requestAnimationFrame(animate);});

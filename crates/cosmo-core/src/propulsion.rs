@@ -19,6 +19,8 @@ pub struct Engine {
     pub enabled: bool,
     #[serde(default)]
     pub propellant_kg: f64,
+    #[serde(default)]
+    pub burn_remaining_seconds: Option<f64>,
 }
 
 impl Engine {
@@ -35,6 +37,9 @@ impl Engine {
         if !self.throttle.is_finite() || !(0.0..=1.0).contains(&self.throttle) {
             return Err("throttle must be in [0, 1].".into());
         }
+        if self.burn_remaining_seconds.map(|x| !x.is_finite() || x < 0.0).unwrap_or(false) {
+            return Err("burnRemainingSeconds must be finite and non-negative.".into());
+        }
         if !self.propellant_kg.is_finite() || self.propellant_kg < 0.0 {
             return Err("propellantKg must be finite and non-negative.".into());
         }
@@ -50,7 +55,7 @@ impl Engine {
     }
 
     fn active(&self) -> bool {
-        self.enabled && self.throttle > 0.0 && self.propellant_kg > FUEL_EPSILON_KG
+        self.enabled && self.throttle > 0.0 && self.propellant_kg > FUEL_EPSILON_KG && self.burn_remaining_seconds != Some(0.0)
     }
 }
 
@@ -145,6 +150,7 @@ pub fn integrate_engines(
             let engine_flow = thrust / (engine.isp_seconds * STANDARD_GRAVITY);
             flow += engine_flow;
             next_event = next_event.min(engine.propellant_kg / engine_flow);
+            if let Some(remaining_burn) = engine.burn_remaining_seconds { next_event = next_event.min(remaining_burn); }
         }
         let h = next_event.max(0.0).min(remaining);
         peak_acceleration = peak_acceleration.max(gravity(*position)?.add(force.scale(1.0 / *mass)).norm());
@@ -183,6 +189,11 @@ pub fn integrate_engines(
             let mut consumed = 0.0;
             for engine in engines.iter_mut() {
                 if !engine.active() { continue; }
+                if let Some(remaining_burn) = engine.burn_remaining_seconds {
+                    let left = (remaining_burn - h).max(0.0);
+                    engine.burn_remaining_seconds = Some(left);
+                    if left <= 1.0e-12 { engine.burn_remaining_seconds = Some(0.0); engine.enabled = false; }
+                }
                 let thrust = engine.max_thrust_n * engine.throttle;
                 let engine_flow = thrust / (engine.isp_seconds * STANDARD_GRAVITY);
                 let amount = (engine_flow * h).min(engine.propellant_kg);
@@ -222,7 +233,7 @@ mod tests {
         let mut engines = vec![Engine {
             id: "main".into(), name: "Main".into(), max_thrust_n: 100.0,
             isp_seconds: 300.0, direction: [1.0, 0.0, 0.0],
-            mount_position_m: [0.0; 3], throttle: 1.0, enabled: true, propellant_kg: 10.0,
+            mount_position_m: [0.0; 3], throttle: 1.0, enabled: true, propellant_kg: 10.0, burn_remaining_seconds: None,
         }];
         let result = integrate_engines(&mut p, &mut v, &mut mass, &mut engines, 20.0, |_| Ok(Vec3::new(0.0, 0.0, 0.0))).unwrap();
         let expected_mass = 100.0 - 100.0 / (300.0 * STANDARD_GRAVITY) * 20.0;
@@ -254,8 +265,8 @@ mod tests {
         let mut v = Vec3::new(0.0, 0.0, 0.0);
         let mut mass = 100.0;
         let mut engines = vec![
-            Engine { id:"a".into(),name:"A".into(),max_thrust_n:100.0,isp_seconds:200.0,direction:[1.0,0.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0 },
-            Engine { id:"b".into(),name:"B".into(),max_thrust_n:50.0,isp_seconds:400.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:0.5,enabled:true,propellant_kg:10.0 },
+            Engine { id:"a".into(),name:"A".into(),max_thrust_n:100.0,isp_seconds:200.0,direction:[1.0,0.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:true,propellant_kg:10.0,burn_remaining_seconds:None },
+            Engine { id:"b".into(),name:"B".into(),max_thrust_n:50.0,isp_seconds:400.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:0.5,enabled:true,propellant_kg:10.0,burn_remaining_seconds:None },
         ];
         let result=integrate_engines(&mut p,&mut v,&mut mass,&mut engines,1.0, |_| Ok(Vec3::new(0.0,0.0,0.0))).unwrap();
         assert!((result.thrust_n - (100.0_f64.powi(2)+25.0_f64.powi(2)).sqrt()).abs()<1.0e-10);

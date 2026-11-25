@@ -117,6 +117,7 @@ function updatePlanetInformation(){
   const volume=4*Math.PI*Math.pow(item.meanRadiusM,3)/3;
   const density=item.massKg/volume;
   const gravity=item.mu/(item.meanRadiusM*item.meanRadiusM);
+  const parent=item.parentId?body(item.parentId):null;
   const elements=item.orbitalElements;
   const period=world.orbitalPeriods.get(item.id)??null;
   const environment=item.surface??null;

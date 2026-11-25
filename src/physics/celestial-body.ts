@@ -23,6 +23,7 @@ export interface CelestialBodyOptions {
   readonly rotationEpochSeconds?: number;
   readonly tidalLock?: boolean;
   readonly equatorialRadiusM?: number | null;
+  readonly j2?: number;
   readonly solarDaySeconds?: number | null;
   readonly atmosphereComposition?: readonly string[];
   readonly hasRings?: boolean;
@@ -51,6 +52,7 @@ export class CelestialBody {
   readonly rotationEpochSeconds: number;
   readonly tidalLock: boolean;
   readonly equatorialRadiusM: number | null;
+  readonly j2: number;
   readonly solarDaySeconds: number | null;
   readonly atmosphereComposition: readonly string[];
   readonly hasRings: boolean;
@@ -77,6 +79,7 @@ export class CelestialBody {
     rotationEpochSeconds = 0,
     tidalLock = false,
     equatorialRadiusM = null,
+    j2 = 0,
     solarDaySeconds = null,
     atmosphereComposition = [],
     hasRings = false,
@@ -92,6 +95,7 @@ export class CelestialBody {
     if (semiMajorAxisM !== null) assertPositiveFinite(semiMajorAxisM, 'semiMajorAxisM');
     if (rotationPeriodSeconds !== null) assertPositiveFinite(rotationPeriodSeconds, 'rotationPeriodSeconds');
     if (equatorialRadiusM !== null) assertPositiveFinite(equatorialRadiusM, 'equatorialRadiusM');
+    if (!Number.isFinite(j2)) throw new RangeError('j2 must be finite.');
     if (solarDaySeconds !== null) assertPositiveFinite(solarDaySeconds, 'solarDaySeconds');
     if (axialTiltRad !== null && !Number.isFinite(axialTiltRad)) throw new RangeError('axialTiltRad must be finite.');
     if (poleRightAscensionRad !== null && !Number.isFinite(poleRightAscensionRad)) throw new RangeError('poleRightAscensionRad must be finite.');
@@ -139,6 +143,7 @@ export class CelestialBody {
     this.rotationEpochSeconds = rotationEpochSeconds;
     this.tidalLock = Boolean(tidalLock);
     this.equatorialRadiusM = equatorialRadiusM;
+    this.j2 = j2;
     this.solarDaySeconds = solarDaySeconds;
     this.atmosphereComposition = Object.freeze([...atmosphereComposition]);
     this.hasRings = Boolean(hasRings);

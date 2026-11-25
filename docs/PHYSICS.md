@@ -26,7 +26,7 @@ The declarative J2000 catalogue remains in src/physics/solar-system.ts. createSo
 
 The burn model remains an idealized impulse: it calculates mass loss and burn duration from the rocket equation, then applies the requested delta-v instantaneously. It does not numerically integrate thrust, changing mass and gravity continuously during the burn.
 
-The N-body integrator uses a fixed user-configured step and reports physical-radius collisions instead of softening singularities. It is a second-order symplectic method for smooth, well-separated motion; close encounters still require a smaller step. No adaptive close-encounter integrator, J2 model, relativistic correction or DE440 initial-state fit is implemented yet. No validated accuracy bound against JPL Horizons is claimed. N-body mode is opt-in and is not the default flight-deck mode.
+The N-body integrator uses a fixed user-configured step and reports physical-radius collisions instead of softening singularities. It is a second-order symplectic method for smooth, well-separated motion; close encounters still require a smaller step. No adaptive close-encounter integrator, J2 model, relativistic correction or DE440 initial-state fit is implemented yet. No validated accuracy bound against JPL Horizons is claimed. N-body mode is opt-in through the Worker/client API and is not the default flight-deck mode; there is not yet a user-facing mode selector or a lossless switch back to ephemeris mode. The current orbit-path cache is still generated from the catalogue's initial Keplerian elements, so dynamic N-body trajectory trails are not yet represented.
 
 ## Application data flow
 

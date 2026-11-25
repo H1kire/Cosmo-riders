@@ -81,7 +81,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     if (source.includes('solarMoonScreenPoint')) throw new Error('Synthetic Moon screen offset must not be used.');
     if (!source.includes('targetState.position.x-focusState.position.x')) throw new Error('Local view must use physical parent-relative coordinates.');
     if (!source.includes('LOCAL_VIEW_START_ZOOM')) throw new Error('Hierarchical local-view transition is missing.');
-    if (!source.includes('orbitalElementsToState')) throw new Error('Orbit paths must use orbital elements.');
+    if (!source.includes('world.orbitPaths.get(id)') || source.includes('orbitalElementsToState') || source.includes('rotateStateToParentEquator')) throw new Error('Orbit paths must come from Rust-generated orbital samples.');
   }],
   ['3D renderer uses WebGL, orbit geometry and adaptive mesh LOD', async () => {
     const source = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');

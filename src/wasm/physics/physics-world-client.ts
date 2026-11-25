@@ -62,7 +62,7 @@ export class PhysicsWorldClient{
  async setEngineEnabled(vesselId:string,engineId:string,enabled:boolean):Promise<void>{await this.bridge.setEngineEnabled(vesselId,engineId,enabled);}
  async setEngineThrottle(vesselId:string,engineId:string,throttle:number):Promise<void>{await this.bridge.setEngineThrottle(vesselId,engineId,throttle);}
  async setEngineDirection(vesselId:string,engineId:string,direction:readonly [number,number,number]):Promise<void>{await this.bridge.setEngineDirection(vesselId,engineId,direction);}
- propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as Promise<PropulsionSnapshot>;}
+ propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as unknown as Promise<PropulsionSnapshot>;}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
  async dispose():Promise<void>{await this.bridge.dispose();}

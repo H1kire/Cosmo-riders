@@ -127,6 +127,44 @@ export const SOLAR_SYSTEM_DATA = Object.freeze({
   ...Object.fromEntries(satellites.map(body => [body.id, body]))
 });
 
+/** Convert the single declarative J2000 catalogue into the Rust/WASM DTO contract.
+ * No orbital state is calculated here; Rust owns ephemeris initialization.
+ */
+export function createSolarSystemBodyCatalog(): readonly Record<string, unknown>[] {
+  return Object.values(SOLAR_SYSTEM_DATA)
+    .filter((entry): entry is Exclude<typeof entry, string> => typeof entry === 'object' && entry !== null && 'massKg' in entry)
+    .map(entry => {
+      const body = entry as unknown as Record<string, unknown>;
+      const elements = (body.elements ?? null) as Record<string, unknown> | null;
+      return {
+        id: body.id,
+        name: body.name,
+        massKg: body.massKg,
+        meanRadiusM: body.meanRadiusM,
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        parentId: body.parentId ?? null,
+        semiMajorAxisM: elements?.semiMajorAxisM ?? null,
+        orbitalElements: elements,
+        surfaceSeed: body.surfaceSeed ?? null,
+        surface: body.surface ?? null,
+        rotationPeriodSeconds: body.rotationPeriodSeconds ?? null,
+        axialTiltRad: body.axialTiltRad ?? null,
+        poleRightAscensionRad: body.poleRightAscensionRad ?? null,
+        poleDeclinationRad: body.poleDeclinationRad ?? null,
+        rotationDirection: body.rotationDirection ?? 1,
+        primeMeridianRad: body.primeMeridianRad ?? 0,
+        rotationEpochSeconds: body.rotationEpochSeconds ?? 0,
+        tidalLock: body.tidalLock ?? false,
+        equatorialRadiusM: body.equatorialRadiusM ?? null,
+        solarDaySeconds: body.solarDaySeconds ?? null,
+        atmosphereComposition: body.atmosphereComposition ?? [],
+        hasRings: body.hasRings ?? false,
+        orbitalReferenceFrame: body.orbitalReferenceFrame ?? 'ecliptic'
+      };
+    });
+}
+
 export function createSolarSystemWorld(options = {}) {
   const world = new PhysicsWorld(options);
   world.addBody(new CelestialBody(SOLAR_SYSTEM_DATA.sun));

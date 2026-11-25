@@ -108,7 +108,10 @@ impl PhysicsWorld{
   let center=bodies.iter().fold(Vec3::new(0.0,0.0,0.0),|sum,b|sum.add(b.position.scale(b.mass_kg/total_mass)));
   let drift=bodies.iter().fold(Vec3::new(0.0,0.0,0.0),|sum,b|sum.add(b.velocity.scale(b.mass_kg/total_mass)));
   for body in &mut bodies{body.position=body.position.sub(center);body.velocity=body.velocity.sub(drift);}
-  self.nbody=Some(NBodySystem::new(bodies)?);self.sync_n_body_states()?;Ok(())
+  for vessel in &mut self.vessels{vessel.p=vessel.p.sub(center);vessel.vel=vessel.vel.sub(drift);}
+  self.nbody=Some(NBodySystem::new(bodies)?);self.sync_n_body_states()?;
+  for vessel in &mut self.vessels{let pi=self.indices[&vessel.primary];vessel.r=vessel.p.sub(self.states[pi].p());vessel.v=vessel.vel.sub(self.states[pi].vel());}
+  Ok(())
  }
  pub fn n_body_enabled(&self)->bool{self.nbody.is_some()}
  fn sync_n_body_states(&mut self)->Result<(),String>{

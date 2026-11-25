@@ -8,7 +8,7 @@
 - Patched-conic primary switching uses direct parent/child SOI boundaries with hysteresis.
 - Propulsion utilities calculate pressure-adjusted thrust, mass flow, TWR, idealized burn duration and rocket-equation propellant consumption.
 - Maneuver utilities calculate coplanar Hohmann transfers and plane-change Δv.
-- The flight deck exposes planetary mapping, vessel telemetry, engine pulses and transfer estimates.
+- The flight deck exposes planetary mapping, vessel telemetry, continuous engine direction/throttle/duration controls and transfer estimates; the legacy impulse API remains separate.
 
 ## Browser map / rendering audit
 - The WebGL 3D solar-system view uses a logarithmic spatial display projection so the planetary system fits on screen; this is presentation only and does not alter SI physics.
@@ -35,7 +35,7 @@ Run `npm run check` with Node.js 20+. Tests cover SI constants, vector arithmeti
 - Keplerian planetary ephemerides neglect mutual perturbations and are not precision navigation data.
 - Moon elements are rounded and educational; use timestamped JPL Horizons/DE440 states for higher fidelity.
 - SOI switching uses hysteresis and checks direct parent/child bodies after each fixed step; high-speed crossings may still be missed.
-- Engine burns are currently idealized impulses: the model computes mass loss and burn duration but does not integrate continuous thrust and gravity during the burn.
+- The Rust PhysicsWorld now integrates continuous engine thrust, per-engine propellant depletion, changing vessel mass and gravity with RK4. Engine mount positions are metadata only because vessel attitude and torque are not modeled. Massive-body positions are sampled at the step boundary during vessel integration; the coupled planet/ship system is not yet a single high-order integrator.
 - Hohmann transfers assume circular coplanar orbits; launch windows, phase targeting and capture are not solved.
 - Planet rendering is procedural and currently has no high-resolution real surface textures, tiled/quadtree terrain, true heightmap displacement, atmospheric scattering, shadows, eclipses or body rotation. The current geometry LOD is a first visual tier, not the final terrain system.
 - The planetary ephemeris remains a compact Keplerian approximation, not a precision JPL ephemeris.
@@ -50,3 +50,14 @@ The older status statements above describe an earlier stage and are superseded f
 ## Current implementation update
 
 The earlier statements in this audit that rotation, atmosphere, cloud layers and analytic eclipse visibility are absent describe an earlier revision and are superseded on the current development branch. Planet rotation and procedural surfaces are active; atmosphere and clouds are separate shader passes; occultation is analytical. Satellite elements use combined two-body GM and a shared approximate parent-equatorial transform where configured. The model is still Keplerian and does not claim precision Horizons ephemerides, full shadow maps or N-body dynamics. See FOUNDATION_FIXES.md.
+
+
+## Continuous propulsion update (2026-11-25)
+
+- Each vessel can own multiple engines with independent thrust, ISP, throttle, enable state, inertial direction and propellant reserve.
+- Resultant thrust vectors and mass flows are summed; each engine stops at its own fuel-depletion event.
+- RK4 advances vessel position, velocity and mass under the combined point-mass gravity field and active thrust.
+- WASM/Worker/Bridge/Client expose engine installation, enable, throttle, direction and telemetry commands.
+- The active flight-control window now starts and stops a finite-duration prograde or retrograde burn and displays mass, thrust, mass flow, remaining propellant and acceleration.
+- Fractional render snapshots include engine thrust while predicting the remaining part of a frame.
+- The integration is not a full attitude/rigid-body propulsion model: engine mount offsets do not create torque, thrust direction is inertial and held fixed during a physics step, and body gravity is sampled at step-end positions.

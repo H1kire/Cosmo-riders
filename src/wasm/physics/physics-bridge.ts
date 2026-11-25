@@ -13,6 +13,7 @@ export class PhysicsBridge{
  setPaused(value:boolean):Promise<void>{return this.request({type:'set-paused',value});}
  addVessel(vessel:Record<string,unknown>):Promise<void>{return this.request({type:'add-vessel',vessel});}
  addEngine(vesselId:string,engine:Record<string,unknown>):Promise<void>{return this.request({type:'add-engine',vesselId,engine});}
+ startEngineBurn(vesselId:string,engineId:string,durationSeconds:number):Promise<void>{return this.request({type:'engine-burn',vesselId,engineId,durationSeconds});}
  setEngineEnabled(vesselId:string,engineId:string,enabled:boolean):Promise<void>{return this.request({type:'engine-enabled',vesselId,engineId,enabled});}
  setEngineThrottle(vesselId:string,engineId:string,throttle:number):Promise<void>{return this.request({type:'engine-throttle',vesselId,engineId,throttle});}
  setEngineDirection(vesselId:string,engineId:string,direction:readonly [number,number,number]):Promise<void>{return this.request({type:'engine-direction',vesselId,engineId,direction});}

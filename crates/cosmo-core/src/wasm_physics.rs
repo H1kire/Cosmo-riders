@@ -17,7 +17,8 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
  pub fn get_body_states_at(&mut self,t:f64)->Result<Float64Array,JsValue>{let a=self.wm()?.body_states_at(t).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
  pub fn get_gravitational_parameter(&self,id:String)->Result<f64,JsValue>{self.w()?.gravitational_parameter(&id).map_err(error)}
  pub fn get_circular_orbit_speed(&self,id:String,radius:f64)->Result<f64,JsValue>{self.w()?.circular_orbit_speed(&id,radius).map_err(error)}
- pub fn get_rotation_angles_at(&self,t:f64)->Result<Float64Array,JsValue>{let a=self.w()?.rotation_angles_at(t).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}\n pub fn get_orbit_path(&self,id:String,segments:u32)->Result<Float64Array,JsValue>{let a=self.w()?.orbit_path(&id,segments).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
+ pub fn get_rotation_angles_at(&self,t:f64)->Result<Float64Array,JsValue>{let a=self.w()?.rotation_angles_at(t).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
+ pub fn get_orbit_path(&self,id:String,segments:u32)->Result<Float64Array,JsValue>{let a=self.w()?.orbit_path(&id,segments).map_err(error)?;Ok(Float64Array::from(a.as_slice()))}
  pub fn get_body_states(&mut self)->Result<Float64Array,JsValue>{let t=self.w()?.simulation_time_seconds;self.get_body_states_at(t)}
  pub fn get_vessel_state(&self,id:String)->Result<String,JsValue>{serde_json::to_string(&self.w()?.vessel_state(&id).map_err(error)?).map_err(error)}
  pub fn get_vessel_state_at(&mut self,id:String,t:f64,states:Float64Array)->Result<String,JsValue>{let mut a=vec![0.0;states.length() as usize];states.copy_to(&mut a);let s=self.wm()?.vessel_state_at(&id,t,&a).map_err(error)?;serde_json::to_string(&s).map_err(error)}

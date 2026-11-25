@@ -156,7 +156,7 @@ pub fn integrate_engines(
         peak_acceleration = peak_acceleration.max(gravity(*position)?.add(force.scale(1.0 / *mass)).norm());
         if h <= 0.0 {
             for engine in engines.iter_mut() {
-                if engine.propellant_kg <= FUEL_EPSILON_KG { engine.propellant_kg = 0.0; }
+                if engine.propellant_kg <= FUEL_EPSILON_KG { engine.propellant_kg = 0.0; engine.enabled = false; if engine.burn_remaining_seconds.is_some() { engine.burn_remaining_seconds = Some(0.0); } }
             }
             continue;
         }

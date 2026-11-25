@@ -5,6 +5,8 @@ import init, { generate_surface_tile } from '../src/wasm/pkg/cosmo_core.js';
 import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
+import { createSolarSystemBodyCatalog } from '../src/physics/solar-system.ts';
+import { create_physics_world } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
@@ -73,4 +75,19 @@ test('geodesic mesh worker requests Rust-generated stitch indices with an explic
  assert.match(worker,/build_geodesic_stitch_indices\(task\.resolution,task\.coarseEdgeMask\)/);
  assert.match(pool,/coarseEdgeMask=0/);
  assert.match(pool,/radiusM\+':'\+coarseEdgeMask/);
+});
+
+test('Rust PhysicsWorld WASM owns the canonical 50-body J2000 catalogue',async()=>{
+ await initializeWasm();const catalog=createSolarSystemBodyCatalog();assert.equal(catalog.length,50);
+ const world=create_physics_world(JSON.stringify(catalog),JSON.stringify({fixedStepSeconds:60,maxSubSteps:2000}));
+ const snapshot=world.get_physics_snapshot() as {bodyIds:string[];bodyStates:Float64Array;simulationTimeSeconds:number};
+ assert.equal(snapshot.bodyIds.length,50);assert.equal(snapshot.simulationTimeSeconds,0);assert.equal(snapshot.bodyStates.length,300);
+ const day=world.get_body_states_at(86400);assert.equal(day.length,300);assert.ok(Array.from(day).every(Number.isFinite));
+ world.dispose_physics_world();assert.throws(()=>world.get_physics_snapshot(),/disposed/i);
+});
+test('dedicated physics worker delegates interpolation and simulation to its single WASM handle',async()=>{
+ const [worker,bridge,client,protocol,core]=await Promise.all([read('src/wasm/physics/physics-worker.ts'),read('src/wasm/physics/physics-bridge.ts'),read('src/wasm/physics/physics-world-client.ts'),read('src/wasm/physics/physics-protocol.ts'),read('crates/cosmo-core/src/physics_world.rs')]);
+ assert.match(worker,/create_physics_world\(/);assert.match(worker,/get_body_states_at\(renderTime\)/);assert.match(worker,/get_vessel_state_at\(id,renderTime,renderBodyStates\)/);
+ assert.match(worker,/apply_idealized_burn\(/);assert.match(bridge,/new Worker\(new URL\('\.\/physics-worker\.ts'/);assert.match(client,/result\.renderBodyStates/);
+ assert.match(protocol,/vesselPrimaryIds/);assert.match(core,/pub fn advance\(/);assert.match(core,/pub fn apply_idealized_burn\(/);
 });

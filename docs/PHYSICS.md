@@ -13,8 +13,10 @@ The declarative J2000 catalogue remains in src/physics/solar-system.ts. createSo
 - State-vector to orbital-elements conversion.
 - Elliptic elements to state conversion plus general conic conversion from semilatus rectum, eccentricity and true anomaly.
 - Celestial-body definitions retain physical, rotation, pole, tidal-lock, surface, atmosphere and reference-frame metadata.
-- J2000.0 hierarchical ephemerides preserve ecliptic and parent-equator conventions.
+- Default ephemeris mode uses hierarchical J2000.0 Keplerian elements and preserves ecliptic and parent-equator conventions. It is a compact approximate model, not DE440/Horizons output.
 - Fixed-step accumulator, time scale, pause/resume, max-substep guard and non-mutating arbitrary-time snapshots.
+- Optional dynamic mode is implemented inside the same PhysicsWorld and can be enabled with `PhysicsWorldClient.enableNBody()`. It converts the initialized hierarchy to barycentric coordinates, then integrates all catalogued massive bodies with pairwise Newtonian gravity and kick-drift-kick velocity Verlet. The Sun is dynamic rather than fixed at the origin.
+- In dynamic mode, spacecraft are massless test particles integrated in the combined gravity field of all catalogued bodies. SOI selection is retained for primary-body display and local orbital metadata; it does not reset absolute position or velocity.
 - Analytic sidereal spin angles are evaluated in Rust at the interpolated render time; tidal-locked orientation remains derived from the parent-relative orbital frame.
 - Vessel position, velocity, mass, relative state, primary body and primary-switch history.
 - SOI entry/exit hysteresis and patched-conic primary transitions.
@@ -23,6 +25,8 @@ The declarative J2000 catalogue remains in src/physics/solar-system.ts. createSo
 - Orbital paths are sampled in Rust and transferred to the renderer as Float64Array; Solar3DView no longer evaluates Kepler equations to construct orbit curves.
 
 The burn model remains an idealized impulse: it calculates mass loss and burn duration from the rocket equation, then applies the requested delta-v instantaneously. It does not numerically integrate thrust, changing mass and gravity continuously during the burn.
+
+The N-body integrator uses a fixed user-configured step and reports physical-radius collisions instead of softening singularities. It is a second-order symplectic method for smooth, well-separated motion; close encounters still require a smaller step. No adaptive close-encounter integrator, J2 model, relativistic correction or DE440 initial-state fit is implemented yet. No validated accuracy bound against JPL Horizons is claimed. N-body mode is opt-in and is not the default flight-deck mode.
 
 ## Application data flow
 

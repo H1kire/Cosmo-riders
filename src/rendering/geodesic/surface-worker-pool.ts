@@ -4,7 +4,7 @@ import type { GeodesicTileMesh } from './tile-mesh.ts';
 type WorkerValue=SurfaceTileData|GeodesicTileMesh;
 type TaskKind='tile'|'mesh';
 type FailureKind=TaskKind|'worker-startup'|'worker-runtime';
-type TaskPayload={kind:'tile';request:SurfaceTileRequest}|{kind:'mesh';tile:GeoTile;resolution:number;radiusM:number};
+type TaskPayload={kind:'tile';request:SurfaceTileRequest}|{kind:'mesh';tile:GeoTile;resolution:number;radiusM:number;coarseEdgeMask:number};
 export class SurfaceWorkerTaskError extends Error {
  readonly taskKind:FailureKind;readonly taskKey:string;readonly phase:'startup'|'runtime'|'task'|'disposed';
  constructor(taskKind:FailureKind,taskKey:string,phase:'startup'|'runtime'|'task'|'disposed',message:string){super(message);this.name='SurfaceWorkerTaskError';this.taskKind=taskKind;this.taskKey=taskKey;this.phase=phase;}
@@ -102,7 +102,7 @@ export class SurfaceTileWorkerPool {
   const promise=this.subscribe<T>(task,signal);this.pending.set(key,task);this.queue.push(task);this.pump();return promise;
  }
  request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{return this.enqueue<SurfaceTileData>(surfaceTileKey(request),{kind:'tile',request},priority,signal);}
- requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0,signal?:AbortSignal):Promise<GeodesicTileMesh>{return this.enqueue<GeodesicTileMesh>('mesh:'+tile.id.key+':'+resolution+':'+radiusM,{kind:'mesh',tile,resolution,radiusM},priority,signal);}
+ requestMesh(tile:GeoTile,resolution:number,radiusM:number,priority=0,signal?:AbortSignal,coarseEdgeMask=0):Promise<GeodesicTileMesh>{return this.enqueue<GeodesicTileMesh>('mesh:'+tile.id.key+':'+resolution+':'+radiusM+':'+coarseEdgeMask,{kind:'mesh',tile,resolution,radiusM,coarseEdgeMask},priority,signal);}
  reprioritize(key:string,priority:number):void{const task=this.pending.get(key);if(task){task.priority=Math.max(task.priority,priority);this.pump();}}
  dispose():void{
   if(this.disposed)return;this.disposed=true;const error=new DOMException('Surface worker task cancelled because its pool was disposed.','AbortError');

@@ -207,6 +207,18 @@ impl PhysicsWorld{
  let states=w.body_states_at(0.5).unwrap();let predicted=w.vessel_state_at("ship",0.5,&states).unwrap();
  assert!(predicted.velocity[1]>0.0);assert!(predicted.mass_kg<1010.0);assert_eq!(w.simulation_time_seconds,0.0);
 }
+#[test]fn physics_world_stops_a_commanded_burn_inside_a_larger_fixed_step(){
+ let mut w=PhysicsWorld::new(Options{fixed_step_seconds:10.0,max_sub_steps:10,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();
+ w.add_body(body()).unwrap();
+ w.add_vessel(VesselDefinition{id:"ship".into(),primary_body_id:"earth".into(),position:[7_000_000.0,0.0,0.0],velocity:[0.0,0.0,0.0],mass_kg:1000.0,engines:Vec::new()}).unwrap();
+ w.add_engine("ship",Engine{id:"main".into(),name:"Main".into(),max_thrust_n:1000.0,isp_seconds:300.0,direction:[0.0,1.0,0.0],mount_position_m:[0.0;3],throttle:1.0,enabled:false,propellant_kg:10.0,burn_remaining_seconds:None}).unwrap();
+ w.start_engine_burn("ship","main",2.0).unwrap();w.step().unwrap();
+ let state=w.propulsion_state("ship").unwrap();
+ assert_eq!(state["thrustN"].as_f64().unwrap(),0.0);
+ assert!(state["propellantRemainingKg"].as_f64().unwrap()>9.9);
+ assert!(w.vessel_state("ship").unwrap().mass_kg<1010.0);
+ assert_eq!(state["engines"][0]["burnRemainingSeconds"].as_f64(),Some(0.0));
+}
 #[test]fn engine_throttle_and_shutdown_are_respected(){
  let mut w=PhysicsWorld::new(Options{fixed_step_seconds:1.0,max_sub_steps:10,soi_enter_factor:0.9,soi_exit_factor:1.1}).unwrap();
  w.add_body(body()).unwrap();

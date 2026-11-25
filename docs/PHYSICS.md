@@ -15,10 +15,11 @@ The declarative J2000 catalogue remains in src/physics/solar-system.ts. createSo
 - Celestial-body definitions retain physical, rotation, pole, tidal-lock, surface, atmosphere and reference-frame metadata.
 - J2000.0 hierarchical ephemerides preserve ecliptic and parent-equator conventions.
 - Fixed-step accumulator, time scale, pause/resume, max-substep guard and non-mutating arbitrary-time snapshots.
+- Analytic sidereal spin angles are evaluated in Rust at the interpolated render time; tidal-locked orientation remains derived from the parent-relative orbital frame.
 - Vessel position, velocity, mass, relative state, primary body and primary-switch history.
 - SOI entry/exit hysteresis and patched-conic primary transitions.
 - Impulsive maneuvers, pressure-adjusted thrust, specific impulse, mass flow, rocket equation, propellant consumption and burn-duration estimates.
-- Hohmann transfer, plane-change delta-v and orbital-period calculations.
+- Hohmann transfer, plane-change delta-v, circular-orbit speed, thrust-to-weight ratio and orbital-period calculations.
 - Orbital paths are sampled in Rust and transferred to the renderer as Float64Array; Solar3DView no longer evaluates Kepler equations to construct orbit curves.
 
 The burn model remains an idealized impulse: it calculates mass loss and burn duration from the rocket equation, then applies the requested delta-v instantaneously. It does not numerically integrate thrust, changing mass and gravity continuously during the burn.
@@ -32,7 +33,7 @@ The burn model remains an idealized impulse: it calculates mass loss and burn du
 5. The client converts packed snapshots into lookup maps. Solar3DView consumes these maps, body metadata and Rust-generated orbit paths.
 6. Render-origin subtraction and conversion to GPU-friendly local coordinates remain presentation operations; physical coordinates remain SI f64.
 
-The geodesic surface Worker is separate and does not share the PhysicsWorld handle.
+The geodesic surface Worker is separate and does not share the PhysicsWorld handle. Both the 3D renderer and the 2D flight-deck map consume precomputed Rust orbit-path samples; neither reconstructs the orbital curve in TypeScript.
 
 ## Automated reference validation
 

@@ -13,7 +13,7 @@ The root flight-deck page loads lab/main.ts, which starts the browser applicatio
 
 Rust owns celestial ephemerides, the fixed-step accumulator, vessel state, patched-conic primary transitions, SOI hysteresis and idealized propulsion/maneuver calculations. It also precomputes orbital paths. The Worker returns packed Float64Array snapshots and orbit-path buffers.
 
-PhysicsWorldClient is a DTO/cache adapter. It creates CelestialBody presentation metadata, stores the Rust snapshots and makes body/orbit data available to the view. It does not independently propagate bodies or vessels. Solar3DView consumes those states and the Rust-generated orbit paths; render-origin subtraction and coordinate conversion are visual transforms only.
+PhysicsWorldClient is a DTO/cache adapter. It creates CelestialBody presentation metadata, stores the Rust snapshots and makes body/orbit data available to the view. It does not independently propagate bodies or vessels. Solar3DView consumes those states, Rust-computed spin angles and Rust-generated orbit paths; the 2D map uses the same orbit-path cache. Render-origin subtraction and coordinate conversion are visual transforms only.
 
 The old TypeScript PhysicsWorld remains in src/physics/ as a comparison reference for automated parity tests. It is not instantiated by the active flight deck. Do not reintroduce a second live simulation authority.
 

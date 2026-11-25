@@ -7,7 +7,8 @@
 - Rust PhysicsWorld owns the live J2000 celestial hierarchy, fixed-step clock, ephemerides, vessel state, SOI hysteresis and patched-conic primary switching.
 - Pressure-adjusted idealized propulsion, rocket-equation mass loss, impulsive maneuvers, Hohmann transfer, plane-change and orbital-period calculations are available through Rust/WASM.
 - One dedicated physics Worker owns one WASM PhysicsWorld handle; TypeScript is a client/cache adapter.
-- The live flight deck renders Rust body/vessel snapshots and Rust-generated orbit paths through the existing Solar3DView.
+- The live flight deck renders Rust body/vessel snapshots, interpolated Rust spin angles and Rust-generated orbit paths through the existing Solar3DView and 2D map.
+- Initial circular-orbit velocities, gravitational parameters and thrust-to-weight calculations in the flight deck are queried from Rust/WASM.
 - The legacy TypeScript PhysicsWorld remains only as a comparison reference for automated parity tests.
 - A separate geodesic Worker delegates surface channels, meshes and stitch-index generation to Rust.
 - GitHub Actions runs Rust tests, WASM build, generated-package verification, TypeScript tests/audits, Vite build, deployment audit and Pages deployment.

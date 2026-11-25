@@ -25,7 +25,7 @@ The physics worker is deliberately separate from surface generation. It does not
 - vessel relative state and patched-conics primary-body transitions;
 - SOI enter/exit hysteresis and primary transition history;
 - impulsive maneuvers and idealized rocket-equation burns;
-- analytic body spin metadata and tidal-lock period derivation.
+- analytic body spin metadata, Rust-computed spin phase at arbitrary render time and tidal-lock period derivation.
 
 The catalog remains declared once in `src/physics/solar-system.ts`. `createSolarSystemBodyCatalog()` maps it into the WASM DTO once during worker initialization. The Rust engine does not contain a second hand-maintained planet catalog.
 
@@ -48,11 +48,11 @@ The physics handle API is exported from `wasm_physics.rs`:
 
 Additional orbital computations are also available through the worker: state-to-elements, general conic elements-to-state conversion, orbital path sampling, orbital period, Hohmann transfer and plane-change delta-v.
 
-Snapshots contain stable body and vessel ID tables plus packed `Float64Array` buffers. Each body occupies six values (position xyz, velocity xyz); each vessel occupies thirteen values (position, velocity, relative position, relative velocity, mass). Primary-body IDs and transition metadata are carried alongside the packed numerical data.
+Snapshots contain stable body and vessel ID tables plus packed `Float64Array` buffers. Each body occupies six values (position xyz, velocity xyz); a parallel rotation-angle array carries analytic spin phase (NaN denotes no independent spin, such as a tidally locked body); each vessel occupies thirteen values (position, velocity, relative position, relative velocity, mass). Primary-body IDs and transition metadata are carried alongside the packed numerical data.
 
 ## Application integration
 
-`PhysicsWorldClient` is a DTO/cache adapter over `PhysicsBridge`; it does not integrate motion. The laboratory creates one client and one worker, loads the canonical catalog, adds its vessel, and renders committed/interpolated snapshots through the existing `Solar3DView` and WebGL2 path. The worker computes the interpolated body and vessel states for the frame. It also precomputes each body's 1024-segment orbit path; Solar3DView samples that transferred path at its adaptive visual segment count rather than running TypeScript Kepler conversion.
+`PhysicsWorldClient` is a DTO/cache adapter over `PhysicsBridge`; it does not integrate motion. The laboratory creates one client and one worker, loads the canonical catalog, adds its vessel, and renders committed/interpolated snapshots through the existing `Solar3DView` and WebGL2 path. The worker computes the interpolated body and vessel states for the frame. It also precomputes each body's 1024-segment orbit path; Solar3DView samples that transferred path at its adaptive visual segment count rather than running TypeScript Kepler conversion. It also precomputes each body's 1024-segment orbit path; Solar3DView samples that transferred path at its adaptive visual segment count rather than running TypeScript Kepler conversion.
 
 `CelestialBody` instances remain as presentation metadata (names, radii, pole parameters, surface data and orbit descriptors). They are not an active simulation world. The legacy TypeScript `PhysicsWorld` remains available as a comparison reference while parity coverage is expanded.
 
@@ -62,7 +62,10 @@ GitHub Actions builds the Rust/WASM package before the TypeScript quality audit.
 
 - all 50 catalog bodies at J2000.0, one day, 30 days and one year compared against the retained TypeScript reference using absolute and scale-relative tolerances;
 - non-mutating arbitrary-time snapshots;
-- elliptic, parabolic and hyperbolic conic conversion; universal-propagation reversibility;\n- vessel-step and powered-burn parity against the TypeScript reference;\n- powered-burn mass/fuel change, Hohmann transfer and orbital-period exports;\n- Rust-generated orbit path closure and Solar3DView integration;
+- elliptic, parabolic and hyperbolic conic conversion; universal-propagation reversibility;
+- vessel-step and powered-burn parity against the TypeScript reference;
+- powered-burn mass/fuel change, Hohmann transfer and orbital-period exports;
+- Rust-generated orbit path closure and Solar3DView integration;
 - SOI entry and preservation of absolute vessel position and velocity during primary-body switching;
 - fixed-step pause/time-scale and max-substep accumulator behavior.
 

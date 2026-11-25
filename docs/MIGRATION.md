@@ -1,23 +1,24 @@
 # Architecture migration status
 
-## Implemented in source
+## Implemented on test
 
 - Cargo workspace and pinned Rust toolchain.
-- Rust f64 vector/orbital mathematics and wasm-bindgen exports.
-- Rust icosahedron face/tile subdivision and triangular mesh generation.
-- Rust deterministic geodesic surface-page generation with the five existing channels.
-- Active geodesic worker initializes WASM and runs surface/mesh work off the main thread.
-- GitHub Actions installs Rust/WASM tooling, runs Rust tests, generates wasm-bindgen output, then runs the existing TypeScript quality audit and Vite deployment.
-- Static WASM package audit and bridge regression tests.
+- Rust f64 vector/orbital mathematics, universal-variable Kepler propagation, state conversion and general conic conversion.
+- Rust PhysicsWorld owns the live J2000 celestial hierarchy, fixed-step clock, ephemerides, vessel state, SOI hysteresis and patched-conic primary switching.
+- Pressure-adjusted idealized propulsion, rocket-equation mass loss, impulsive maneuvers, Hohmann transfer, plane-change and orbital-period calculations are available through Rust/WASM.
+- One dedicated physics Worker owns one WASM PhysicsWorld handle; TypeScript is a client/cache adapter.
+- The live flight deck renders Rust body/vessel snapshots and Rust-generated orbit paths through the existing Solar3DView.
+- The legacy TypeScript PhysicsWorld remains only as a comparison reference for automated parity tests.
+- A separate geodesic Worker delegates surface channels, meshes and stitch-index generation to Rust.
+- GitHub Actions runs Rust tests, WASM build, generated-package verification, TypeScript tests/audits, Vite build, deployment audit and Pages deployment.
 
 ## Still on the legacy implementation
 
-- Full PhysicsWorld/body catalog/vessel/patched-conic/propulsion execution remains TypeScript.
 - Solar3DView and all active scene passes remain WebGL2/GLSL.
 - HDR, bloom, atmosphere, clouds, rings, shadows and tone mapping have not yet been ported to WGSL/WebGPU.
 - Runtime WebGPU device-loss/reinitialization and WebGL2 fallback orchestration are not implemented.
-- Cargo.lock is committed from the resolved CI dependency graph and the Rust test step uses --locked.
+- The procedural surface renderer remains a hybrid: Rust creates surface data and geodesic meshes; WebGL2/GLSL performs rendering.
 
 ## Verification boundary
 
-The GitHub Actions workflow is the authority for Rust compilation/tests, wasm-pack output, TypeScript checks, Vite bundling and Pages deployment. A successful build does not prove visual parity, WebGPU runtime support, frame rate or browser stability on the user's GTX 1650.
+GitHub Actions is the authority for Rust compilation/tests, wasm-pack output, TypeScript checks, Vite bundling and Pages deployment. Automated parity tests cover the solar-system catalogue, spacecraft propagation/burns, SOI transitions, conic conversions, fixed-step clock and Rust-generated orbit paths. A successful build does not prove visual parity, frame rate or browser stability on the user's GTX 1650. No manual browser/game/WebGL test is performed by this workflow.

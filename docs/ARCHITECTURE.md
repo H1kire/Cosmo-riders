@@ -2,21 +2,38 @@
 
 ## Responsibility boundaries
 
-- **TypeScript** owns the browser application, DOM, menus, camera input, scene coordination, diagnostics and GPU command submission.
-- **Rust** owns numerical and data-parallel CPU work: orbital mathematics, geodesic topology/mesh generation and deterministic planetary surface pages.
-- **WebAssembly** exposes Rust functions to browser workers. Large page channels cross the boundary as typed arrays, not JSON.
-- **WebGPU/WGSL** is the target graphics backend. It must own GPU resources and render/compute pipelines; Rust does not issue WebGPU commands.
+- TypeScript owns browser application state, DOM, menus, camera input, scene coordination, diagnostics and GPU command submission. It also holds declarative solar-system and presentation metadata.
+- Rust owns simulation state and numerical physics, as well as geodesic topology, mesh construction and deterministic surface-page generation.
+- WebAssembly exposes Rust functionality to isolated browser Workers. Numeric snapshots and generated channels cross the boundary as typed arrays where practical.
+- WebGL2/GLSL remains the active renderer. WebGPU/WGSL is the target backend; it is not yet implemented as a complete replacement.
 
-## Current source integration
+## Current application data flow
 
-The existing geodesic Worker is now the WASM execution boundary. It initializes the generated wasm-bindgen module once, then handles mesh and surface-page tasks. The existing TypeScript worker pool still owns prioritization, deduplication, cancellation, bounded concurrency and transferable buffers. This keeps the current page cache and WebGL2 renderer contract intact while moving the actual geometry and surface calculations off the UI thread into Rust.
+The root flight-deck page loads lab/main.ts, which starts the browser application. lab/lab.ts creates a single PhysicsWorldClient; its PhysicsBridge owns one dedicated physics-worker.ts. The Worker initializes wasm-bindgen and creates exactly one Rust PhysicsWorld from the declarative catalogue.
 
-The active scene and the full physics world still use their existing TypeScript/WebGL2 implementations. They are intentionally retained until their replacements pass parity and integration checks. This is an incremental migration, not a claim that the entire renderer or simulation has already moved.
+Rust owns celestial ephemerides, the fixed-step accumulator, vessel state, patched-conic primary transitions, SOI hysteresis and idealized propulsion/maneuver calculations. It also precomputes orbital paths. The Worker returns packed Float64Array snapshots and orbit-path buffers.
+
+PhysicsWorldClient is a DTO/cache adapter. It creates CelestialBody presentation metadata, stores the Rust snapshots and makes body/orbit data available to the view. It does not independently propagate bodies or vessels. Solar3DView consumes those states and the Rust-generated orbit paths; render-origin subtraction and coordinate conversion are visual transforms only.
+
+The old TypeScript PhysicsWorld remains in src/physics/ as a comparison reference for automated parity tests. It is not instantiated by the active flight deck. Do not reintroduce a second live simulation authority.
+
+## Worker boundaries
+
+- src/wasm/physics/physics-worker.ts: one PhysicsWorld handle; serialized commands, snapshots, orbital computations and vessel operations.
+- src/rendering/geodesic/surface-tile-worker.ts: WASM surface channels, geodesic meshes and stitch indices.
+- The existing surface worker pool retains its bounded scheduling, priorities, deduplication, cancellation and transferable-buffer behavior.
+
+The physics Worker uses one worker thread and does not require SharedArrayBuffer, atomics or WASM threads.
 
 ## Data conventions
 
 - Physics uses SI units and f64 internally.
-- Render positions remain camera-relative before conversion to GPU f32.
-- Surface tile height output is f32 in **metres**, after multiplying the dimensionless terrain fraction by the body's mean radius.
-- Surface pages preserve Albedo RGBA8, Normal RGB8, Height f32 in CPU memory, Roughness R8 and Material ID R8 channels.
-- A worker transfers owned ArrayBuffers to the renderer; no borrowed view into WASM linear memory is retained after a call.
+- Physical coordinates are never scaled to fit the camera.
+- Render positions are made camera-relative before conversion to GPU f32.
+- Surface tile height is f32 in metres.
+- Surface pages preserve Albedo RGBA8, Normal RGB8, Height f32, Roughness R8 and Material ID R8 channels.
+- Worker-owned buffers are transferred rather than retaining borrowed views into WASM linear memory.
+
+## Remaining migration
+
+The complete 3D renderer still uses WebGL2: planet materials, atmosphere, clouds, rings, lighting/shadows, HDR, bloom and tone mapping. A future WebGPU backend must preserve the one-scene camera, global/local projection, tracking, render origin and all existing visual passes, with WebGL2 retained as fallback until parity is demonstrated.

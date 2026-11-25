@@ -42,8 +42,8 @@ export class SurfaceTileWorkerPool {
    worker.onerror=event=>{
     event.preventDefault?.();const task=slot.task;
     if(task){this.workerRuntimeErrorsValue++;this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker runtime failure: '+(event.message||'unknown worker error')));}
-    else if(!slot.ready){this.workerStartupErrorsValue++;this.startupError=new SurfaceWorkerTaskError('worker-startup','worker:'+slot.id,'startup','Surface worker startup failed: '+(event.message||'worker module could not be initialized'));}
-    else{this.workerRuntimeErrorsValue++;this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker failed outside an active task: '+(event.message||'unknown worker error'));}
+    else if(!slot.ready){this.workerStartupErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-startup','worker:'+slot.id,'startup','Surface worker startup failed: '+(event.message||'worker module could not be initialized'));}
+    else{this.workerRuntimeErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker failed outside an active task: '+(event.message||'unknown worker error'));}
     this.removeSlot(slot);
    };
    worker.onmessageerror=()=>{
@@ -58,8 +58,8 @@ export class SurfaceTileWorkerPool {
  }
  private removeSlot(slot:WorkerSlot):void{slot.worker.terminate();this.slots=this.slots.filter(item=>item!==slot);if(this.slots.length===0)this.rejectQueuedWithoutWorkers();else this.pump();}
  private rejectQueuedWithoutWorkers():void{
-  if(this.disposed||this.slots.length>0)return;const message=this.startupError?.message??'No healthy surface workers remain.';
-  for(const task of this.queue.splice(0)){if(this.pending.get(task.key)===task)this.pending.delete(task.key);this.rejectSubscribers(task,new SurfaceWorkerTaskError('worker-startup',task.key,'startup',message));}
+  if(this.disposed||this.slots.length>0)return;const failure=this.startupError instanceof SurfaceWorkerTaskError?this.startupError:null,message=this.startupError?.message??'No healthy surface workers remain.';
+  for(const task of this.queue.splice(0)){if(this.pending.get(task.key)===task)this.pending.delete(task.key);this.rejectSubscribers(task,new SurfaceWorkerTaskError(failure?.taskKind??'worker-startup',task.key,failure?.phase??'startup',message));}
  }
  private rejectSubscribers(task:Task,error:Error):void{for(const s of task.subscribers){if(s.abort)s.signal?.removeEventListener('abort',s.abort);s.reject(error);}task.subscribers.clear();}
  private resolveSubscribers(task:Task,value:WorkerValue):void{for(const s of task.subscribers){if(s.abort)s.signal?.removeEventListener('abort',s.abort);s.resolve(value);}task.subscribers.clear();}

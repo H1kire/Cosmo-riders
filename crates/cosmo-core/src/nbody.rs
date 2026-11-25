@@ -25,10 +25,14 @@ pub struct AdaptiveAdvanceStats {
 }
 
 fn normalized_step_error(coarse: &NBodySystem, fine: &NBodySystem, relative_tolerance: f64) -> f64 {
+    let length_scale = coarse.bodies.iter().chain(fine.bodies.iter())
+        .map(|body| body.position.norm()).fold(1.0_f64, f64::max);
+    let speed_scale = coarse.bodies.iter().chain(fine.bodies.iter())
+        .map(|body| body.velocity.norm()).fold(1.0_f64, f64::max);
+    let position_scale = 1.0e-3 + relative_tolerance * length_scale;
+    let velocity_scale = 1.0e-9 + relative_tolerance * speed_scale;
     let mut maximum: f64 = 0.0;
     for (a, b) in coarse.bodies.iter().zip(fine.bodies.iter()) {
-        let position_scale = 1.0e-3 + relative_tolerance * a.position.norm().max(b.position.norm()).max(1.0);
-        let velocity_scale = 1.0e-9 + relative_tolerance * a.velocity.norm().max(b.velocity.norm()).max(1.0);
         let position_error = b.position.sub(a.position).norm() / position_scale;
         let velocity_error = b.velocity.sub(a.velocity).norm() / velocity_scale;
         maximum = maximum.max(position_error).max(velocity_error);
@@ -209,7 +213,7 @@ impl NBodySystem {
             }
 
             let error = normalized_step_error(&coarse, &fine, relative_tolerance);
-            if error <= 1.0 || h.abs() <= min_step_seconds * (1.0 + 1.0e-12) {
+            if error <= 1.0 {
                 accepted = fine;
                 remaining = (remaining - h).abs().max(0.0) * direction;
                 stats.accepted_steps += 1;
@@ -230,6 +234,9 @@ impl NBodySystem {
                 h = direction * (h.abs() * factor).min(max_step_seconds);
             } else {
                 stats.rejected_steps += 1;
+                if h.abs() <= min_step_seconds * (1.0 + 1.0e-12) {
+                    return Err("Adaptive N-body local error remains above tolerance at the minimum step.".into());
+                }
                 let factor = (0.9 * (1.0 / error).powf(1.0 / 3.0)).clamp(0.1, 0.5);
                 h = direction * (h.abs() * factor).max(min_step_seconds);
             }

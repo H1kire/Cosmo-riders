@@ -24,7 +24,10 @@ The physics worker is deliberately separate from surface generation. It does not
 - arbitrary-time body snapshots without mutating committed simulation time;
 - vessel relative state and patched-conics primary-body transitions;
 - SOI enter/exit hysteresis and primary transition history;
-- impulsive maneuvers and idealized rocket-equation burns;
+- impulsive maneuvers and idealized rocket-equation burns as separate legacy/planning operations;
+- multiple per-vessel engines with independent propellant, throttle, enable state, ISP and inertial thrust direction;
+- RK4 continuous-thrust integration of vessel position, velocity and changing mass, including gravity and engine-specific fuel-depletion events;
+- current propulsion telemetry (resultant thrust, mass flow, acceleration and remaining propellant);
 - analytic body spin metadata, Rust-computed spin phase at arbitrary render time and tidal-lock period derivation;
 - optional barycentric N-body mode using pairwise Newtonian gravity and kick-drift-kick velocity Verlet; massless vessels are integrated as test particles in the combined field, while SOI remains presentation/primary metadata.
 
@@ -46,6 +49,7 @@ The physics handle API is exported from `wasm_physics.rs`:
 - `advance_simulation`, `step_simulation`;
 - `get_body_states`, `get_body_states_at`, `get_vessel_state`, `get_vessel_state_at`;
 - `get_sphere_of_influence`, `apply_maneuver`, `apply_idealized_burn`;
+- `add_engine`, `set_engine_enabled`, `set_engine_throttle`, `set_engine_direction`, `get_propulsion_state`;
 - `get_physics_snapshot`, `get_orbit_path`, `dispose_physics_world`.
 
 Additional orbital computations are also available through the worker: state-to-elements, general conic elements-to-state conversion, orbital path sampling, orbital period, Hohmann transfer and plane-change delta-v. `PhysicsBridge.enableNBody()` and `PhysicsWorldClient.enableNBody()` select the dynamic mode in the same Rust-owned PhysicsWorld; it is not a second world.
@@ -72,4 +76,4 @@ GitHub Actions builds the Rust/WASM package before the TypeScript quality audit.
 - fixed-step pause/time-scale and max-substep accumulator behavior;
 - N-body pair-force momentum conservation, bounded one-orbit energy error, reversibility, collision rejection, barycentric Sun motion and vessel-relative-state continuity across the frame transform.
 
-The N-body mode uses a fixed configured step; adaptive close-encounter integration, DE440/Horizons initial states, continuous-thrust integration and dynamically sampled N-body orbit trails are not implemented yet. These are automated tests, not a real browser/WebGL visual test. Runtime behavior on the user's GPU and visual orientation/seam quality still require a real application run.
+The N-body mode uses a fixed configured step; adaptive close-encounter integration, DE440/Horizons initial states, J2/relativistic corrections and dynamically sampled N-body orbit trails are not implemented yet. Continuous-thrust spacecraft use RK4 against the massive-body snapshot at the end of the current step; planetary N-body integration remains velocity-Verlet. Engine mount positions do not yet drive attitude or torque. These are automated tests, not a real browser/WebGL visual test. Runtime behavior on the user's GPU and visual orientation/seam quality still require a real application run.

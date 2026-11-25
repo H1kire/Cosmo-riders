@@ -99,6 +99,20 @@ pub fn state_to_elements(r:Vec3,v:Vec3,mu:f64)->Result<OrbitalElements,String>{
     Ok(OrbitalElements{semi_major_axis:a,eccentricity:e,inclination,longitude_ascending_node:node,argument_of_periapsis:peri,true_anomaly:nu,specific_energy:energy,specific_angular_momentum:hm})
 }
 
+/// Convert semilatus rectum and true anomaly to an inertial state for any conic.
+pub fn conic_elements_to_state(p:f64,e:f64,i:f64,node:f64,peri:f64,nu:f64,mu:f64)->Result<(Vec3,Vec3),String>{
+ if !p.is_finite()||p<=0.0||!mu.is_finite()||mu<=0.0{return Err("Semilatus rectum and mu must be positive.".into())}
+ if !e.is_finite()||e<0.0{return Err("Eccentricity must be finite and non-negative.".into())}
+ if ![i,node,peri,nu].iter().all(|x|x.is_finite()){return Err("Orbital angles must be finite.".into())}
+ let denominator=1.0+e*nu.cos();
+ if !denominator.is_finite()||denominator<=1e-14{return Err("True anomaly is outside the physical branch of this conic.".into())}
+ let radius=p/denominator;if !radius.is_finite()||radius<=0.0{return Err("Conic radius is not finite and positive.".into())}
+ let x=radius*nu.cos();let y=radius*nu.sin();let speed=(mu/p).sqrt();let vx=-speed*nu.sin();let vy=speed*(e+nu.cos());
+ let(c_o,s_o)=(node.cos(),node.sin());let(c_i,s_i)=(i.cos(),i.sin());let(c_w,s_w)=(peri.cos(),peri.sin());
+ let m11=c_o*c_w-s_o*s_w*c_i;let m12=-c_o*s_w-s_o*c_w*c_i;let m21=s_o*c_w+c_o*s_w*c_i;let m22=-s_o*s_w+c_o*c_w*c_i;let m31=s_w*s_i;let m32=c_w*s_i;
+ Ok((Vec3::new(m11*x+m12*y,m21*x+m22*y,m31*x+m32*y),Vec3::new(m11*vx+m12*vy,m21*vx+m22*vy,m31*vx+m32*vy)))
+}
+
 pub fn orbital_elements_to_state(a:f64,e:f64,i:f64,node:f64,peri:f64,mean:f64,mu:f64)->Result<(Vec3,Vec3),String>{
     if !a.is_finite()||a<=0.0||!mu.is_finite()||mu<=0.0{return Err("Semi-major axis and mu must be positive.".into());}
     if !e.is_finite()||!(0.0..1.0).contains(&e){return Err("Elliptic eccentricity must be in [0, 1).".into());}
@@ -121,6 +135,15 @@ pub fn orbital_elements_to_state(a:f64,e:f64,i:f64,node:f64,peri:f64,mean:f64,mu
 #[cfg(test)]
 mod tests {
  use super::*;
+ #[test]
+ fn conic_conversion_supports_all_three_trajectory_types(){
+  let mu=3.986004418e14;let p=7.0e6;
+  for e in [0.4,1.0,1.4]{
+   let(r,v)=conic_elements_to_state(p,e,0.3,0.4,0.5,0.6,mu).unwrap();
+   let elements=state_to_elements(r,v,mu).unwrap();
+   assert!((elements.eccentricity-e).abs()<1e-10);
+  }
+ }
  #[test]
  fn circular_kepler_orbit_closes_after_one_period() {
   let mu:f64=3.986004418e14;let radius:f64=7_000_000.0;let speed=(mu/radius).sqrt();

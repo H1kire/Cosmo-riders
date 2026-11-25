@@ -19,6 +19,7 @@ export class PhysicsBridge{
  sphereOfInfluence(bodyId:string):Promise<number|null>{return this.request({type:'sphere-of-influence',bodyId});}
  rotationAngleAt(bodyId:string,timeSeconds:number):Promise<number>{return this.request({type:'rotation-angle',bodyId,timeSeconds});}
  stateToOrbitalElements(position:readonly [number,number,number],velocity:readonly [number,number,number],mu:number):Promise<Float64Array>{return this.request({type:'state-to-elements',position,velocity,mu});}
+ conicElementsToState(semilatusRectumM:number,eccentricity:number,inclination:number,longitudeAscendingNode:number,argumentOfPeriapsis:number,trueAnomaly:number,mu:number):Promise<Float64Array>{return this.request({type:'conic-elements-to-state',semilatusRectumM,eccentricity,inclination,longitudeAscendingNode,argumentOfPeriapsis,trueAnomaly,mu});}
  hohmannTransfer(primaryMu:number,initialRadiusM:number,targetRadiusM:number):Promise<Record<string,number>>{return this.request({type:'hohmann-transfer',primaryMu,initialRadiusM,targetRadiusM});}
  planeChangeDeltaV(speedMS:number,angleRadians:number):Promise<number>{return this.request({type:'plane-change',speedMS,angleRadians});}
  orbitalPeriod(semiMajorAxisM:number,mu:number):Promise<number>{return this.request({type:'orbital-period',semiMajorAxisM,mu});}

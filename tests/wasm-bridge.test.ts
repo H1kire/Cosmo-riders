@@ -6,7 +6,7 @@ import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
-import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler } from '../src/wasm/pkg/cosmo_core.js';
+import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
@@ -172,4 +172,24 @@ test('Solar3DView consumes Rust worker snapshots in the live application',async(
  assert.match(view,/render\(world,states,timeSeconds/);
  assert.match(view,/const bodies=\[\.\.\.world\.bodies\.values\(\)\]/);
  assert.match(view,/const bodyState=states\.get\(body\.id\)/);
+});
+
+test('Rust/WASM conic element conversion supports elliptic parabolic and hyperbolic states',async()=>{
+ await initializeWasm();const mu=3.986004418e14,p=7_000_000;
+ for(const eccentricity of [.4,1,1.4]){
+  const state=conic_elements_to_state(p,eccentricity,.3,.4,.5,.6,mu);
+  assert.equal(state.length,6);assert.ok(Array.from(state).every(Number.isFinite));
+  const elements=state_to_orbital_elements(new Float64Array(state.slice(0,3)),new Float64Array(state.slice(3,6)),mu);
+  assert.ok(Math.abs(elements[1]-eccentricity)<1e-10,'eccentricity round-trip '+eccentricity);
+ }
+});
+test('Rust PhysicsWorld accumulator preserves fractional time across pause and rejects oversized backlogs atomically',async()=>{
+ await initializeWasm();
+ const world=create_physics_world(JSON.stringify([{id:'sun',name:'Sun',massKg:1.98847e30,meanRadiusM:696340000,position:[0,0,0],velocity:[0,0,0]}]),JSON.stringify({fixedStepSeconds:60,maxSubSteps:10}));
+ world.set_time_scale(2);assert.equal(world.advance_simulation(45),1);
+ let s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,60);assert.equal(s.accumulatorSeconds,30);
+ world.set_paused(true);assert.equal(world.advance_simulation(100),0);s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,60);assert.equal(s.accumulatorSeconds,30);
+ world.set_paused(false);assert.equal(world.advance_simulation(15),1);s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,120);assert.equal(s.accumulatorSeconds,0);
+ assert.throws(()=>world.advance_simulation(60*11),/maxSubSteps/i);s=world.get_physics_snapshot();assert.equal(s.simulationTimeSeconds,120);assert.equal(s.accumulatorSeconds,0);
+ world.dispose_physics_world();
 });

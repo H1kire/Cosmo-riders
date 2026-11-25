@@ -25,6 +25,12 @@ pub fn state_to_orbital_elements(position:Float64Array,velocity:Float64Array,mu:
 }
 
 #[wasm_bindgen]
+pub fn conic_elements_to_state(semilatus_rectum:f64,eccentricity:f64,inclination:f64,longitude_ascending_node:f64,argument_of_periapsis:f64,true_anomaly:f64,mu:f64)->Result<Float64Array,JsValue>{
+ let(r,v)=physics::conic_elements_to_state(semilatus_rectum,eccentricity,inclination,longitude_ascending_node,argument_of_periapsis,true_anomaly,mu).map_err(js_error)?;
+ Ok(Float64Array::from(&[r.x,r.y,r.z,v.x,v.y,v.z][..]))
+}
+
+#[wasm_bindgen]
 pub fn orbital_elements_to_state(semi_major_axis:f64,eccentricity:f64,inclination:f64,longitude_ascending_node:f64,argument_of_periapsis:f64,mean_anomaly:f64,mu:f64)->Result<Float64Array,JsValue>{
  let(r,v)=physics::orbital_elements_to_state(semi_major_axis,eccentricity,inclination,longitude_ascending_node,argument_of_periapsis,mean_anomaly,mu).map_err(js_error)?;
  Ok(Float64Array::from(&[r.x,r.y,r.z,v.x,v.y,v.z][..]))

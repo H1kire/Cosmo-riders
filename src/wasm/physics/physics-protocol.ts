@@ -8,6 +8,7 @@ export type PhysicsCommand=
  |{type:'vessel-state-at';id:string;timeSeconds:number;bodyStates:Float64Array}
  |{type:'sphere-of-influence';bodyId:string}|{type:'rotation-angle';bodyId:string;timeSeconds:number}
  |{type:'state-to-elements';position:readonly [number,number,number];velocity:readonly [number,number,number];mu:number}
+ |{type:'conic-elements-to-state';semilatusRectumM:number;eccentricity:number;inclination:number;longitudeAscendingNode:number;argumentOfPeriapsis:number;trueAnomaly:number;mu:number}
  |{type:'hohmann-transfer';primaryMu:number;initialRadiusM:number;targetRadiusM:number}
  |{type:'plane-change';speedMS:number;angleRadians:number}|{type:'orbital-period';semiMajorAxisM:number;mu:number}|{type:'dispose'};
 export interface PhysicsRequest{readonly id:number;readonly command:PhysicsCommand}

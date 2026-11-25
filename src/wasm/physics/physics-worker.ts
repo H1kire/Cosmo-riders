@@ -22,6 +22,7 @@ scope.onmessage=async(event:MessageEvent<PhysicsRequest>)=>{
  case'add-engine':live().add_engine(command.vesselId,JSON.stringify(command.engine));result=true;break;
  case'engine-enabled':live().set_engine_enabled(command.vesselId,command.engineId,command.enabled);result=true;break;
  case'engine-throttle':live().set_engine_throttle(command.vesselId,command.engineId,command.throttle);result=true;break;
+ case'engine-direction':live().set_engine_direction(command.vesselId,command.engineId,new Float64Array(command.direction));result=true;break;
  case'propulsion-state':result=JSON.parse(live().get_propulsion_state(command.vesselId));break;
  case'maneuver':live().apply_maneuver(command.vesselId,new Float64Array(command.direction),command.deltaVMS);result=true;break;
  case'burn':result=JSON.parse(live().apply_idealized_burn(command.vesselId,new Float64Array(command.direction),command.deltaVMS,command.vacuumThrustN,command.seaLevelThrustN,command.ispSeconds,command.ambientPressurePa,command.referencePressurePa,command.dryMassKg));break;

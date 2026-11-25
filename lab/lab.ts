@@ -546,7 +546,7 @@ async function startContinuousBurn(){
   try{
     await world.setEngineDirection('test-vessel','main-r200',[direction.x,direction.y,direction.z]);
     await world.setEngineThrottle('test-vessel','main-r200',throttle);
-    await world.setEngineEnabled('test-vessel','main-r200',true);
+    await world.startEngineBurn('test-vessel','main-r200',duration);
     burnStopTimeSeconds=world.simulationTimeSeconds+duration;
     $('engine-start').disabled=true;$('engine-stop').disabled=false;
     $('burn-status').textContent='Тяга включена · '+(engineDirectionSign<0?'ретроградно':'проградно')+' · '+fmt(duration,1)+' с';

@@ -468,12 +468,12 @@ mod tests {
     #[test]
     fn adaptive_test_particle_reduces_steps_in_the_dynamic_gravity_field() {
         let start = circular_pair();
-        let end = start.advanced_adaptive(5.0e6, 5.0e6, 1.0e-8, 1.0, 10_000).unwrap().0;
+        let end = start.advanced_adaptive(600.0, 60.0, 1.0e-10, 1.0e-4, 10_000).unwrap().0;
         let earth = start.bodies().iter().find(|body| body.id == "earth").unwrap();
         let position = earth.position.add(Vec3::new(7.0e6, 0.0, 0.0));
         let velocity = earth.velocity.add(Vec3::new(0.0, 7.5e3, 0.0));
         let (p, v, stats) = NBodySystem::integrate_test_particle_adaptive(
-            &start, &end, position, velocity, 5.0e6, 5.0e6, 1.0e-8, 1.0, 10_000
+            &start, &end, position, velocity, 600.0, 600.0, 1.0e-10, 1.0e-3, 10_000
         ).unwrap();
         assert!(stats.rejected_steps > 0);
         assert!(stats.accepted_steps > 1);

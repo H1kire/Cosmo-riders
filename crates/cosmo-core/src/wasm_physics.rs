@@ -12,6 +12,11 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
  pub fn enable_n_body(&mut self)->Result<(),JsValue>{self.wm()?.enable_n_body().map_err(error)}
  pub fn is_n_body_enabled(&self)->bool{self.world.as_ref().map(|w|w.n_body_enabled()).unwrap_or(false)}
  pub fn add_vessel(&mut self,json:String)->Result<(),JsValue>{let v:VesselDefinition=serde_json::from_str(&json).map_err(error)?;self.wm()?.add_vessel(v).map_err(error)}
+ pub fn add_engine(&mut self,vessel_id:String,json:String)->Result<(),JsValue>{let mut engine:crate::propulsion::Engine=serde_json::from_str(&json).map_err(error)?;engine.validate().map_err(error)?;self.wm()?.add_engine(&vessel_id,engine).map_err(error)}
+ pub fn set_engine_enabled(&mut self,vessel_id:String,engine_id:String,enabled:bool)->Result<(),JsValue>{self.wm()?.set_engine_enabled(&vessel_id,&engine_id,enabled).map_err(error)}
+ pub fn set_engine_throttle(&mut self,vessel_id:String,engine_id:String,throttle:f64)->Result<(),JsValue>{self.wm()?.set_engine_throttle(&vessel_id,&engine_id,throttle).map_err(error)}
+ pub fn get_propulsion_state(&self,vessel_id:String)->Result<String,JsValue>{serde_json::to_string(&self.w()?.propulsion_state(&vessel_id).map_err(error)?).map_err(error)}
+
  pub fn set_time_scale(&mut self,x:f64)->Result<(),JsValue>{self.wm()?.set_time_scale(x).map_err(error)}
  pub fn set_paused(&mut self,x:bool){if let Some(w)=self.world.as_mut(){w.set_paused(x)}}
  pub fn advance_simulation(&mut self,dt:f64)->Result<u32,JsValue>{self.wm()?.advance(dt).map_err(error)}

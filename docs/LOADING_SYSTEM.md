@@ -8,7 +8,7 @@ Solar3DView now exposes an initialization promise. Its base WebGL programs and U
 
 - Geodesic renderer creation is deferred until after the first scene frame.
 - GPU texture arrays are allocated one array per frame.
-- Root mesh construction and procedural surface-page generation use the shared bounded module Worker pool.
+- Geodesic mesh and procedural surface-page generation are moved off the main thread into the single bounded module Worker pool.
 - Worker results use Transferable Objects.
 - GPU mesh-buffer creation and texture-page uploads share a bounded per-frame operation budget.
 - The UV renderer remains visible while geodesic preparation runs and remains available after a failure.

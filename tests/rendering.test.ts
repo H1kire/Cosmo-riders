@@ -182,7 +182,7 @@ test('planet surfaces are generated directly from continuous spherical shader fi
  assert.ok(source.includes('vSurfaceDirection=n'));
  assert.ok(source.includes('normalize(vNormal)'));
  assert.ok(source.includes('domainWarp3(n*2.15'));
- assert.ok(source.includes('float land=smoothstep(0.505,0.535,continentField)'));
+ assert.ok(source.includes('float land=smoothstep(0.486,0.516,continentField)'));
  assert.ok(source.includes('float softBelts=smoothstep(-0.48,0.58,belts)'));
  assert.ok(!source.includes('samplerCube'));
  assert.ok(!source.includes('uGeneratedAlbedo'));

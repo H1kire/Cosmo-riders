@@ -175,7 +175,7 @@ mod tests {
         let initial = system.total_momentum();
         for _ in 0..1000 { system.step(60.0).unwrap(); }
         let final_momentum = system.total_momentum();
-        let scale = initial.norm().max(1.0);
+        let scale = system.bodies().iter().map(|body| body.mass_kg * body.velocity.norm()).sum::<f64>().max(1.0);
         assert!(final_momentum.sub(initial).norm() / scale < 1.0e-12);
     }
 

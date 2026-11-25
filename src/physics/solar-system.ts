@@ -5,7 +5,7 @@ import { orbitalPeriod } from './orbital-elements.ts';
 
 const deg = (value: number) => value * Math.PI / 180;
 // Zonal J2 coefficients and reference radii: MathWorks Aerospace Blockset planetary data table.
-// https://www.mathworks.com/help/aeroblks/spacecraftdynamics.html#mw_4f4e1a6e-9f3b-4f91-8f4d-8fce5c9d4f6e
+// https://www.mathworks.com/help/aeroblks/spacecraftdynamics.html
 const J2_COEFFICIENTS:Record<string,number> = {
   sun:1.0e-7,mercury:50.3e-6,venus:4.458e-6,earth:1082.62617385222e-6,
   moon:202.7e-6,mars:1960.45e-6,jupiter:14736e-6,saturn:16298e-6,

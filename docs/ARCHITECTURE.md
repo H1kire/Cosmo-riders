@@ -2,38 +2,46 @@
 
 ## Responsibility boundaries
 
-- TypeScript owns browser application state, DOM, menus, camera input, scene coordination, diagnostics and GPU command submission. It also holds declarative solar-system and presentation metadata.
-- Rust owns simulation state and numerical physics, as well as geodesic topology, mesh construction and deterministic surface-page generation.
-- WebAssembly exposes Rust functionality to isolated browser Workers. Numeric snapshots and generated channels cross the boundary as typed arrays where practical.
-- WebGL2/GLSL remains the active renderer. WebGPU/WGSL is the target backend; it is not yet implemented as a complete replacement.
+- TypeScript owns browser application state, DOM, camera input, scene coordination, diagnostics and GPU command submission.
+- Rust owns the live simulation state, numerical physics, geodesic topology, mesh construction and deterministic surface-page generation.
+- WebAssembly exposes Rust functionality to isolated Workers. Physics snapshots and generated channels cross the boundary as typed arrays.
+- WebGL2/GLSL is the only active renderer. A complete WebGPU/WGSL backend and backend selector are not implemented.
 
-## Current application data flow
+## Simulation data flow
 
-The root flight-deck page loads lab/main.ts, which starts the browser application. lab/lab.ts creates a single PhysicsWorldClient; its PhysicsBridge owns one dedicated physics-worker.ts. The Worker initializes wasm-bindgen and creates exactly one Rust PhysicsWorld from the declarative catalogue.
+The flight deck creates one `PhysicsWorldClient`. Its `PhysicsBridge` owns one physics Worker, which initializes one Rust `PhysicsWorld` from the catalogue in `src/physics/solar-system.ts`. Rust is the sole live authority for body and vessel state; the client converts snapshots into presentation DTOs and caches Rust-generated orbit paths. The 2D map and `Solar3DView` consume those shared snapshots. Render-origin subtraction, scale changes and coordinate conversion are presentation transforms and do not modify SI state.
 
-Rust owns the default hierarchical Kepler ephemeris mode and the optional barycentric N-body mode inside the same PhysicsWorld. Dynamic mode uses pairwise Newtonian gravity with velocity-Verlet integration; spacecraft are massless test particles in the same field. SOI hysteresis changes primary-body metadata without changing absolute spacecraft state. Idealized impulsive propulsion remains the only burn execution model. It also precomputes orbital paths. The Worker returns packed Float64Array snapshots and orbit-path buffers.
+The default mode is hierarchical approximate J2000 Keplerian propagation. The same Rust world can opt into barycentric N-body mode through the Worker/client API. N-body initialization preserves vessel-relative position and velocity, but there is no disable/switch-back operation and no user-facing mode selector. N-body starts from the approximate catalogue states; it is not a scientific ephemeris. Its body integrator uses pairwise Newtonian gravity plus catalogued J2 and adaptive step-doubling around kick-drift-kick velocity Verlet. It is neither IAS15 nor a close-encounter regularized method. Dynamic orbit trails are not available.
 
-PhysicsWorldClient is a DTO/cache adapter. It creates CelestialBody presentation metadata, stores the Rust snapshots and makes body/orbit data available to the view. It does not independently propagate bodies or vessels. Solar3DView consumes those states, Rust-computed spin angles and Rust-generated orbit paths; the 2D map uses the same orbit-path cache. Render-origin subtraction and coordinate conversion are visual transforms only.
+Continuous engine thrust is integrated by Rust during committed vessel steps and fractional render snapshots. Multiple engines, per-engine propellant reserves, mass flow, depletion and commanded burn-end events are represented. Engine mount offsets do not produce torque because rigid-body attitude is not modeled; thrust direction remains inertial. Planet and powered-vessel integration are coupled using finite-step snapshots rather than one high-order coupled solve.
 
-The old TypeScript PhysicsWorld remains in src/physics/ as a comparison reference for automated parity tests. It is not instantiated by the active flight deck. Do not reintroduce a second live simulation authority.
+The TypeScript `PhysicsWorld` in `src/physics/` is retained as a comparison reference; the live flight deck does not instantiate it.
+
+## Rendering and surfaces
+
+`Solar3DView` owns one WebGL2 scene with shared body states, camera, render origin, selection, orbit paths, body rotation, lighting, atmosphere, clouds, rings, eclipses and HDR/post-processing. No WebGPU backend is active. WebGPU resource lifetime, device-loss recovery, WGSL render passes, backend selection and parity validation remain future work; WebGL2 must remain available through that migration.
+
+The geodesic pipeline is connected only for Earth. It generates twenty root-face meshes and five surface channels through the bounded surface Worker pool and uploads them into bounded WebGL2 texture arrays. The UV sphere remains the active fallback while pages prepare or if generation fails. Quadtree selection, neighbor balancing and stitching exist as CPU components, but the active renderer still draws the twenty root faces. Other bodies use the procedural sphere path. Per-body geodesic integration and GPU-driven adaptive LOD are not complete.
+
+Surface profiles are deterministic procedural visual models based on catalogue metadata. They are not measured global geology or a climate/geochemistry simulation. The four atmospheric giants use atmospheric procedural rendering rather than a solid terrain model.
 
 ## Worker boundaries
 
-- src/wasm/physics/physics-worker.ts: one PhysicsWorld handle; serialized commands, snapshots, orbital computations and vessel operations.
-- src/rendering/geodesic/surface-tile-worker.ts: WASM surface channels, geodesic meshes and stitch indices.
-- The existing surface worker pool retains its bounded scheduling, priorities, deduplication, cancellation and transferable-buffer behavior.
-
-The physics Worker uses one worker thread and does not require SharedArrayBuffer, atomics or WASM threads.
+- `src/wasm/physics/physics-worker.ts`: owns one Rust PhysicsWorld and serializes simulation commands/snapshots.
+- `src/rendering/geodesic/surface-tile-worker.ts`: generates Rust surface pages, geodesic meshes and stitch indices.
+- Physics and surface work use separate Workers and do not require SharedArrayBuffer.
 
 ## Data conventions
 
 - Physics uses SI units and f64 internally.
-- Physical coordinates are never scaled to fit the camera.
-- Render positions are made camera-relative before conversion to GPU f32.
-- Surface tile height is f32 in metres.
-- Surface pages preserve Albedo RGBA8, Normal RGB8, Height f32, Roughness R8 and Material ID R8 channels.
-- Worker-owned buffers are transferred rather than retaining borrowed views into WASM linear memory.
+- Render positions are camera-relative before conversion to GPU f32.
+- Surface height is in metres; channels are Albedo RGBA8, Normal RGB8, Height f32, Roughness R8 and Material ID R8.
+- Worker-owned buffers are transferred rather than borrowed from WASM linear memory.
 
-## Remaining migration
+## Remaining implementation
 
-The N-body mode is opt-in through the PhysicsWorldClient/Worker API; the flight deck currently starts in the approximate J2000 Kepler ephemeris mode. There is not yet a user-facing mode selector or a lossless switch back to ephemeris mode, and dynamic orbit trails are not yet generated. Its initial conditions are not DE440/Horizons precision states, and close-encounter adaptive integration is not implemented. Continuous-thrust integration remains outstanding.\n\nThe complete 3D renderer still uses WebGL2: planet materials, atmosphere, clouds, rings, lighting/shadows, HDR, bloom and tone mapping. A future WebGPU backend must preserve the one-scene camera, global/local projection, tracking, render origin and all existing visual passes, with WebGL2 retained as fallback until parity is demonstrated.
+- Scientific local ephemerides (DE440/DE441 or a validated equivalent), time/frame transformations and independent Horizons checks are absent.
+- N-body close-encounter regularization, collision impact response, user-facing mode switching and dynamic orbit trails are absent.
+- WebGPU is not implemented; all active render passes use WebGL2.
+- The active geodesic renderer is Earth-only and does not yet use adaptive quadtree leaves.
+- GTX 1650 browser performance, visual parity and rendered seam quality require manual GPU verification.

@@ -1,36 +1,26 @@
-# Foundation fixes — Cosmo-riders
+# Active foundation status
 
-> **Surface rendering update:** the active renderer now uses direct GLSL terrain fields; the old CPU cubemap/Worker pipeline is disconnected. Orbit rendering has been returned to the continuous line-strip approach used by `main`, with the corrected satellite reference-frame transform retained. The spacecraft is intentionally absent from the active solar-system view.
-
+This file records current implementation facts on `test`. Older surface-pipeline and impulse-control descriptions were removed because they no longer matched the active scene and physics code.
 
 ## Rendering and camera
-- Global frame exposure no longer changes with the focused body's distance from the Sun.
-- A display-only per-planet gain is applied after physical surface lighting. The inverse-square light law, terminator and eclipse visibility remain in the lighting calculation; the display gain does not brighten the background or other bodies.
-- Atmosphere and cloud shaders receive the 1-AU-normalized stellar irradiance exactly once.
-- Camera zoom is clamped outside the focused body's mean radius. Screen-space body picking uses the projected body radius rather than a fixed 22-pixel centre target.
-- The full 100 AU scene range is retained. The near plane adapts to camera distance and focused-body radius. This reduces the depth ratio near a planet, but is not a logarithmic depth buffer; extreme multi-scale Z precision still needs browser verification.
-- Surface LOD activates earlier: 64 / 128 / 256 / 512 / 1024 / 2048 texels per cube-map face at increasing projected radii. Mesh LOD uses separate screen-space thresholds.
-- Albedo sampling skips the unused height calculation; roughness uses a lower-cost class-aware procedural field. This removes redundant CPU work, but its visual appearance still needs checking.
-- Cloud time is no longer wrapped every 100,000 simulation seconds.
-- RingRenderer draws annular ring meshes for Jupiter, Saturn, Uranus and Neptune. The current rings are stylized procedural bands, not photometric/radiometric ring simulations.
 
-## Orbital mechanics
-- Relative two-body propagation uses mu = G * (M_parent + M_body).
-- Satellite elements declare an explicit reference frame. The Moon retains ecliptic elements; other modeled satellites use an approximate parent-equatorial frame derived from the parent's pole.
-- The same transform is shared by physics, 3D orbit lines and local orbit-path rendering.
-- Synchronous satellite periods include both parent and satellite GM.
-- These remain mean-element Kepler approximations, not precise JPL Horizons ephemerides or individual Laplace-plane solutions.
+- `Solar3DView` is the active shared scene coordinator and uses WebGL2/GLSL. HDR, bloom, glare, lens flare, tone mapping, atmosphere, cloud layers, rings, lighting and analytic eclipse/occlusion calculations are connected to this scene.
+- Global logarithmic and local linear display projections, focused-body camera origin, adaptive near clipping, camera controls and screen-space body picking are presentation behavior; they do not alter SI simulation state.
+- Body rotation and orbit paths use state supplied by the Rust PhysicsWorld.
+- The geodesic surface path is active only for Earth. It draws the twenty root faces while preparing its five channels; UV sphere rendering is used during preparation and on failure. The other bodies use the procedural sphere path.
+- Quadtree selection, balancing, neighbor detection and stitch generation exist as CPU components, but the active geodesic draw list is not driven by adaptive leaves. The rendering path has not had browser/GPU visual verification.
+- `HDRPipeline` is the connected post-processing path; `RingRenderer` is the connected annular-ring subsystem. The older parallel `RenderEngine`/`RenderPipeline` and standalone material/effect classes are not the active scene backend.
+- Full shadow maps, volumetric ring shadows, logarithmic depth buffering and WebGPU are not implemented.
 
-## Simulation controls and UI
-- Time-scale choices: 0×, 1×, 2×, 5×, 10×, 50× and 100×.
-- Manual engine impulses reset simulation speed to 1×.
-- Selecting a body in the 3D renderer updates the selected object in the information panel.
-- Telemetry, flight, maneuver-planner and local-system windows are available from the sidebar.
-- Camera hints match the implemented controls: RMB orbit, MMB pan, LMB select.
+## Orbital mechanics and simulation
 
-## Rendering architecture
-- Solar3DView is the active scene coordinator.
-- HDRPipeline is the single active post-processing pipeline for HDR, Bloom, Glare and Lens Flare.
-- RingRenderer is a connected dedicated visual subsystem.
-- Atmosphere and clouds are separate rendering passes; eclipses/occlusion are analytical.
-- The older parallel RenderEngine/RenderPipeline and standalone material/effect classes remain inactive scaffolding. Full shadow maps, volumetric ring shadows and logarithmic depth remain future work.
+- Satellite relative two-body propagation uses combined parent/body GM. Modeled satellite elements declare their reference frame, and shared transforms are used for state and orbit presentation.
+- The default ephemeris is approximate hierarchical J2000 Keplerian propagation. It is not DE440/Horizons precision data.
+- Optional N-body propagation is implemented in the Rust PhysicsWorld using pairwise Newtonian gravity, catalogued J2 and adaptive step-doubling around kick-drift-kick velocity Verlet. It is not IAS15 and has no close-encounter regularization or impact response.
+- Continuous engine thrust, changing mass, per-engine propellant depletion and gravity during powered motion are integrated through the Rust/WASM/Worker/client flight-control path. This is not a rigid-body attitude model: mounts create no torque and thrust vectors are inertial.
+- The N-body option is available through the API but has no user-facing selector or switch-back operation. Its initial conditions and cached orbit paths remain based on the approximate catalogue.
+
+## UI and verification boundary
+
+- The flight deck exposes time controls, body selection, telemetry, continuous engine direction/throttle/duration controls, maneuver estimates and local-system navigation.
+- Automated checks are described in `QUALITY_ASSURANCE.md`; they are not browser visual tests. GTX 1650 performance, GPU memory, seam quality and WebGL runtime behavior still require manual verification.

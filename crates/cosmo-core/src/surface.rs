@@ -11,7 +11,7 @@ pub struct SurfaceProfile{
  pub volcanic_activity:f64,pub erosion:f64,pub age:f64,
 }
 #[derive(Clone,Copy)]
-struct Plate{direction:Vec3,oceanic:bool,elevation:f64}
+struct Plate{direction:Vec3,elevation:f64}
 #[derive(Clone,Copy)]
 struct Sample{color:[f64;3],height:f64,rough:f64,material:u8}
 pub struct TileOutput{pub albedo:Vec<u8>,pub normal:Vec<u8>,pub height:Vec<f32>,pub roughness:Vec<u8>,pub material:Vec<u8>}
@@ -37,16 +37,16 @@ fn fbm(p:Vec3,seed:u32,octaves:u32)->f64{
 fn plates(seed:u32,p:&SurfaceProfile)->Vec<Plate>{
  let count=10+(p.tectonic_activity*10.0).round() as u32;let mut out=Vec::new();
  for i in 0..count{let y=1.0-2.0*(i as f64+0.5)/count as f64;let angle=i as f64*2.399963229728653+hash(i as i32,3,7,seed)*0.7;let r=(1.0-y*y).sqrt();
- out.push(Plate{direction:Vec3::new(angle.cos()*r,y,angle.sin()*r),oceanic:hash(i as i32,11,5,seed)<clamp(0.55-p.silicate_fraction*0.2,0.0,1.0),elevation:(hash(i as i32,19,13,seed)-0.5)*0.12});}out
+ out.push(Plate{direction:Vec3::new(angle.cos()*r,y,angle.sin()*r),elevation:(hash(i as i32,19,13,seed)-0.5)*0.12});}out
 }
 fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->Sample{
  let seed=p.seed as u32;let macro_n=fbm(d.scale(3.1),seed,5);let regional=fbm(d.scale(11.0),seed.wrapping_add(31),4);
  let mut nearest=2.0;let mut second=2.0;let mut first=None;
  for plate in plate_set{let q=1.0-d.dot(plate.direction);if q<nearest{second=nearest;nearest=q;first=Some(*plate);}else if q<second{second=q;}}
- let boundary=1.0-smooth(0.006,0.055,second-nearest);let plate=first.unwrap_or(Plate{direction:d,oceanic:false,elevation:0.0});
+ let boundary=1.0-smooth(0.006,0.055,second-nearest);let plate=first.unwrap_or(Plate{direction:d,elevation:0.0});
  let tectonic=boundary*p.tectonic_activity;let volcanic=fbm(d.scale(19.0),seed.wrapping_add(71),4)*p.volcanic_activity;
  let latitude=d.y.abs();let frost=smooth(0.68,0.96,latitude)*p.ice_fraction;let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
- let(mut height,mut color,mut rough,mut material)=(0.0,[0.35,0.34,0.31],0.88,1u8);
+ let mut height:f64;let mut color:[f64;3];let mut rough:f64;let mut material:u8;
  if p.kind=="oceanic"||p.water_fraction>0.45{
   let continental=smooth(-0.08,0.13,macro_n-0.48+plate.elevation+tectonic*0.09);let trench=boundary*boundary*p.tectonic_activity*0.11;let mountains=boundary.powf(0.7)*p.tectonic_activity*0.16;
   height=(macro_n-0.5)*0.18+(regional-0.5)*0.065+mountains-trench+volcanic*0.035;

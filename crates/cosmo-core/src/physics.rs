@@ -90,7 +90,7 @@ pub fn state_to_elements(r:Vec3,v:Vec3,mu:f64)->Result<OrbitalElements,String>{
     let inclination=clamp(h.z/hm).acos();let n=Vec3::new(-h.y,h.x,0.0);let nm=n.norm();
     let equatorial=nm<1e-12*hm;let circular=e<1e-10;
     let node=if equatorial{0.0}else{n.y.atan2(n.x)};
-    let mut peri=0.0;let nu;
+    let mut peri=0.0;let mut nu;
     if !circular&&!equatorial{peri=clamp(n.dot(ev)/(nm*e)).acos();if ev.z<0.0{peri=2.0*PI-peri;}}
     else if !circular{peri=ev.y.atan2(ev.x);}
     if !circular{nu=clamp(ev.dot(r)/(e*rn)).acos();if r.dot(v)<0.0{nu=2.0*PI-nu;}}

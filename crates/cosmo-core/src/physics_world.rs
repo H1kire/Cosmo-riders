@@ -45,6 +45,15 @@ pub struct VesselState{pub id:String,pub primary_body_id:String,pub position:[f6
 #[serde(rename_all="camelCase")]
 pub struct VesselDefinition{pub id:String,pub primary_body_id:String,pub position:[f64;3],pub velocity:[f64;3],#[serde(default="mass")]pub mass_kg:f64,#[serde(default)]pub engines:Vec<Engine>}
 fn mass()->f64{1000.0}
+fn gravity_from_bodies(bodies:&[(f64,f64,Vec3)],position:Vec3)->Result<Vec3,String>{
+ let mut acceleration=Vec3::new(0.0,0.0,0.0);
+ for(mass,radius,body_position)in bodies{
+  let delta=body_position.sub(position);let distance=delta.norm();
+  if !distance.is_finite()||distance<=*radius{return Err("Vessel collision with a celestial body's physical radius.".into())}
+  acceleration=acceleration.add(delta.scale(G*mass/(distance*distance*distance)));
+ }
+ if acceleration.finite(){Ok(acceleration)}else{Err("Gravitational acceleration became non-finite.".into())}
+}
 #[derive(Clone,Debug)]
 struct Vessel{id:String,primary:String,p:Vec3,vel:Vec3,r:Vec3,v:Vec3,mass:f64,engines:Vec<Engine>,last_thrust_n:f64,last_mass_flow_kg_s:f64,last_acceleration_m_s2:f64,last:Option<PrimarySwitch>,history:Vec<PrimarySwitch>}
 impl Vessel{fn snapshot(&self)->VesselState{VesselState{id:self.id.clone(),primary_body_id:self.primary.clone(),position:arr(self.p),velocity:arr(self.vel),relative_position:arr(self.r),relative_velocity:arr(self.v),mass_kg:self.mass,last_primary_switch:self.last.clone(),primary_body_history:self.history.clone()}}}
@@ -124,10 +133,18 @@ impl PhysicsWorld{
  fn step_n_body(&mut self)->Result<(),String>{
   let dt=self.options.fixed_step_seconds;let start=self.nbody.as_ref().ok_or("N-body mode is not enabled.")?.clone();
   let end=start.advanced(dt,dt.abs())?;self.nbody=Some(end);self.sync_n_body_states()?;self.simulation_time_seconds+=dt;
+  let gravity_bodies:Vec<(f64,f64,Vec3)>=self.bodies.iter().zip(self.states.iter()).map(|(b,s)|(b.mass_kg,b.mean_radius_m,s.p())).collect();
   for i in 0..self.vessels.len(){
-   let(p,vv)=NBodySystem::integrate_test_particle(&start,self.nbody.as_ref().unwrap(),self.vessels[i].p,self.vessels[i].vel,dt)?;
-   self.vessels[i].p=p;self.vessels[i].vel=vv;
-   let pi=self.indices[&self.vessels[i].primary];self.vessels[i].r=p.sub(self.states[pi].p());self.vessels[i].v=vv.sub(self.states[pi].vel());
+   if self.vessels[i].engines.is_empty(){
+    let(p,vv)=NBodySystem::integrate_test_particle(&start,self.nbody.as_ref().unwrap(),self.vessels[i].p,self.vessels[i].vel,dt)?;
+    self.vessels[i].p=p;self.vessels[i].vel=vv;
+   }else{
+    let vessel=&mut self.vessels[i];
+    let diagnostics=integrate_engines(&mut vessel.p,&mut vessel.vel,&mut vessel.mass,&mut vessel.engines,dt,|position|gravity_from_bodies(&gravity_bodies,position))?;
+    vessel.last_thrust_n=diagnostics.thrust_n;vessel.last_mass_flow_kg_s=diagnostics.mass_flow_kg_s;vessel.last_acceleration_m_s2=diagnostics.acceleration_m_s2;
+   }
+   let pi=self.indices[&self.vessels[i].primary];let p=self.vessels[i].p;let vv=self.vessels[i].vel;
+   self.vessels[i].r=p.sub(self.states[pi].p());self.vessels[i].v=vv.sub(self.states[pi].vel());
    let next=self.choose_primary(&self.vessels[i])?;self.switch_primary(i,next);
   }
   Ok(())
@@ -141,7 +158,7 @@ impl PhysicsWorld{
  pub fn body_states_at(&mut self,t:f64)->Result<Vec<f64>,String>{self.ready()?;if !t.is_finite(){return Err("timeSeconds must be finite.".into())}if let Some(system)=&self.nbody{let projected=system.advanced(t-self.simulation_time_seconds,self.options.fixed_step_seconds)?;let mut out=Vec::with_capacity(projected.bodies().len()*6);for body in projected.bodies(){out.extend_from_slice(&arr(body.position));out.extend_from_slice(&arr(body.velocity));}return Ok(out)}let mut out=Vec::with_capacity(self.bodies.len()*6);let mut computed:Vec<BodyState>=Vec::with_capacity(self.bodies.len());for i in 0..self.bodies.len(){let b=&self.bodies[i];let s=if let Some(pid)=&b.parent_id{let pi=self.indices[pid];let init=self.initial[i].ok_or("Missing initial relative state.")?;let rel=propagate_kepler(init.position,init.velocity,G*(b.mass_kg+self.bodies[pi].mass_kg),t,1e-10,100)?;BodyState::new(computed[pi].p().add(rel.position),computed[pi].vel().add(rel.velocity))}else{BodyState{position:b.position,velocity:b.velocity}};out.extend_from_slice(&s.position);out.extend_from_slice(&s.velocity);computed.push(s)}Ok(out)}
  fn choose_primary(&self,vessel:&Vessel)->Result<String,String>{let ci=*self.indices.get(&vessel.primary).ok_or("Missing current primary.")?;let current=&self.bodies[ci];if let Some(pid)=&current.parent_id{if let Some(soi)=self.sphere_of_influence(&current.id){if vessel.p.sub(self.states[ci].p()).norm()>soi*self.options.soi_exit_factor{return Ok(pid.clone())}}}let mut best:Option<(String,f64)>=None;for(i,b)in self.bodies.iter().enumerate(){if b.parent_id.as_deref()!=Some(current.id.as_str()){continue}if let Some(soi)=self.sphere_of_influence(&b.id){let d=vessel.p.sub(self.states[i].p()).norm();if d<soi*self.options.soi_enter_factor&&best.as_ref().map(|x|soi<x.1).unwrap_or(true){best=Some((b.id.clone(),soi))}}}Ok(best.map(|x|x.0).unwrap_or_else(||current.id.clone()))}
  fn switch_primary(&mut self,i:usize,next:String){if self.vessels[i].primary==next{return}let ni=self.indices[&next];let state=self.states[ni];let old=self.vessels[i].primary.clone();let x=&mut self.vessels[i];x.r=x.p.sub(state.p());x.v=x.vel.sub(state.vel());let change=PrimarySwitch{from:old,to:next.clone(),time_seconds:self.simulation_time_seconds};x.last=Some(change.clone());x.history.push(change);x.primary=next}
- pub fn step(&mut self)->Result<(),String>{self.ready()?;if self.nbody.is_some(){return self.step_n_body()}self.simulation_time_seconds+=self.options.fixed_step_seconds;self.update_ephemerides()?;for i in 0..self.vessels.len(){let pi=self.indices[&self.vessels[i].primary];let ps=self.states[pi];let mu=G*self.bodies[pi].mass_kg;let next=propagate_kepler(self.vessels[i].r,self.vessels[i].v,mu,self.options.fixed_step_seconds,1e-10,100)?;self.vessels[i].r=next.position;self.vessels[i].v=next.velocity;self.vessels[i].p=ps.p().add(next.position);self.vessels[i].vel=ps.vel().add(next.velocity);let primary=self.choose_primary(&self.vessels[i])?;self.switch_primary(i,primary)}Ok(())}
+ pub fn step(&mut self)->Result<(),String>{self.ready()?;if self.nbody.is_some(){return self.step_n_body()}self.simulation_time_seconds+=self.options.fixed_step_seconds;self.update_ephemerides()?;let gravity_bodies:Vec<(f64,f64,Vec3)>=self.bodies.iter().zip(self.states.iter()).map(|(b,s)|(b.mass_kg,b.mean_radius_m,s.p())).collect();for i in 0..self.vessels.len(){if self.vessels[i].engines.is_empty(){let pi=self.indices[&self.vessels[i].primary];let ps=self.states[pi];let mu=G*self.bodies[pi].mass_kg;let next=propagate_kepler(self.vessels[i].r,self.vessels[i].v,mu,self.options.fixed_step_seconds,1e-10,100)?;self.vessels[i].r=next.position;self.vessels[i].v=next.velocity;self.vessels[i].p=ps.p().add(next.position);self.vessels[i].vel=ps.vel().add(next.velocity);}else{let vessel=&mut self.vessels[i];let diagnostics=integrate_engines(&mut vessel.p,&mut vessel.vel,&mut vessel.mass,&mut vessel.engines,self.options.fixed_step_seconds,|position|gravity_from_bodies(&gravity_bodies,position))?;vessel.last_thrust_n=diagnostics.thrust_n;vessel.last_mass_flow_kg_s=diagnostics.mass_flow_kg_s;vessel.last_acceleration_m_s2=diagnostics.acceleration_m_s2;let pi=self.indices[&vessel.primary];vessel.r=vessel.p.sub(self.states[pi].p());vessel.v=vessel.vel.sub(self.states[pi].vel());}let primary=self.choose_primary(&self.vessels[i])?;self.switch_primary(i,primary)}Ok(())}
  pub fn advance(&mut self,dt:f64)->Result<u32,String>{if !dt.is_finite()||dt<0.0{return Err("realDeltaSeconds must be finite and non-negative.".into())}if self.paused||self.time_scale==0.0||dt==0.0{return Ok(0)}let total=self.accumulator_seconds+dt*self.time_scale;if !total.is_finite(){return Err("Physics accumulator overflow.".into())}let count=(total/self.options.fixed_step_seconds).floor();if count>self.options.max_sub_steps as f64{return Err("Physics backlog exceeds maxSubSteps.".into())}let n=count as u32;let old_time=self.simulation_time_seconds;let old_states=self.states.clone();let old_vessels=self.vessels.clone();let old_nbody=self.nbody.clone();for _ in 0..n{if let Err(e)=self.step(){self.simulation_time_seconds=old_time;self.states=old_states;self.vessels=old_vessels;self.nbody=old_nbody;return Err(e)}}self.accumulator_seconds=(total-n as f64*self.options.fixed_step_seconds).max(0.0);Ok(n)}
  pub fn add_engine(&mut self,vessel_id:&str,mut engine:Engine)->Result<(),String>{engine.validate()?;let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;if self.vessels[i].engines.iter().any(|item|item.id==engine.id){return Err(format!("Duplicate engine id: {}",engine.id))}self.vessels[i].mass+=engine.propellant_kg;self.vessels[i].engines.push(engine);Ok(())}
  pub fn set_engine_enabled(&mut self,vessel_id:&str,engine_id:&str,enabled:bool)->Result<(),String>{let i=*self.vessel_indices.get(vessel_id).ok_or_else(||format!("Unknown vessel: {vessel_id}"))?;let engine=self.vessels[i].engines.iter_mut().find(|e|e.id==engine_id).ok_or_else(||format!("Unknown engine: {engine_id}"))?;engine.enabled=enabled;Ok(())}

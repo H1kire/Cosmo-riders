@@ -57,6 +57,7 @@ const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
 const SHIP_DRY_MASS_KG = 7000;
 let world:PhysicsWorldClient = null as unknown as PhysicsWorldClient, vessel, paused = false, lastFrame = 0, trail = [];
+let engineDirectionSign:1|-1=1,burnStopTimeSeconds:number|null=null,engineStopPending=false;
 let renderedBodyStates = null, renderedVesselState = null;
 let focusBodyId = null, pendingGlobalTransition = false;
 let selectedBodyId: string|null = null;
@@ -157,7 +158,7 @@ async function createScenario(name) {
   const earth=world.getBodyState('earth'),moon=world.getBodyState('moon');
   if(name==='moon-approach'){
     const moonSoi=world.getSphereOfInfluence('moon')??0,offset=vector3(moonSoi*.72,0,0);
-    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(moon.position,offset),velocity:add(moon.velocity,vector3(0,180,0)),massKg:12000});
+    vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(moon.position,offset),velocity:add(moon.velocity,vector3(0,180,0)),massKg:7000});
   }else if(name==='moon-orbit'){
     const radius=2_000_000;
     const circularSpeed=await world.circularOrbitSpeed('moon',radius);
@@ -167,6 +168,10 @@ async function createScenario(name) {
     const circularSpeed=await world.circularOrbitSpeed('earth',radius);
     vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,circularSpeed,0)),massKg:12000});
   }
+  await world.addEngine('test-vessel',{id:'main-r200',name:'R-200 Chemical Engine',maxThrustN:200000,ispSeconds:340,direction:[0,1,0],mountPositionM:[0,0,0],throttle:1,enabled:false,propellantKg:5000});
+  vessel=world.getVesselState('test-vessel');burnStopTimeSeconds=null;engineStopPending=false;
+  $('burn-status').textContent='Двигатель выключен · запас топлива 5 000 кг';
+  $('engine-start').disabled=false;$('engine-stop').disabled=true;
   trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
   await updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
 }
@@ -527,7 +532,36 @@ async function updateTelemetry(){
   $('switch-value').textContent=vessel.lastPrimarySwitch?body(vessel.lastPrimarySwitch.from).name+' → '+body(vessel.lastPrimarySwitch.to).name:'Не было';
   $('clock-value').textContent='J2000.0 + '+fmt(world.simulationTimeSeconds/DAY,5)+' суток';
   updatePlanetInformation();$('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
-  $('twr-value').textContent=fmt(await world.thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
+  const propulsion=await world.propulsionState('test-vessel');
+  $('twr-value').textContent=fmt(await world.thrustToWeightRatio(Number(propulsion.thrustN)||0,vessel.massKg,9.80665),2)+' : 1';
+  $('engine-telemetry').textContent='Тяга: '+fmt(Number(propulsion.thrustN)||0,1)+' Н · расход: '+fmt(Number(propulsion.massFlowKgS)||0,4)+' кг/с · топливо: '+fmt(Number(propulsion.propellantRemainingKg)||0,2)+' кг · ускорение: '+fmt(Number(propulsion.accelerationMS2)||0,4)+' м/с²';
+}
+async function startContinuousBurn(){
+  if(burnStopTimeSeconds!==null)return;
+  const duration=Number(($('engine-duration') as HTMLInputElement).value),throttle=Number(($('engine-throttle') as HTMLInputElement).value);
+  if(!Number.isFinite(duration)||duration<1||duration>3600){$('burn-status').textContent='Длительность должна быть от 1 до 3600 секунд.';return;}
+  if(!Number.isFinite(throttle)||throttle<=0||throttle>1){$('burn-status').textContent='Установи дроссель выше 0%.';return;}
+  const primaryState=currentPrimaryState(),relativeVelocity=subtract(vessel.velocity,primaryState.velocity);
+  let direction=normalize(relativeVelocity);if(engineDirectionSign<0)direction=scale(direction,-1);
+  try{
+    await world.setEngineDirection('test-vessel','main-r200',[direction.x,direction.y,direction.z]);
+    await world.setEngineThrottle('test-vessel','main-r200',throttle);
+    await world.setEngineEnabled('test-vessel','main-r200',true);
+    burnStopTimeSeconds=world.simulationTimeSeconds+duration;
+    $('engine-start').disabled=true;$('engine-stop').disabled=false;
+    $('burn-status').textContent='Тяга включена · '+(engineDirectionSign<0?'ретроградно':'проградно')+' · '+fmt(duration,1)+' с';
+    await updateTelemetry();
+  }catch(error){burnStopTimeSeconds=null;$('burn-status').textContent='ОТКАЗ ДВИГАТЕЛЯ: '+(error instanceof Error?error.message:String(error));}
+}
+async function stopContinuousBurn(reason='Остановлено вручную'){
+  if(burnStopTimeSeconds===null&&engineStopPending)return;
+  burnStopTimeSeconds=null;engineStopPending=true;
+  try{
+    await world.setEngineEnabled('test-vessel','main-r200',false);
+    $('burn-status').textContent=reason;$('engine-start').disabled=false;$('engine-stop').disabled=true;
+    await updateTelemetry();
+  }catch(error){$('burn-status').textContent='ОШИБКА ОСТАНОВКИ: '+(error instanceof Error?error.message:String(error));}
+  finally{engineStopPending=false;}
 }
 async function applyPoweredBurn(deltaVMS){
   await world.setTimeScale(1);$('time-scale').value='1';
@@ -556,6 +590,7 @@ async function animate(timestamp){
   if(!paused){
     const oldPrimary=vessel.primaryBodyId,result=await world.advance(delta);
     vessel=world.getVesselState('test-vessel');renderedBodyStates=world.renderBodyStates;renderedVesselState=world.renderVessels.get('test-vessel')??vessel;
+    if(burnStopTimeSeconds!==null&&world.simulationTimeSeconds>=burnStopTimeSeconds&&!engineStopPending){void stopContinuousBurn('Burn завершён: заданная длительность достигнута.');}
     if(result.steps>0){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
       const p=world.getBodyState(vessel.primaryBodyId);trail.push({x:vessel.position.x-p.position.x,y:vessel.position.y-p.position.y,time:timestamp});
@@ -583,8 +618,11 @@ solar3D?.canvas.addEventListener('bodyselect',event=>{
 $('pause-button').addEventListener('click',()=>{paused=!paused;void world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
 $('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(async()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;await updateTelemetry();drawAll();});});
 $('reset-button').addEventListener('click',()=>{paused=false;$('pause-button').textContent='Ⅱ Пауза';void createScenario($('scenario').value);});
-$('retro-button').addEventListener('click',()=>applyPoweredBurn(-10));
-$('pro-button').addEventListener('click',()=>applyPoweredBurn(10));
+$('retro-button').addEventListener('click',()=>{engineDirectionSign=-1;$('retro-button').classList.add('active');$('pro-button').classList.remove('active');});
+$('pro-button').addEventListener('click',()=>{engineDirectionSign=1;$('pro-button').classList.add('active');$('retro-button').classList.remove('active');});
+$('engine-throttle').addEventListener('input',event=>{const value=Number((event.target as HTMLInputElement).value);$('engine-throttle-value').textContent=Math.round(value*100)+'%';void world.setEngineThrottle('test-vessel','main-r200',value).catch(error=>{$('burn-status').textContent=String(error);});});
+$('engine-start').addEventListener('click',()=>{void startContinuousBurn();});
+$('engine-stop').addEventListener('click',()=>{void stopContinuousBurn();});
 window.addEventListener('resize',drawAll);
 
 window.addEventListener('number-format-change',()=>{void updateTelemetry().then(()=>drawAll());});

@@ -14,7 +14,7 @@ export class PhysicsWorldClient{
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
-  for(const entry of this.catalog){const b=entry as Record<string,any>;const metadata=new CelestialBody({...b,position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,solarDaySeconds:b.solarDaySeconds??null});this.bodies.set(metadata.id,metadata);this.sphereOfInfluence.set(metadata.id,await this.bridge.sphereOfInfluence(metadata.id));}
+  for(const entry of this.catalog){const b=entry as Record<string,any>;const metadata=new CelestialBody({...b,id:String(b.id),name:String(b.name),massKg:Number(b.massKg),meanRadiusM:Number(b.meanRadiusM),position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,solarDaySeconds:b.solarDaySeconds??null});this.bodies.set(metadata.id,metadata);this.sphereOfInfluence.set(metadata.id,await this.bridge.sphereOfInfluence(metadata.id));}
   await this.refresh(await this.bridge.snapshot());
  }
  private async refresh(s:PhysicsSnapshot):Promise<void>{

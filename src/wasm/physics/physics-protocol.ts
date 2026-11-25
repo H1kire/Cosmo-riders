@@ -1,6 +1,7 @@
 export interface PhysicsSnapshot{readonly simulationTimeSeconds:number;readonly accumulatorSeconds:number;readonly timeScale:number;readonly paused:boolean;readonly bodyIds:readonly string[];readonly bodyStates:Float64Array;readonly rotationAngles:Float64Array;readonly vesselIds:readonly string[];readonly vesselPrimaryIds:readonly string[];readonly vesselLastPrimarySwitchJson:readonly string[];readonly vesselPrimaryHistoryJson:readonly string[];readonly vesselStates:Float64Array}
 export type PhysicsCommand=
  |{type:'initialize';catalog:readonly Record<string,unknown>[];options?:Record<string,number>}
+ |{type:'enable-n-body'}|{type:'n-body-status'}
  |{type:'advance';realDeltaSeconds:number}|{type:'step'}|{type:'set-time-scale';value:number}|{type:'set-paused';value:boolean}
  |{type:'add-vessel';vessel:Record<string,unknown>}|{type:'maneuver';vesselId:string;direction:readonly [number,number,number];deltaVMS:number}
  |{type:'burn';vesselId:string;direction:readonly [number,number,number];deltaVMS:number;vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number;ambientPressurePa:number;referencePressurePa:number;dryMassKg:number}

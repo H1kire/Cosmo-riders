@@ -1,4 +1,4 @@
-import init,{create_physics_world} from '../pkg/cosmo_core.js';
+import init,{create_physics_world,state_to_orbital_elements,hohmann_transfer,plane_change_delta_v,orbital_period} from '../pkg/cosmo_core.js';
 import type {PhysicsRequest,PhysicsResponse,PhysicsSnapshot} from './physics-protocol.ts';
 type Handle=ReturnType<typeof create_physics_world>;
 const scope=self as unknown as {onmessage:((event:MessageEvent<PhysicsRequest>)=>void)|null;postMessage:(value:unknown,transfer?:Transferable[])=>void};
@@ -25,6 +25,10 @@ scope.onmessage=async(event:MessageEvent<PhysicsRequest>)=>{
  case'vessel-state-at':result=JSON.parse(live().get_vessel_state_at(command.id,command.timeSeconds,command.bodyStates));break;
  case'sphere-of-influence':result=live().get_sphere_of_influence(command.bodyId)??null;break;
  case'rotation-angle':result=live().get_rotation_angle_at(command.bodyId,command.timeSeconds);break;
+ case'state-to-elements':result=state_to_orbital_elements(new Float64Array(command.position),new Float64Array(command.velocity),command.mu);break;
+ case'hohmann-transfer':result=JSON.parse(hohmann_transfer(command.primaryMu,command.initialRadiusM,command.targetRadiusM));break;
+ case'plane-change':result=plane_change_delta_v(command.speedMS,command.angleRadians);break;
+ case'orbital-period':result=orbital_period(command.semiMajorAxisM,command.mu);break;
  case'dispose':world?.dispose_physics_world();world=null;result=true;break;
  }
  reply(id,result);

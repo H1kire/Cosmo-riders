@@ -33,6 +33,10 @@ export class PhysicsWorldClient{
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}
  async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as unknown as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}
  async step():Promise<void>{await this.bridge.step();await this.refresh(await this.bridge.snapshot());}
+ stateToOrbitalElements(position:V3,velocity:V3,mu:number):Promise<Float64Array>{return this.bridge.stateToOrbitalElements([position.x,position.y,position.z],[velocity.x,velocity.y,velocity.z],mu);}
+ hohmannTransfer(primaryMu:number,initialRadiusM:number,targetRadiusM:number):Promise<Record<string,number>>{return this.bridge.hohmannTransfer(primaryMu,initialRadiusM,targetRadiusM);}
+ planeChangeDeltaV(speedMS:number,angleRadians:number):Promise<number>{return this.bridge.planeChangeDeltaV(speedMS,angleRadians);}
+ orbitalPeriod(a:number,mu:number):Promise<number>{return this.bridge.orbitalPeriod(a,mu);}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
  async dispose():Promise<void>{await this.bridge.dispose();}

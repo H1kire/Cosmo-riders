@@ -2,9 +2,7 @@ import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
 import { PhysicsWorldClient } from '../src/wasm/physics/physics-world-client.ts';
 import { AU } from '../src/physics/constants.ts';
 import { add, magnitude, normalize, scale, subtract, vector3 } from '../src/physics/vector3.ts';
-import { stateToOrbitalElements, orbitalPeriod } from '../src/physics/orbital-elements.ts';
 import { thrustToWeightRatio } from '../src/physics/propulsion.ts';
-import { hohmannTransfer } from '../src/physics/maneuvers.ts';
 import { orbitalElementsToState } from '../src/physics/orbital-state.ts';
 import { rotateStateToParentEquator } from '../src/physics/orbital-frame.ts';
 import { Solar3DView } from '../src/presentation/solar-3d.ts';
@@ -172,7 +170,7 @@ async function createScenario(name) {
     vessel=await world.addVessel({id:'test-vessel',primaryBodyId:'earth',position:add(earth.position,vector3(radius,0,0)),velocity:add(earth.velocity,vector3(0,Math.sqrt(earthMu/radius),0)),massKg:12000});
   }
   trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
-  updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
+  await updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
 }
 function resizeCanvas(canvas) {
   const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
@@ -518,18 +516,19 @@ document.querySelectorAll<HTMLElement>('.floating-window').forEach(win=>{
   bar.addEventListener('pointerup',end);bar.addEventListener('pointercancel',end);
 });
 
-function updateTelemetry(){
+async function updateTelemetry(){
   if(!vessel)return;
   const primary=currentPrimary(),state=currentPrimaryState(),relativePosition=subtract(vessel.position,state.position),relativeVelocity=subtract(vessel.velocity,state.velocity);
-  const r=magnitude(relativePosition),v=magnitude(relativeVelocity),elements=stateToOrbitalElements(relativePosition,relativeVelocity,primary.mu);
-  const period=elements.trajectoryType==='elliptic'?orbitalPeriod(elements.semiMajorAxis,primary.mu):null,soi=world.getSphereOfInfluence(primary.id);
+  const r=magnitude(relativePosition),v=magnitude(relativeVelocity),raw=await world.stateToOrbitalElements(relativePosition,relativeVelocity,primary.mu);
+  const semiMajorAxis=raw[0],eccentricity=raw[1],energy=raw[6],energyScale=Math.max(v*v/2,primary.mu/r,Number.MIN_VALUE);
+  const parabolic=Math.abs(energy)<=1e-12*energyScale,elliptic=!parabolic&&energy<0;
+  const period=elliptic?await world.orbitalPeriod(semiMajorAxis,primary.mu):null,soi=world.getSphereOfInfluence(primary.id);
   $('primary-badge').textContent=primary.name;$('distance-value').textContent=distanceLabel(r);$('speed-value').textContent=speedLabel(v);
-  $('period-value').textContent=period?fmt(period/DAY,3)+' суток':'не замкнута';$('eccentricity-value').textContent=fmt(elements.eccentricity,6);
+  $('period-value').textContent=period?fmt(period/DAY,3)+' суток':'не замкнута';$('eccentricity-value').textContent=fmt(eccentricity,6);
   $('soi-value').textContent=soi?distanceLabel(soi):'—';
   $('switch-value').textContent=vessel.lastPrimarySwitch?body(vessel.lastPrimarySwitch.from).name+' → '+body(vessel.lastPrimarySwitch.to).name:'Не было';
   $('clock-value').textContent='J2000.0 + '+fmt(world.simulationTimeSeconds/DAY,5)+' суток';
-  updatePlanetInformation();
-  $('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
+  updatePlanetInformation();$('mass-value').textContent=fmt(vessel.massKg,1)+' кг';
   $('twr-value').textContent=fmt(thrustToWeightRatio(ENGINE.vacuumThrustN,vessel.massKg,9.80665),2)+' : 1';
 }
 async function applyPoweredBurn(deltaVMS){
@@ -540,11 +539,11 @@ async function applyPoweredBurn(deltaVMS){
     const result=await world.applyBurn('test-vessel',[direction.x,direction.y,direction.z],Math.abs(deltaVMS),ENGINE,SHIP_DRY_MASS_KG);
     vessel=world.getVesselState('test-vessel');renderedVesselState=vessel;
     $('burn-status').textContent='Включение: '+fmt(result.burnDurationSeconds,2)+' с · топливо: '+fmt(result.propellantUsedKg,2)+' кг · Δv '+fmt(Math.abs(deltaVMS),1)+' м/с';
-    updateTelemetry();drawAll();
+    await updateTelemetry();drawAll();
   }catch(error){$('burn-status').textContent='ОТКАЗ ДВИГАТЕЛЯ: '+error.message;}
 }
-function updateManeuverPlanner(){
-  const transfer=hohmannTransfer({primaryMu:body('sun').mu,initialRadiusM:SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM,targetRadiusM:SOLAR_SYSTEM_DATA.mars.elements.semiMajorAxisM});
+async function updateManeuverPlanner(){
+  const transfer=await world.hohmannTransfer(body('sun').mu,SOLAR_SYSTEM_DATA.earth.elements.semiMajorAxisM,SOLAR_SYSTEM_DATA.mars.elements.semiMajorAxisM);
   $('hohmann-departure').textContent=fmt(transfer.departureDeltaVMS/1000,3)+' км/с';
   $('hohmann-arrival').textContent=fmt(transfer.arrivalDeltaVMS/1000,3)+' км/с';
   $('hohmann-total').textContent=fmt(transfer.totalDeltaVMS/1000,3)+' км/с';
@@ -561,7 +560,7 @@ async function animate(timestamp){
     if(result.steps>0){
       if(vessel.primaryBodyId!==oldPrimary)trail=[];
       const p=world.getBodyState(vessel.primaryBodyId);trail.push({x:vessel.position.x-p.position.x,y:vessel.position.y-p.position.y,time:timestamp});
-      if(timestamp-lastTelemetryUpdate>=250){updateTelemetry();lastTelemetryUpdate=timestamp;}
+      if(timestamp-lastTelemetryUpdate>=250){void updateTelemetry();lastTelemetryUpdate=timestamp;}
     }
   }else{renderedBodyStates=world.bodyStates;renderedVesselState=vessel;}
   const previousZoom=cameraZoom.solar,cameraEase=1-Math.exp(-12*delta),zoomDifference=Math.abs(cameraTargetZoom.solar-cameraZoom.solar);
@@ -583,11 +582,11 @@ solar3D?.canvas.addEventListener('bodyselect',event=>{
   renderSystemNavigation();
 });
 $('pause-button').addEventListener('click',()=>{paused=!paused;void world.setPaused(paused);$('pause-button').textContent=paused?'▶ Продолжить':'Ⅱ Пауза';});
-$('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;updateTelemetry();drawAll();});});
+$('step-button').addEventListener('click',()=>{if(!paused){paused=true;void world.setPaused(true);$('pause-button').textContent='▶ Продолжить';}void world.step().then(async()=>{vessel=world.getVesselState('test-vessel');renderedBodyStates=world.bodyStates;renderedVesselState=vessel;await updateTelemetry();drawAll();});});
 $('reset-button').addEventListener('click',()=>{paused=false;$('pause-button').textContent='Ⅱ Пауза';void createScenario($('scenario').value);});
 $('retro-button').addEventListener('click',()=>applyPoweredBurn(-10));
 $('pro-button').addEventListener('click',()=>applyPoweredBurn(10));
 window.addEventListener('resize',drawAll);
 
-window.addEventListener('number-format-change',()=>{updateTelemetry();drawAll();});
-void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));updateManeuverPlanner();requestAnimationFrame(animate);});
+window.addEventListener('number-format-change',()=>{void updateTelemetry().then(()=>drawAll());});
+void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));await updateManeuverPlanner();requestAnimationFrame(animate);});

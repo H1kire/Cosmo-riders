@@ -18,5 +18,9 @@ export class PhysicsBridge{
  vesselStateAt(id:string,timeSeconds:number,bodyStates:Float64Array):Promise<Record<string,unknown>>{return this.request({type:'vessel-state-at',id,timeSeconds,bodyStates});}
  sphereOfInfluence(bodyId:string):Promise<number|null>{return this.request({type:'sphere-of-influence',bodyId});}
  rotationAngleAt(bodyId:string,timeSeconds:number):Promise<number>{return this.request({type:'rotation-angle',bodyId,timeSeconds});}
+ stateToOrbitalElements(position:readonly [number,number,number],velocity:readonly [number,number,number],mu:number):Promise<Float64Array>{return this.request({type:'state-to-elements',position,velocity,mu});}
+ hohmannTransfer(primaryMu:number,initialRadiusM:number,targetRadiusM:number):Promise<Record<string,number>>{return this.request({type:'hohmann-transfer',primaryMu,initialRadiusM,targetRadiusM});}
+ planeChangeDeltaV(speedMS:number,angleRadians:number):Promise<number>{return this.request({type:'plane-change',speedMS,angleRadians});}
+ orbitalPeriod(semiMajorAxisM:number,mu:number):Promise<number>{return this.request({type:'orbital-period',semiMajorAxisM,mu});}
  async dispose():Promise<void>{if(this.disposed)return;try{await this.request<boolean>({type:'dispose'});}finally{this.disposed=true;this.worker.terminate();for(const p of this.pending.values())p.reject(new Error('PhysicsBridge disposed.'));this.pending.clear();}}
 }

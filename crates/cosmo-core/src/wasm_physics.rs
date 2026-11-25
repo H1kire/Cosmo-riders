@@ -25,3 +25,8 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
  pub fn get_physics_snapshot(&mut self)->Result<JsValue,JsValue>{let w=self.wm()?;let t=w.simulation_time_seconds;let states=w.body_states_at(t).map_err(error)?;let ids=Array::new();for id in w.body_ids(){ids.push(&JsValue::from_str(&id));}let vessels=w.vessel_states();let vids=Array::new();let pids=Array::new();let switches=Array::new();let mut packed=Vec::with_capacity(vessels.len()*13);for v in vessels{vids.push(&JsValue::from_str(&v.id));pids.push(&JsValue::from_str(&v.primary_body_id));let switch_json=serde_json::to_string(&v.last_primary_switch).map_err(error)?;switches.push(&JsValue::from_str(&switch_json));packed.extend_from_slice(&v.position);packed.extend_from_slice(&v.velocity);packed.extend_from_slice(&v.relative_position);packed.extend_from_slice(&v.relative_velocity);packed.push(v.mass_kg)}let o=Object::new();set(&o,"simulationTimeSeconds",&JsValue::from_f64(w.simulation_time_seconds))?;set(&o,"accumulatorSeconds",&JsValue::from_f64(w.accumulator_seconds))?;set(&o,"timeScale",&JsValue::from_f64(w.time_scale))?;set(&o,"paused",&JsValue::from_bool(w.paused))?;set(&o,"bodyIds",&ids.into())?;set(&o,"bodyStates",&Float64Array::from(states.as_slice()).into())?;set(&o,"vesselIds",&vids.into())?;set(&o,"vesselPrimaryIds",&pids.into())?;set(&o,"vesselLastPrimarySwitchJson",&switches.into())?;set(&o,"vesselStates",&Float64Array::from(packed.as_slice()).into())?;Ok(o.into())}
  pub fn dispose_physics_world(&mut self){self.world=None}
 }
+
+#[wasm_bindgen]
+pub fn orbital_period(semi_major_axis_m:f64,mu:f64)->Result<f64,JsValue>{
+ crate::maneuvers::orbital_period(semi_major_axis_m,mu).map_err(error)
+}

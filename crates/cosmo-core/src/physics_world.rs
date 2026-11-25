@@ -62,13 +62,15 @@ pub struct PhysicsWorld{
 }
 impl PhysicsWorld{
  pub fn new(o:Options)->Result<Self,String>{positive(o.fixed_step_seconds,"fixedStepSeconds")?;if o.max_sub_steps==0{return Err("maxSubSteps must be positive.".into())}if !(o.soi_enter_factor>0.0&&o.soi_enter_factor<1.0){return Err("soiEnterFactor must be between zero and one.".into())}if !(o.soi_exit_factor>1.0){return Err("soiExitFactor must exceed one.".into())}Ok(Self{options:o,bodies:vec![],indices:HashMap::new(),initial:vec![],states:vec![],vessels:vec![],vessel_indices:HashMap::new(),simulation_time_seconds:0.0,accumulator_seconds:0.0,time_scale:1.0,paused:false,initialized:false})}
- pub fn add_body(&mut self,b:BodyDefinition)->Result<(),String>{
+ pub fn add_body(&mut self,mut b:BodyDefinition)->Result<(),String>{
   if self.initialized{return Err("Cannot add bodies after ephemeris initialization.".into())}if b.id.trim().is_empty()||b.name.trim().is_empty(){return Err("Body id and name must be non-empty.".into())}positive(b.mass_kg,"massKg")?;positive(b.mean_radius_m,"meanRadiusM")?;v(b.position)?;v(b.velocity)?;
   if b.rotation_direction!=1&&b.rotation_direction != -1{return Err("rotationDirection must be 1 or -1.".into())}if b.orbital_reference_frame!="ecliptic"&&b.orbital_reference_frame!="parent-equator"{return Err("Unsupported orbital reference frame.".into())}
-  if let Some(x)=b.rotation_period_seconds{positive(x,"rotationPeriodSeconds")?}if let Some(x)=b.equatorial_radius_m{positive(x,"equatorialRadiusM")?}if let Some(x)=b.solar_day_seconds{positive(x,"solarDaySeconds")?}
+  if let Some(x)=b.rotation_period_seconds{positive(x,"rotationPeriodSeconds")?}if let Some(x)=b.equatorial_radius_m{positive(x,"equatorialRadiusM")?}if let Some(x)=b.semi_major_axis_m{positive(x,"semiMajorAxisM")?}if let Some(x)=b.solar_day_seconds{positive(x,"solarDaySeconds")?}
   if !b.prime_meridian_rad.is_finite()||!b.rotation_epoch_seconds.is_finite(){return Err("Rotation phase and epoch must be finite.".into())}
   if let Some(e)=&b.orbital_elements{positive(e.semi_major_axis_m,"semiMajorAxisM")?;if !e.eccentricity.is_finite()||!(0.0..1.0).contains(&e.eccentricity){return Err("Elliptic eccentricity must be in [0, 1).".into())}if b.parent_id.is_none(){return Err("An orbiting body must have parentId.".into())}}
   if self.indices.contains_key(&b.id){return Err(format!("Duplicate body id: {}",b.id))}match &b.parent_id{Some(p)if !self.indices.contains_key(p)=>return Err(format!("Parent body not found: {p}")),None if !self.bodies.is_empty()=>return Err("Only one root body is supported.".into()),_=>{}}
+  if b.semi_major_axis_m.is_none(){b.semi_major_axis_m=b.orbital_elements.as_ref().map(|e|e.semi_major_axis_m);}
+  if b.tidal_lock&&b.rotation_period_seconds.is_none(){if let(Some(a),Some(parent_id))=(b.semi_major_axis_m,b.parent_id.as_ref()){let parent=&self.bodies[self.indices[parent_id]];b.rotation_period_seconds=Some(std::f64::consts::TAU*(a.powi(3)/(G*(b.mass_kg+parent.mass_kg))).sqrt());}}
   let i=self.bodies.len();self.indices.insert(b.id.clone(),i);self.bodies.push(b);self.initial.push(None);self.states.push(BodyState{position:[0.0;3],velocity:[0.0;3]});Ok(())
  }
  pub fn body_count(&self)->usize{self.bodies.len()}pub fn body_ids(&self)->Vec<String>{self.bodies.iter().map(|b|b.id.clone()).collect()}pub fn body(&self,id:&str)->Option<&BodyDefinition>{self.indices.get(id).map(|i|&self.bodies[*i])}

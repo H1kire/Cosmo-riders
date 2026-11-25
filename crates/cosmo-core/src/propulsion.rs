@@ -260,6 +260,25 @@ mod tests {
     }
 
     #[test]
+    fn commanded_burn_duration_splits_the_step_and_shuts_engine_down() {
+        let mut p = Vec3::new(0.0, 0.0, 0.0);
+        let mut v = Vec3::new(0.0, 0.0, 0.0);
+        let mut mass = 100.0;
+        let mut engines = vec![Engine {
+            id: "main".into(), name: "Main".into(), max_thrust_n: 100.0,
+            isp_seconds: 300.0, direction: [1.0, 0.0, 0.0],
+            mount_position_m: [0.0; 3], throttle: 1.0, enabled: true,
+            propellant_kg: 10.0, burn_remaining_seconds: Some(2.0),
+        }];
+        let result = integrate_engines(&mut p, &mut v, &mut mass, &mut engines, 10.0, |_| Ok(Vec3::new(0.0, 0.0, 0.0))).unwrap();
+        assert!(!engines[0].enabled);
+        assert_eq!(engines[0].burn_remaining_seconds, Some(0.0));
+        assert!(engines[0].propellant_kg > 9.9);
+        assert!(result.propellant_used_kg < 0.1);
+        assert!(v.x > 1.9 && v.x < 2.1);
+    }
+
+    #[test]
     fn multiple_engines_sum_force_and_mass_flow() {
         let mut p = Vec3::new(0.0, 0.0, 0.0);
         let mut v = Vec3::new(0.0, 0.0, 0.0);

@@ -477,6 +477,22 @@ mod tests {
     }
 
     #[test]
+    fn j2_pair_interaction_preserves_linear_momentum() {
+        let system = NBodySystem::new(vec![
+            NBody { id:"oblate".into(),mass_kg:5.0e24,collision_radius_m:6.0e6,equatorial_radius_m:6.1e6,
+                j2:1.0e-3,pole_axis:Vec3::new(0.0,0.0,1.0),position:Vec3::new(0.0,0.0,0.0),velocity:Vec3::new(0.0,0.0,0.0) },
+            NBody { id:"probe".into(),mass_kg:1.0e20,collision_radius_m:1.0e5,equatorial_radius_m:1.0e5,
+                j2:0.0,pole_axis:Vec3::new(0.0,0.0,1.0),position:Vec3::new(1.0e9,2.0e8,0.0),velocity:Vec3::new(0.0,0.0,0.0) },
+        ]).unwrap();
+        let before = system.total_momentum();
+        let scale = system.bodies().iter().map(|body|body.mass_kg*body.velocity.norm()).sum::<f64>().max(1.0);
+        let mut advanced = system.clone();
+        advanced.step(10.0).unwrap();
+        assert!((advanced.total_momentum().sub(before)).norm()/scale < 1.0e-14);
+        assert!(advanced.total_energy().unwrap().is_finite());
+    }
+
+    #[test]
     fn pairwise_forces_preserve_total_momentum_to_roundoff() {
         let mut system = circular_pair();
         let initial = system.total_momentum();

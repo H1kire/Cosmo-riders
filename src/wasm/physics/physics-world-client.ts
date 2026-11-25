@@ -5,7 +5,7 @@ import {PhysicsBridge} from './physics-bridge.ts';
 import type {PhysicsSnapshot} from './physics-protocol.ts';
 type V3=Readonly<{x:number;y:number;z:number}>;
 export interface PhysicsState{readonly position:V3;readonly velocity:V3}
-export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly primaryBodyId:string;readonly relativePosition:V3;readonly relativeVelocity:V3;readonly massKg:number;readonly lastPrimarySwitch:{from:string;to:string;timeSeconds:number}|null}
+export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly primaryBodyId:string;readonly relativePosition:V3;readonly relativeVelocity:V3;readonly massKg:number;readonly lastPrimarySwitch:{from:string;to:string;timeSeconds:number}|null;readonly primaryBodyHistory:readonly {from:string;to:string;timeSeconds:number}[]}
 type BodyMetadata=CelestialBody;
 const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[offset+2]});
 export class PhysicsWorldClient{
@@ -20,7 +20,7 @@ export class PhysicsWorldClient{
  private async refresh(s:PhysicsSnapshot):Promise<void>{
   this.simulationTimeSeconds=s.simulationTimeSeconds;this.accumulator=s.accumulatorSeconds;this.timeScale=s.timeScale;this.paused=s.paused;
   this.bodyStates.clear();s.bodyIds.forEach((id,i)=>this.bodyStates.set(id,{position:vector(s.bodyStates,i*6),velocity:vector(s.bodyStates,i*6+3)}));
-  this.vessels.clear();s.vesselIds.forEach((id,i)=>{const o=i*13;this.vessels.set(id,{id,primaryBodyId:s.vesselPrimaryIds[i],position:vector(s.vesselStates,o),velocity:vector(s.vesselStates,o+3),relativePosition:vector(s.vesselStates,o+6),relativeVelocity:vector(s.vesselStates,o+9),massKg:s.vesselStates[o+12],lastPrimarySwitch:JSON.parse(s.vesselLastPrimarySwitchJson[i])});});
+  this.vessels.clear();s.vesselIds.forEach((id,i)=>{const o=i*13;this.vessels.set(id,{id,primaryBodyId:s.vesselPrimaryIds[i],position:vector(s.vesselStates,o),velocity:vector(s.vesselStates,o+3),relativePosition:vector(s.vesselStates,o+6),relativeVelocity:vector(s.vesselStates,o+9),massKg:s.vesselStates[o+12],lastPrimarySwitch:JSON.parse(s.vesselLastPrimarySwitchJson[i]),primaryBodyHistory:JSON.parse(s.vesselPrimaryHistoryJson[i])});});
  }
  async addVessel(d:{id:string;primaryBodyId:string;position:V3;velocity:V3;massKg?:number}):Promise<VesselSnapshot>{
   await this.bridge.addVessel({id:d.id,primaryBodyId:d.primaryBodyId,position:[d.position.x,d.position.y,d.position.z],velocity:[d.velocity.x,d.velocity.y,d.velocity.z],massKg:d.massKg??1000});

@@ -136,7 +136,7 @@ test('Rust patched-conics entry preserves absolute vessel position and velocity'
  rust.add_vessel(JSON.stringify({id:'soi-probe',primaryBodyId:'earth',position:[snapshot.bodyStates[m]+soi*.5,snapshot.bodyStates[m+1],snapshot.bodyStates[m+2]],velocity:[snapshot.bodyStates[m+3],snapshot.bodyStates[m+4],snapshot.bodyStates[m+5]],massKg:1000}));
  rust.step_simulation();
  const vessel=JSON.parse(rust.get_vessel_state('soi-probe')),states=rust.get_body_states(),mo=moon*6;
- assert.equal(vessel.primaryBodyId,'moon');assert.equal(vessel.lastPrimarySwitch.to,'moon');
+ assert.equal(vessel.primaryBodyId,'moon');assert.equal(vessel.lastPrimarySwitch.to,'moon');assert.equal(vessel.primaryBodyHistory.length,1);assert.equal(vessel.primaryBodyHistory[0].from,'earth');
  for(let axis=0;axis<3;axis++){assert.ok(Math.abs(vessel.position[axis]-states[mo+axis]-vessel.relativePosition[axis])<1e-5);assert.ok(Math.abs(vessel.velocity[axis]-states[mo+3+axis]-vessel.relativeVelocity[axis])<1e-8);}
  rust.dispose_physics_world();
 });

@@ -149,7 +149,7 @@ mod force_tests{
  }
  #[test]
  fn circular_orbit_specific_energy_is_negative(){
-  let mu=3.986004418e14;let radius=7.0e6;let speed=(mu/radius).sqrt();
+  let mu:f64=3.986004418e14;let radius:f64=7.0e6;let speed=(mu/radius).sqrt();
   let energy=0.5*speed*speed-mu/radius;
   assert!((energy+mu/(2.0*radius)).abs()<1e-8);
  }

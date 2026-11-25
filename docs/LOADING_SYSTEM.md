@@ -41,4 +41,5 @@ Import and initialization failures are logged and shown in the overlay. Worker, 
 - Individual shader compilation/link calls and each individual sphere allocation remain synchronous within their own frame slice; WebGL does not provide a general non-blocking compile API here.
 - The render target pixel ceiling limits framebuffer and post-processing cost, but it cannot prove that a particular Edge/GPU driver will not stall.
 - The procedural surface worker pool is intentionally limited to one CPU worker and at most two pending tasks, leaving CPU capacity for Edge and the render loop.
+- The optional Long Tasks observer reports the count and maximum duration of browser tasks; initialization diagnostics also report named stage timings and the longest synchronous slice.
 - Actual first-frame and phase durations still need browser instrumentation and visual confirmation on the target GPU.

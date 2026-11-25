@@ -60,7 +60,7 @@ test('both published entry points gate application import behind the start scree
 test('Solar3DView stages base initialization and caps GPU render resolution for desktop stability',async()=>{
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
  assert.match(source,/readonly ready:Promise<void>/);assert.match(source,/this\.ready=this\.initialize\(\)/);assert.match(source,/private async initialize\(\):Promise<void>/);
- assert.ok((source.match(/await this\.yieldToBrowser\(\)/g)??[]).length>=5);assert.ok(source.includes('1920*1080'));assert.ok(source.includes('antialias:false'));assert.ok(source.includes('Math.min(2,settings.msaaSamples)'));
+ assert.ok((source.match(/await this\.yieldToBrowser\(\)/g)??[]).length>=5);assert.ok(source.includes('1920*1080'));assert.ok(source.includes('antialias:false'));assert.ok(source.includes('Math.min(2,settings.msaaSamples)'));assert.ok(source.includes('PerformanceObserver'));assert.ok(source.includes('longestSynchronousChunkMs'));assert.ok(source.includes('longestLongTaskMs'));
 });
 
 test('quality replacement keeps the ready Earth renderer visible while sharing its worker pool',async()=>{

@@ -13,6 +13,7 @@ impl PhysicsWorldHandle{fn w(&self)->Result<&PhysicsWorld,JsValue>{self.world.as
  pub fn is_n_body_enabled(&self)->bool{self.world.as_ref().map(|w|w.n_body_enabled()).unwrap_or(false)}
  pub fn add_vessel(&mut self,json:String)->Result<(),JsValue>{let v:VesselDefinition=serde_json::from_str(&json).map_err(error)?;self.wm()?.add_vessel(v).map_err(error)}
  pub fn add_engine(&mut self,vessel_id:String,json:String)->Result<(),JsValue>{let mut engine:crate::propulsion::Engine=serde_json::from_str(&json).map_err(error)?;engine.validate().map_err(error)?;self.wm()?.add_engine(&vessel_id,engine).map_err(error)}
+ pub fn start_engine_burn(&mut self,vessel_id:String,engine_id:String,duration:f64)->Result<(),JsValue>{self.wm()?.start_engine_burn(&vessel_id,&engine_id,duration).map_err(error)}
  pub fn set_engine_enabled(&mut self,vessel_id:String,engine_id:String,enabled:bool)->Result<(),JsValue>{self.wm()?.set_engine_enabled(&vessel_id,&engine_id,enabled).map_err(error)}
  pub fn set_engine_throttle(&mut self,vessel_id:String,engine_id:String,throttle:f64)->Result<(),JsValue>{self.wm()?.set_engine_throttle(&vessel_id,&engine_id,throttle).map_err(error)}
  pub fn set_engine_direction(&mut self,vessel_id:String,engine_id:String,direction:Float64Array)->Result<(),JsValue>{if direction.length()!=3{return Err(error("Engine direction needs three components."))}let mut a=[0.0;3];direction.copy_to(&mut a);self.wm()?.set_engine_direction(&vessel_id,&engine_id,a).map_err(error)}

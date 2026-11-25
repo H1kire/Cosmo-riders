@@ -32,9 +32,9 @@ The game source is TypeScript (`src/`, `lab/`, `tests/`, and `scripts/`). Vite c
 - Flight deck with planetary map, local Earth–Moon view, vessel telemetry, time controls, engine pulses and Earth-to-Mars Hohmann estimate.
 
 ## Model boundaries
-The planetary ephemeris is a compact Keplerian J2000 approximation, not a DE440/Horizons precision ephemeris. The Moon uses rounded educational elements. Mutual planetary perturbations and N-body gravity are not integrated.
+The planetary ephemeris is a compact Keplerian J2000 approximation, not a DE440/Horizons precision ephemeris. The Moon uses rounded educational elements. Mutual planetary perturbations are not integrated in the default ephemeris mode. An opt-in Rust N-body mode is available through `PhysicsWorldClient.enableNBody()`; it uses the initialized approximate J2000 states as initial conditions and is not a DE440/Horizons precision simulation.
 
-The propulsion layer currently calculates a burn's rocket-equation mass loss and duration, then applies its Δv as an idealized instantaneous impulse. It does not yet integrate thrust, changing mass and gravity continuously throughout the burn; attitude control, staging, aerodynamic drag, heating, collisions and surface operations remain future work.
+The propulsion layer currently calculates a burn's rocket-equation mass loss and duration, then applies its Δv as an idealized instantaneous impulse. Continuous-thrust integration with evolving mass and gravity during the burn is not implemented. It does not yet integrate thrust, changing mass and gravity continuously throughout the burn; attitude control, staging, aerodynamic drag, heating, collisions and surface operations remain future work.
 
 The Hohmann planner assumes coplanar circular orbits and does not solve launch windows, phase matching, launch from a planetary surface or arrival capture. The 3D browser view uses a logarithmic global spatial projection and a local linear scale around the focused body; projection never changes the underlying SI physics. Planet appearance is procedural rather than sourced from high-resolution satellite texture maps, and the current LOD does not yet provide a tiled terrain/quadtree surface system.
 

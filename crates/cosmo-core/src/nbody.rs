@@ -485,9 +485,9 @@ mod tests {
                 j2:0.0,pole_axis:Vec3::new(0.0,0.0,1.0),position:Vec3::new(1.0e9,2.0e8,0.0),velocity:Vec3::new(0.0,0.0,0.0) },
         ]).unwrap();
         let before = system.total_momentum();
-        let scale = system.bodies().iter().map(|body|body.mass_kg*body.velocity.norm()).sum::<f64>().max(1.0);
         let mut advanced = system.clone();
         advanced.step(10.0).unwrap();
+        let scale = advanced.bodies().iter().map(|body|body.mass_kg*body.velocity.norm()).sum::<f64>().max(1.0);
         assert!((advanced.total_momentum().sub(before)).norm()/scale < 1.0e-14);
         assert!(advanced.total_energy().unwrap().is_finite());
     }

@@ -1,6 +1,6 @@
 export interface PhysicsSnapshot {
  readonly simulationTimeSeconds:number;readonly accumulatorSeconds:number;readonly timeScale:number;readonly paused:boolean;
- readonly bodyIds:readonly string[];readonly bodyStates:Float64Array;readonly vesselIds:readonly string[];readonly vesselStates:Float64Array;
+ readonly bodyIds:readonly string[];readonly bodyStates:Float64Array;readonly vesselIds:readonly string[];readonly vesselPrimaryIds:readonly string[];readonly vesselStates:Float64Array;
 }
 export type PhysicsCommand=
  |{type:'initialize';catalog:readonly Record<string,unknown>[];options?:Record<string,number>}

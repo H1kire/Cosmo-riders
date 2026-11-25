@@ -12,7 +12,7 @@ scope.onmessage=async(event:MessageEvent<PhysicsRequest>)=>{
  try{let result:unknown;
  switch(command.type){
  case'initialize':if(world)throw new Error('Physics Worker already owns a PhysicsWorld.');await ensureWasm();world=create_physics_world(JSON.stringify(command.catalog),JSON.stringify(command.options??{}));result=true;break;
- case'advance':{const w=live(),steps=w.advance_simulation(command.realDeltaSeconds),snapshot=w.get_physics_snapshot() as PhysicsSnapshot,renderTime=snapshot.simulationTimeSeconds+(snapshot.paused?0:snapshot.accumulatorSeconds),renderBodyStates=w.get_body_states_at(renderTime),renderVesselStates=snapshot.vesselIds.map(id=>JSON.parse(w.get_vessel_state_at(id,renderTime,renderBodyStates)));result={steps,snapshot,renderBodyStates,renderVesselStates};break;}
+ case'advance':{const w=live(),steps=w.advance_simulation(command.realDeltaSeconds),snapshot=w.get_physics_snapshot() as PhysicsSnapshot,renderTime=snapshot.simulationTimeSeconds+(snapshot.paused?0:snapshot.accumulatorSeconds),renderBodyStates=w.get_body_states_at(renderTime),renderRotationAngles=w.get_rotation_angles_at(renderTime),renderVesselStates=snapshot.vesselIds.map(id=>JSON.parse(w.get_vessel_state_at(id,renderTime,renderBodyStates)));result={steps,snapshot,renderBodyStates,renderRotationAngles,renderVesselStates};break;}
  case'step':live().step_simulation();result=live().get_physics_snapshot();break;
  case'set-time-scale':live().set_time_scale(command.value);result=true;break;
  case'set-paused':live().set_paused(command.value);result=true;break;

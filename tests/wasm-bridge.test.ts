@@ -253,3 +253,17 @@ test('Rust owns circular-orbit speed and thrust-to-weight calculations',async()=
  assert.ok(Math.abs(twr-20_000/(1_000*9.80665))<1e-12);
  world.dispose_physics_world();
 });
+
+test('Rust snapshots carry analytic spin angles into Solar3DView',async()=>{
+ await initializeWasm();
+ const world=create_physics_world(JSON.stringify(createSolarSystemBodyCatalog()),JSON.stringify({fixedStepSeconds:60,maxSubSteps:10}));
+ const snapshot=world.get_physics_snapshot();
+ assert.equal(snapshot.rotationAngles.length,50);
+ assert.ok(Number.isFinite(snapshot.rotationAngles[snapshot.bodyIds.indexOf('earth')]));
+ const [worker,client,view]=await Promise.all([read('src/wasm/physics/physics-worker.ts'),read('src/wasm/physics/physics-world-client.ts'),read('src/presentation/solar-3d.ts')]);
+ assert.match(worker,/get_rotation_angles_at\(renderTime\)/);
+ assert.match(client,/result\.renderRotationAngles/);
+ assert.match(view,/world\.renderRotationAngles/);
+ assert.doesNotMatch(view,/rotationAngleAt\?\./);
+ world.dispose_physics_world();
+});

@@ -1,4 +1,4 @@
-export interface PhysicsSnapshot{readonly simulationTimeSeconds:number;readonly accumulatorSeconds:number;readonly timeScale:number;readonly paused:boolean;readonly bodyIds:readonly string[];readonly bodyStates:Float64Array;readonly vesselIds:readonly string[];readonly vesselPrimaryIds:readonly string[];readonly vesselLastPrimarySwitchJson:readonly string[];readonly vesselPrimaryHistoryJson:readonly string[];readonly vesselStates:Float64Array}
+export interface PhysicsSnapshot{readonly simulationTimeSeconds:number;readonly accumulatorSeconds:number;readonly timeScale:number;readonly paused:boolean;readonly bodyIds:readonly string[];readonly bodyStates:Float64Array;readonly rotationAngles:Float64Array;readonly vesselIds:readonly string[];readonly vesselPrimaryIds:readonly string[];readonly vesselLastPrimarySwitchJson:readonly string[];readonly vesselPrimaryHistoryJson:readonly string[];readonly vesselStates:Float64Array}
 export type PhysicsCommand=
  |{type:'initialize';catalog:readonly Record<string,unknown>[];options?:Record<string,number>}
  |{type:'advance';realDeltaSeconds:number}|{type:'step'}|{type:'set-time-scale';value:number}|{type:'set-paused';value:boolean}
@@ -14,4 +14,4 @@ export type PhysicsCommand=
  |{type:'plane-change';speedMS:number;angleRadians:number}|{type:'orbital-period';semiMajorAxisM:number;mu:number}|{type:'dispose'};
 export interface PhysicsRequest{readonly id:number;readonly command:PhysicsCommand}
 export interface PhysicsResponse{readonly id:number;readonly ok:boolean;readonly result?:unknown;readonly error?:string}
-export interface AdvanceResult{readonly steps:number;readonly snapshot:PhysicsSnapshot;readonly renderBodyStates:Float64Array;readonly renderVesselStates:readonly Record<string,unknown>[]}
+export interface AdvanceResult{readonly steps:number;readonly snapshot:PhysicsSnapshot;readonly renderBodyStates:Float64Array;readonly renderRotationAngles:Float64Array;readonly renderVesselStates:readonly Record<string,unknown>[]}

@@ -24,7 +24,7 @@ const sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),c
 function perspective(f,a,n,fz){const q=1/Math.tan(f/2),d=1/(n-fz);return[q/a,0,0,0,0,q,0,0,0,0,(fz+n)*d,-1,0,0,2*fz*n*d,0];}
 function lookAt(e,t,u){const z=norm(sub(e,t)),x=norm(cross(u,z)),y=cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1];}
 function multiply(a,b){const o=Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o;}
-function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState){
+function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle=0){
  const relativePosition=state&&parentState?[state.position.x-parentState.position.x,state.position.y-parentState.position.y,state.position.z-parentState.position.z]:null;
  const relativeVelocity=state&&parentState?[state.velocity.x-parentState.velocity.x,state.velocity.y-parentState.velocity.y,state.velocity.z-parentState.velocity.z]:null;
  const mapVector=v=>[v[0],v[2],v[1]];
@@ -62,7 +62,7 @@ function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState){
  }
  const right=norm(cross(spinAxis,forward));
  forward=norm(cross(right,spinAxis));
- const angle=body.rotationAngleAt?.(timeSeconds)??0,ca=Math.cos(angle),sa=Math.sin(angle);
+ const angle=rotationAngle??0,ca=Math.cos(angle),sa=Math.sin(angle);
  const rotatedRight=right.map((value,index)=>value*ca-forward[index]*sa);
  const rotatedForward=right.map((value,index)=>value*sa+forward[index]*ca);
  return [rotatedRight[0]*radius,spinAxis[0]*radius,rotatedForward[0]*radius,0,
@@ -457,7 +457,8 @@ export class Solar3DView{
    const level=selectMeshLod(px,this.graphics.maxMeshLod),mesh=this.meshes[level];
    
    const parentState=body.parentId?states.get(body.parentId):null;
-   const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState);
+   const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
+   const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
    g.uniform3f(l.uCameraPosition,...eye);

@@ -10,7 +10,7 @@ type BodyMetadata=CelestialBody;
 const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[offset+2]});
 export class PhysicsWorldClient{
  readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
- simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly renderVessels=new Map<string,VesselSnapshot>();
+ simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly rotationAngles=new Map<string,number|null>();readonly renderRotationAngles=new Map<string,number|null>();readonly renderVessels=new Map<string,VesselSnapshot>();
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
@@ -27,11 +27,11 @@ export class PhysicsWorldClient{
    this.orbitalPeriods.set(id,period);
    if(metadata.parentId&&metadata.orbitalElements)this.orbitPaths.set(id,await this.bridge.orbitPath(id,1024));
   }));
-  await this.refresh(await this.bridge.snapshot());
+  await this.refresh(await this.bridge.snapshot());this.renderRotationAngles.clear();for(const [id,angle] of this.rotationAngles)this.renderRotationAngles.set(id,angle);
  }
  private async refresh(s:PhysicsSnapshot):Promise<void>{
   this.simulationTimeSeconds=s.simulationTimeSeconds;this.accumulator=s.accumulatorSeconds;this.timeScale=s.timeScale;this.paused=s.paused;
-  this.bodyStates.clear();s.bodyIds.forEach((id,i)=>this.bodyStates.set(id,{position:vector(s.bodyStates,i*6),velocity:vector(s.bodyStates,i*6+3)}));
+  this.bodyStates.clear();s.bodyIds.forEach((id,i)=>this.bodyStates.set(id,{position:vector(s.bodyStates,i*6),velocity:vector(s.bodyStates,i*6+3)}));this.rotationAngles.clear();s.bodyIds.forEach((id,i)=>this.rotationAngles.set(id,Number.isFinite(s.rotationAngles[i])?s.rotationAngles[i]:null));
   this.vessels.clear();s.vesselIds.forEach((id,i)=>{const o=i*13;this.vessels.set(id,{id,primaryBodyId:s.vesselPrimaryIds[i],position:vector(s.vesselStates,o),velocity:vector(s.vesselStates,o+3),relativePosition:vector(s.vesselStates,o+6),relativeVelocity:vector(s.vesselStates,o+9),massKg:s.vesselStates[o+12],lastPrimarySwitch:JSON.parse(s.vesselLastPrimarySwitchJson[i]),primaryBodyHistory:JSON.parse(s.vesselPrimaryHistoryJson[i])});});
  }
  async addVessel(d:{id:string;primaryBodyId:string;position:V3;velocity:V3;massKg?:number}):Promise<VesselSnapshot>{
@@ -43,8 +43,8 @@ export class PhysicsWorldClient{
  getSphereOfInfluence(id:string):number|null{return this.sphereOfInfluence.get(id)??null;}
  async setTimeScale(v:number):Promise<void>{await this.bridge.setTimeScale(v);this.timeScale=v;}
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}
- async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as unknown as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}
- async step():Promise<void>{await this.bridge.step();await this.refresh(await this.bridge.snapshot());}
+ async advance(dt:number){const result=await this.bridge.advance(dt);await this.refresh(result.snapshot);this.renderBodyStates.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderBodyStates.set(id,{position:vector(result.renderBodyStates,i*6),velocity:vector(result.renderBodyStates,i*6+3)}));this.renderRotationAngles.clear();result.snapshot.bodyIds.forEach((id,i)=>this.renderRotationAngles.set(id,Number.isFinite(result.renderRotationAngles[i])?result.renderRotationAngles[i]:null));this.renderVessels.clear();for(const state of result.renderVesselStates){const s=state as unknown as VesselSnapshot;this.renderVessels.set(s.id,s);}return result;}
+ async step():Promise<void>{await this.bridge.step();await this.refresh(await this.bridge.snapshot());this.renderRotationAngles.clear();for(const [id,angle] of this.rotationAngles)this.renderRotationAngles.set(id,angle);}
  stateToOrbitalElements(position:V3,velocity:V3,mu:number):Promise<Float64Array>{return this.bridge.stateToOrbitalElements([position.x,position.y,position.z],[velocity.x,velocity.y,velocity.z],mu);}
  gravitationalParameter(id:string):Promise<number>{return this.bridge.gravitationalParameter(id);}
  circularOrbitSpeed(id:string,radiusM:number):Promise<number>{return this.bridge.circularOrbitSpeed(id,radiusM);}

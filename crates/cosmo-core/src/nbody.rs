@@ -107,15 +107,17 @@ impl NBodySystem {
             return Err("N-body step must be finite and non-zero.".into());
         }
         let initial_acceleration = self.accelerations()?;
-        for (body, acceleration) in self.bodies.iter_mut().zip(initial_acceleration.iter()) {
+        let mut candidate = self.clone();
+        for (body, acceleration) in candidate.bodies.iter_mut().zip(initial_acceleration.iter()) {
             body.position = body.position
                 .add(body.velocity.scale(dt_seconds))
                 .add(acceleration.scale(0.5 * dt_seconds * dt_seconds));
         }
-        let final_acceleration = self.accelerations()?;
-        for (body, (a0, a1)) in self.bodies.iter_mut().zip(initial_acceleration.iter().zip(final_acceleration.iter())) {
+        let final_acceleration = candidate.accelerations()?;
+        for (body, (a0, a1)) in candidate.bodies.iter_mut().zip(initial_acceleration.iter().zip(final_acceleration.iter())) {
             body.velocity = body.velocity.add(a0.add(*a1).scale(0.5 * dt_seconds));
         }
+        *self = candidate;
         Ok(())
     }
 
@@ -211,6 +213,9 @@ mod tests {
                 position: Vec3::new(1.0,0.0,0.0), velocity: Vec3::new(0.0,0.0,0.0) },
         ]).unwrap();
         assert!(system.total_energy().is_err());
-        assert!(system.clone().step(1.0).is_err());
+        let mut candidate = system.clone();
+        let before = candidate.bodies()[0].position;
+        assert!(candidate.step(1.0).is_err());
+        assert_eq!(candidate.bodies()[0].position, before);
     }
 }

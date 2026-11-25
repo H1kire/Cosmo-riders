@@ -215,7 +215,7 @@ impl PhysicsWorld{
  w.start_engine_burn("ship","main",2.0).unwrap();w.step().unwrap();
  let state=w.propulsion_state("ship").unwrap();
  assert_eq!(state["thrustN"].as_f64().unwrap(),0.0);
- assert!(state["propellantRemainingKg"].as_f64().unwrap()>9.9);
+ let remaining=state["propellantRemainingKg"].as_f64().unwrap();assert!(remaining>9.0&&remaining<9.5);
  assert!(w.vessel_state("ship").unwrap().mass_kg<1010.0);
  assert_eq!(state["engines"][0]["burnRemainingSeconds"].as_f64(),Some(0.0));
 }

@@ -122,14 +122,14 @@ impl PhysicsWorld{
  }
  fn step_n_body(&mut self)->Result<(),String>{
   let dt=self.options.fixed_step_seconds;let start=self.nbody.as_ref().ok_or("N-body mode is not enabled.")?.clone();
-  let end=start.advanced(dt,dt.abs())?;self.nbody=Some(end);self.sync_n_body_states()?;
+  let end=start.advanced(dt,dt.abs())?;self.nbody=Some(end);self.sync_n_body_states()?;self.simulation_time_seconds+=dt;
   for i in 0..self.vessels.len(){
    let(p,vv)=NBodySystem::integrate_test_particle(&start,self.nbody.as_ref().unwrap(),self.vessels[i].p,self.vessels[i].vel,dt)?;
    self.vessels[i].p=p;self.vessels[i].vel=vv;
    let pi=self.indices[&self.vessels[i].primary];self.vessels[i].r=p.sub(self.states[pi].p());self.vessels[i].v=vv.sub(self.states[pi].vel());
    let next=self.choose_primary(&self.vessels[i])?;self.switch_primary(i,next);
   }
-  self.simulation_time_seconds+=dt;Ok(())
+  Ok(())
  }
  fn ready(&mut self)->Result<(),String>{self.initialize_ephemerides()}
  pub fn sphere_of_influence(&self,id:&str)->Option<f64>{let i=*self.indices.get(id)?;let b=&self.bodies[i];let pi=*self.indices.get(b.parent_id.as_ref()?)?;let p=&self.bodies[pi];let a=b.semi_major_axis_m.or_else(||b.orbital_elements.as_ref().map(|e|e.semi_major_axis_m))?;if b.mass_kg>=p.mass_kg{return None}Some(a*(b.mass_kg/p.mass_kg).powf(0.4))}

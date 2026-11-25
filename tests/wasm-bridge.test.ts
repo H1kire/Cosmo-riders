@@ -6,7 +6,7 @@ import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
 import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
-import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period } from '../src/wasm/pkg/cosmo_core.js';
+import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler } from '../src/wasm/pkg/cosmo_core.js';
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
@@ -139,4 +139,37 @@ test('Rust patched-conics entry preserves absolute vessel position and velocity'
  assert.equal(vessel.primaryBodyId,'moon');assert.equal(vessel.lastPrimarySwitch.to,'moon');assert.equal(vessel.primaryBodyHistory.length,1);assert.equal(vessel.primaryBodyHistory[0].from,'earth');
  for(let axis=0;axis<3;axis++){assert.ok(Math.abs(vessel.position[axis]-states[mo+axis]-vessel.relativePosition[axis])<1e-5);assert.ok(Math.abs(vessel.velocity[axis]-states[mo+3+axis]-vessel.relativeVelocity[axis])<1e-8);}
  rust.dispose_physics_world();
+});
+
+test('Rust/WASM universal propagation covers elliptic, hyperbolic and near-parabolic trajectories',async()=>{
+ await initializeWasm();
+ const mu=3.986004418e14,r=7_000_000,escape=Math.sqrt(2*mu/r);
+ const cases=[
+  {name:'elliptic',velocity:escape*.7,dt:2400},
+  {name:'near-parabolic',velocity:escape*(1+1e-9),dt:900},
+  {name:'hyperbolic',velocity:escape*1.2,dt:3600}
+ ];
+ for(const scenario of cases){
+  const p=new Float64Array([r,0,0]),v=new Float64Array([0,scenario.velocity,0]);
+  const forward=propagate_kepler(p,v,mu,scenario.dt,1e-11,200);
+  assert.equal(forward.length,7,scenario.name+' state shape');
+  assert.ok(Array.from(forward).every(Number.isFinite),scenario.name+' finite forward state');
+  const back=propagate_kepler(new Float64Array(forward.slice(0,3)),new Float64Array(forward.slice(3,6)),mu,-scenario.dt,1e-11,200);
+  const positionError=Math.hypot(back[0]-r,back[1],back[2])/r;
+  const velocityError=Math.hypot(back[3],back[4]-scenario.velocity,back[5])/scenario.velocity;
+  assert.ok(positionError<2e-8,scenario.name+' reverse position error '+positionError);
+  assert.ok(velocityError<2e-8,scenario.name+' reverse velocity error '+velocityError);
+ }
+});
+test('Solar3DView consumes Rust worker snapshots in the live application',async()=>{
+ const [lab,view,client]=await Promise.all([read('lab/lab.ts'),read('src/presentation/solar-3d.ts'),read('src/wasm/physics/physics-world-client.ts')]);
+ assert.match(lab,/import \{ PhysicsWorldClient \} from '\.\.\/src\/wasm\/physics\/physics-world-client\.ts'/);
+ assert.match(lab,/world=new PhysicsWorldClient\(\)/);
+ assert.match(lab,/await world\.initialize\(/);
+ assert.match(lab,/solar3D\.render\(world,renderedBodyStates/);
+ assert.match(client,/this\.bridge\.initialize\(this\.catalog,options\)/);
+ assert.match(client,/result\.renderBodyStates/);
+ assert.match(view,/render\(world,states,timeSeconds/);
+ assert.match(view,/const bodies=\[\.\.\.world\.bodies\.values\(\)\]/);
+ assert.match(view,/const bodyState=states\.get\(body\.id\)/);
 });

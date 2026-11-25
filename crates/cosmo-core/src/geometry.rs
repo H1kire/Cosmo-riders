@@ -141,7 +141,7 @@ mod stitching_tests{
  #[test]
  fn all_masks_have_conforming_boundary_and_complete_manifold_topology(){
   use std::collections::HashMap;
-  for resolution in [8,16,32,64]{for mask in 0..8{
+  for resolution in [8_u32,16,32,64]{for mask in 0..8{
    let mut coordinates=vec![(0_i32,0_i32);((resolution+1)*(resolution+2)/2) as usize];
    for row in 0..=resolution{for column in 0..=resolution-row{
     let index=row*(resolution+1)-row*row.saturating_sub(1)/2+column;

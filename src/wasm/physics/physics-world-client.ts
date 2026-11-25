@@ -58,6 +58,7 @@ export class PhysicsWorldClient{
  planeChangeDeltaV(speedMS:number,angleRadians:number):Promise<number>{return this.bridge.planeChangeDeltaV(speedMS,angleRadians);}
  orbitalPeriod(a:number,mu:number):Promise<number>{return this.bridge.orbitalPeriod(a,mu);}
  async addEngine(vesselId:string,engine:EngineDefinition):Promise<void>{await this.bridge.addEngine(vesselId,{...engine,mountPositionM:engine.mountPositionM??[0,0,0],throttle:engine.throttle??0,enabled:engine.enabled??false,propellantKg:engine.propellantKg??0});}
+ async startEngineBurn(vesselId:string,engineId:string,durationSeconds:number):Promise<void>{await this.bridge.startEngineBurn(vesselId,engineId,durationSeconds);}
  async setEngineEnabled(vesselId:string,engineId:string,enabled:boolean):Promise<void>{await this.bridge.setEngineEnabled(vesselId,engineId,enabled);}
  async setEngineThrottle(vesselId:string,engineId:string,throttle:number):Promise<void>{await this.bridge.setEngineThrottle(vesselId,engineId,throttle);}
  async setEngineDirection(vesselId:string,engineId:string,direction:readonly [number,number,number]):Promise<void>{await this.bridge.setEngineDirection(vesselId,engineId,direction);}

@@ -22,6 +22,7 @@ export interface WebGPUBodyDraw {
   waterFraction: number;
   iceFraction: number;
   lod: number;
+  eclipseVisibility?: number;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; };
   clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
 }
@@ -111,6 +112,7 @@ struct BodyUniforms {
   lightAndEmission: vec4<f32>,
   material: vec4<f32>,
   cameraPosition: vec4<f32>,
+  lighting: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> body: BodyUniforms;
@@ -171,7 +173,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(input.worldNormal);
     let viewDirection = normalize(body.cameraPosition.xyz - input.worldPosition);
     let rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0), 2.35);
-    let daylight = 0.18 + 0.82 * max(dot(normal, normalize(input.lightDirection)), 0.0);
+    let shadowFactor = mix(1.0, body.lighting.x, clamp(body.lighting.y, 0.0, 1.0));
+    let daylight = 0.18 + 0.82 * max(dot(normal, normalize(input.lightDirection)), 0.0) * shadowFactor;
     if (body.material.x < 9.5) {
       let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
       return vec4<f32>(body.color.rgb * (0.35 + scattering * 1.8), clamp(scattering, 0.0, 0.82));
@@ -216,7 +219,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     albedo *= 0.78 + detail * 0.42;
   }
   let diffuse = max(dot(normalize(input.worldNormal), normalize(input.lightDirection)), 0.0);
-  let illumination = 0.10 + diffuse * 0.90;
+  let shadowFactor = mix(1.0, body.lighting.x, clamp(body.lighting.y, 0.0, 1.0));
+  let illumination = 0.10 + diffuse * 0.90 * shadowFactor;
   return vec4<f32>(albedo * illumination, 1.0);
 }
 `;
@@ -321,7 +325,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 192 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 208 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -424,10 +428,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 192, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 208, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 192 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 208 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -458,7 +462,7 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    const matrix = new Float32Array(48);
+    const matrix = new Float32Array(52);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
@@ -473,6 +477,7 @@ export class WebGPUBackend {
       matrix.set([dx / length, dy / length, dz / length, body.star ? 1 : 0], 36);
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
+      matrix.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
@@ -481,7 +486,7 @@ export class WebGPUBackend {
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
-      const base = new Float32Array(48);
+      const base = new Float32Array(52);
       base.set(Array.from(body.model).slice(0, 16), 0);
       base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
       base.set([1, 1, 1, 1], 32);
@@ -490,6 +495,7 @@ export class WebGPUBackend {
       base.set([dx / lightLength, dy / lightLength, dz / lightLength, 0], 36);
       base.set([0, 0, 0, 0], 40);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
+      base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);

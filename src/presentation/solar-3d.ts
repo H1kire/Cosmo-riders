@@ -528,6 +528,18 @@ export class Solar3DView{
     g.uniform1f(l.uErosion,isStar?0:(body.surface?.erosion??0));
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
+   let webgpuEclipseVisibility=1;
+   if(this.graphics.shadows&&!isStar){
+    const observerPosition=[state.position.x,state.position.y,state.position.z] as [number,number,number];
+    const sourcePosition=[sun.x,sun.y,sun.z] as [number,number,number];
+    for(const blockerBody of bodies){
+     if(blockerBody.id===body.id||blockerBody.id==='sun')continue;
+     const blockerState=states.get(blockerBody.id);if(!blockerState)continue;
+     webgpuEclipseVisibility*=calculateEclipse(sourcePosition,696340000,[blockerState.position.x,blockerState.position.y,blockerState.position.z],blockerBody.meanRadiusM,observerPosition).visibility;
+     if(webgpuEclipseVisibility<0.001)break;
+    }
+   }
+   webgpuDraw.eclipseVisibility=webgpuEclipseVisibility;
    g.uniform3fv(l['uOccluders[0]'],occluders.positions);g.uniform1fv(l['uOccluderRadii[0]'],occluders.radii);
    g.uniform1i(l.uOccluderCount,occluders.count);g.uniform1i(l.uShadows,this.graphics.shadows?1:0);
     let renderedGeodesicEarth=false;

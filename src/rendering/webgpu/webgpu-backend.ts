@@ -22,6 +22,8 @@ export interface WebGPUBodyDraw {
   waterFraction: number;
   iceFraction: number;
   lod: number;
+  atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; };
+  clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
@@ -29,6 +31,8 @@ export interface WebGPURingDraw { id: string; model: ArrayLike<number>; }
 
 export interface WebGPUFrame {
   viewProjection: ArrayLike<number>;
+  cameraPosition: ArrayLike<number>;
+  timeSeconds: number;
   bodies: readonly WebGPUBodyDraw[];
   orbits: readonly WebGPUOrbitDraw[];
   rings: readonly WebGPURingDraw[];
@@ -106,6 +110,7 @@ struct BodyUniforms {
   color: vec4<f32>,
   lightAndEmission: vec4<f32>,
   material: vec4<f32>,
+  cameraPosition: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> body: BodyUniforms;
@@ -120,6 +125,7 @@ struct VertexOutput {
   @location(0) worldNormal: vec3<f32>,
   @location(1) lightDirection: vec3<f32>,
   @location(2) localDirection: vec3<f32>,
+  @location(3) worldPosition: vec3<f32>,
 };
 
 @vertex
@@ -130,6 +136,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
   output.worldNormal = normalize((body.model * vec4<f32>(input.normal, 0.0)).xyz);
   output.lightDirection = normalize(body.lightAndEmission.xyz);
   output.localDirection = input.normal;
+  output.worldPosition = world.xyz;
   return output;
 }
 
@@ -159,10 +166,24 @@ fn fbm3(p: vec3<f32>) -> f32 {
 }
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
+  let direction = normalize(input.localDirection);
+  if (body.material.x > 8.5) {
+    let normal = normalize(input.worldNormal);
+    let viewDirection = normalize(body.cameraPosition.xyz - input.worldPosition);
+    let rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0), 2.35);
+    let daylight = 0.18 + 0.82 * max(dot(normal, normalize(input.lightDirection)), 0.0);
+    if (body.material.x < 9.5) {
+      let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
+      return vec4<f32>(body.color.rgb * (0.35 + scattering * 1.8), clamp(scattering, 0.0, 0.82));
+    }
+    let cloudNoise = fbm3(direction * body.material.w + vec3<f32>(body.cameraPosition.w * 0.018, 0.0, body.cameraPosition.w * 0.011));
+    let cloudMask = smoothstep(1.0 - body.material.y, 1.0 - body.material.y + 0.16, cloudNoise);
+    let cloudAlpha = cloudMask * body.material.z * (0.22 + 0.78 * daylight);
+    return vec4<f32>(body.color.rgb * (0.55 + 0.65 * daylight), clamp(cloudAlpha, 0.0, 0.95));
+  }
   if (body.lightAndEmission.w > 0.5) {
     return vec4<f32>(body.color.rgb * 1.7, 1.0);
   }
-  let direction = normalize(input.localDirection);
   let field = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
   let detail = fbm3(direction * 31.0);
   let kind = body.material.x;
@@ -212,6 +233,7 @@ export class WebGPUBackend {
   error: string | null = null;
   initializationMs = 0;
   private pipeline: any = null;
+  private effectPipeline: any = null;
   private depthTexture: any = null;
   private readonly meshResources = new Map<number, MeshGpuResources>();
   private readonly bodyResources = new Map<string, BodyGpuResources>();
@@ -299,7 +321,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 176 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 192 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -319,6 +341,27 @@ export class WebGPUBackend {
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
+    });
+    this.effectPipeline = await this.device.createRenderPipelineAsync({
+      layout,
+      vertex: {
+        module,
+        entryPoint: 'vertexMain',
+        buffers: [
+          { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
+          { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] }
+        ]
+      },
+      fragment: {
+        module,
+        entryPoint: 'fragmentMain',
+        targets: [{ format: this.format, blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+        } }]
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     this.bindGroupLayout = bindGroupLayout;
     const orbitModule = this.device.createShaderModule({ code: ORBIT_SHADER });
@@ -381,10 +424,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 176, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 192, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 176 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 192 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -415,7 +458,7 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    const matrix = new Float32Array(44);
+    const matrix = new Float32Array(48);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
@@ -429,9 +472,44 @@ export class WebGPUBackend {
       const length = Math.hypot(dx, dy, dz) || 1;
       matrix.set([dx / length, dy / length, dz / length, body.star ? 1 : 0], 36);
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
+      matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+    }
+    pass.setPipeline(this.effectPipeline);
+    for (const body of frame.bodies) {
+      if (!body.atmosphere && !body.clouds?.length) continue;
+      const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
+      const resources = this.resourcesFor(body.id);
+      const base = new Float32Array(48);
+      base.set(Array.from(body.model).slice(0, 16), 0);
+      base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
+      base.set([1, 1, 1, 1], 32);
+      const dx = frame.sunPosition[0] - body.position[0], dy = frame.sunPosition[1] - body.position[1], dz = frame.sunPosition[2] - body.position[2];
+      const lightLength = Math.hypot(dx, dy, dz) || 1;
+      base.set([dx / lightLength, dy / lightLength, dz / lightLength, 0], 36);
+      base.set([0, 0, 0, 0], 40);
+      base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
+      const drawShell = (scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
+        const shell = new Float32Array(base);
+        for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
+        shell.set([color[0], color[1], color[2], 1], 32);
+        shell.set(params, 40);
+        this.device.queue.writeBuffer(resources.uniform, 0, shell);
+        pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
+        pass.setBindGroup(0, resources.bindGroup);
+        pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+      };
+      if (body.atmosphere) {
+        const atmosphere = body.atmosphere;
+        drawShell(1 + Math.max(0.0001, atmosphere.thicknessRatio), atmosphere.color,
+          [9, atmosphere.intensity, atmosphere.thicknessRatio, atmosphere.mie]);
+      }
+      for (const cloud of body.clouds ?? []) {
+        drawShell(1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
+          [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)]);
+      }
     }
     const ringConfigs: Record<string, { inner: number; outer: number; color: readonly [number, number, number]; opacity: number }> = {
       saturn: { inner: 1.24, outer: 2.32, color: [0.72, 0.66, 0.54], opacity: 0.72 },
@@ -509,6 +587,7 @@ export class WebGPUBackend {
     this.meshResources.clear();
     this.depthTexture?.destroy?.(); this.depthTexture = null;
     this.pipeline = null;
+    this.effectPipeline = null;
     this.orbitPipeline = null;
     this.orbitBindGroupLayout = null;
     this.ringPipeline = null;

@@ -504,7 +504,8 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   webgpuBodies.push({id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,lod:level});
+   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,lod:level};
+   webgpuBodies.push(webgpuBody);
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
    g.uniform3f(l.uCameraPosition,...eye);
@@ -567,6 +568,12 @@ export class Solar3DView{
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
    if(this.graphics.atmosphere&&profile){
+    webgpuBody.atmosphere={color:profile.rayleigh,intensity:(profile.intensity??1)*this.graphics.atmosphereIntensity,thicknessRatio:profile.atmosphereHeightM/body.meanRadiusM,mie:profile.mie,anisotropy:profile.mieAnisotropy};
+   }
+   if(this.graphics.clouds&&cloudLayers.length){
+    webgpuBody.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind}));
+   }
+   if(this.graphics.atmosphere&&profile){
     g.enable(g.CULL_FACE);g.cullFace(g.BACK);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);g.depthMask(false);
     this.drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders);
     g.depthMask(true);g.disable(g.BLEND);g.disable(g.CULL_FACE);
@@ -605,7 +612,7 @@ export class Solar3DView{
   }
   if(sunScreen)this.hdr.setOpticalSource([sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)],sunVisible);
   else this.hdr.setOpticalSource([.5,.5],false);
-  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.opacity='0';this.activeBackend='WebGPU';}else{this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
+  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,cameraPosition:eye,timeSeconds,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.opacity='0';this.activeBackend='WebGPU';}else{this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

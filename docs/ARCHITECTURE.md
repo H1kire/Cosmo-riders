@@ -5,7 +5,7 @@
 - TypeScript owns browser application state, DOM, camera input, scene coordination, diagnostics and GPU command submission.
 - Rust owns the live simulation state, numerical physics, geodesic topology, mesh construction and deterministic surface-page generation.
 - WebAssembly exposes Rust functionality to isolated Workers. Physics snapshots and generated channels cross the boundary as typed arrays.
-- WebGL2/GLSL is the only active renderer. A complete WebGPU/WGSL backend and backend selector are not implemented.
+- Solar3DView submits shared scene state to an independent WebGPU/WGSL sphere and orbit backend or the retained WebGL2/GLSL renderer. Auto is the default and falls back to WebGL2. WebGPU currently covers depth-tested body spheres and orbit lines; production materials and effects remain WebGL2-only.
 
 ## Simulation data flow
 
@@ -19,7 +19,7 @@ The TypeScript `PhysicsWorld` in `src/physics/` is retained as a comparison refe
 
 ## Rendering and surfaces
 
-`Solar3DView` owns one WebGL2 scene with shared body states, camera, render origin, selection, orbit paths, body rotation, lighting, atmosphere, clouds, rings, eclipses and HDR/post-processing. No WebGPU backend is active. WebGPU resource lifetime, device-loss recovery, WGSL render passes, backend selection and parity validation remain future work; WebGL2 must remain available through that migration.
+Solar3DView owns shared body states, camera, render origin, selection, orbit paths and body rotation. A separate WebGPU canvas receives body transforms, orbit paths and camera matrices from the same frame and renders indexed spheres and cached orbit line strips through WGSL with depth testing, alpha blending and diffuse/emissive shading. The retained WebGL2 canvas remains fallback and still renders the complete legacy scene; it is hidden while WebGPU is active. Material, geodesic, atmosphere, cloud, ring, eclipse and HDR passes are not yet ported.
 
 The geodesic pipeline is connected only for Earth. It generates twenty root-face meshes and five surface channels through the bounded surface Worker pool and uploads them into bounded WebGL2 texture arrays. The UV sphere remains the active fallback while pages prepare or if generation fails. Quadtree selection, neighbor balancing and stitching exist as CPU components, but the active renderer still draws the twenty root faces. Other bodies use the procedural sphere path. Per-body geodesic integration and GPU-driven adaptive LOD are not complete.
 
@@ -42,6 +42,6 @@ Surface profiles are deterministic procedural visual models based on catalogue m
 
 - Scientific local ephemerides (DE440/DE441 or a validated equivalent), time/frame transformations and independent Horizons checks are absent.
 - N-body close-encounter regularization, collision impact response, user-facing mode switching and dynamic orbit trails are absent.
-- WebGPU is not implemented; all active render passes use WebGL2.
+- WebGPU currently renders body spheres and orbit lines only; WebGL2 remains responsible for procedural/geologic materials, atmosphere, clouds, rings, shadows and HDR effects.
 - The active geodesic renderer is Earth-only and does not yet use adaptive quadtree leaves.
-- GTX 1650 browser performance, visual parity and rendered seam quality require manual GPU verification.
+- WebGPU runtime, GTX 1650 browser performance, visual parity and rendered seam quality require manual GPU verification.

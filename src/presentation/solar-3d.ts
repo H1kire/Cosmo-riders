@@ -13,6 +13,7 @@ import { PLANET_SURFACE_VERTEX, PLANET_SURFACE_FRAGMENT } from '../rendering/sha
 import { GeodesicPlanetRenderer, type PlanetSurfaceMode } from '../rendering/geodesic/geodesic-planet-renderer.ts';
 import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
 import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
+import { WebGPUBackend, type WebGPUBodyDraw } from '../rendering/webgpu/webgpu-backend.ts';
 
 const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;uniform mat4 uModel;void main(){gl_Position=uViewProjection*uModel*vec4(aPosition,1.);}`;
 const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
@@ -98,7 +99,29 @@ export class Solar3DView{
  readonly ready:Promise<void>;
  constructor(canvas){
   this.canvas=canvas;this.gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
-  if(!this.gl)throw Error('WebGL2 недоступен');this.disposed=false;this.ready=this.initialize();
+  if(!this.gl)throw Error('WebGL2 недоступен');this.disposed=false;this.webgpuBackend=null;this.webgpuCanvas=null;this.backendPreference='auto';this.activeBackend='WebGL2';this.backendFallbackReason=null;this.ready=this.initialize();
+ }
+ private readBackendPreference():'auto'|'webgpu'|'webgl2'{try{const value=localStorage.getItem('cosmo-riders.graphics-backend.v1');return value==='webgpu'||value==='webgl2'?value:'auto';}catch{return 'auto';}}
+ private async initializeWebGPUBackend():Promise<boolean>{
+  if(this.disposed)return false;if(this.webgpuBackend?.state==='ready')return true;
+  const canvas=this.webgpuCanvas??document.createElement('canvas');canvas.className='solar-webgpu-canvas';canvas.setAttribute('aria-label','WebGPU Solar System renderer');
+  Object.assign(canvas.style,{position:'absolute',inset:'0',display:'block',width:'100%',height:'100%',pointerEvents:'none',zIndex:'1',visibility:'hidden'});
+  if(!canvas.parentElement)this.canvas.parentElement?.append(canvas);this.webgpuCanvas=canvas;
+  const backend=new WebGPUBackend(canvas);this.webgpuBackend=backend;
+  try{await backend.ready;if(this.disposed){backend.dispose();return false;}if(backend.state!=='ready')throw new Error(backend.error??'WebGPU initialization did not reach ready state.');
+   this.backendFallbackReason=null;this.activeBackend='WebGPU';canvas.style.display='block';canvas.style.visibility='visible';this.canvas.style.visibility='hidden';
+   this.webgpuLossHandler=()=>{void this.handleWebGPUDeviceLoss();};window.addEventListener('graphics-backend-lost',this.webgpuLossHandler);return true;
+  }catch(error){this.backendFallbackReason=error instanceof Error?error.message:String(error);backend.dispose();if(this.webgpuBackend===backend)this.webgpuBackend=null;canvas.style.visibility='hidden';canvas.style.display='none';this.canvas.style.visibility='visible';this.activeBackend='WebGL2';return false;}
+ }
+ private async handleWebGPUDeviceLoss():Promise<void>{
+  const backend=this.webgpuBackend;if(!backend||this.disposed)return;const recovered=await backend.recover();if(this.disposed)return;
+  if(recovered&&backend.state==='ready'){this.activeBackend='WebGPU';this.backendFallbackReason=null;if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.visibility='hidden';}
+  else{this.backendFallbackReason=backend.error??'WebGPU device recovery failed; WebGL2 fallback activated.';this.activeBackend='WebGL2';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.canvas.style.visibility='visible';}
+ }
+ private async setBackendPreference(value:string):Promise<void>{
+  const preference=value==='webgpu'||value==='webgl2'?value:'auto';this.backendPreference=preference;try{localStorage.setItem('cosmo-riders.graphics-backend.v1',preference);}catch{}
+  if(preference==='webgl2'){this.activeBackend='WebGL2';this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';return;}
+  const ready=await this.initializeWebGPUBackend();if(!ready){this.activeBackend='WebGL2';this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';}
  }
  private observeLongTasks():void{
   if(typeof PerformanceObserver==='undefined')return;
@@ -121,7 +144,7 @@ export class Solar3DView{
   await new Promise<void>(resolve=>requestAnimationFrame(()=>{this.syncSliceStartedAt=performance.now();resolve();}));
  }
  private async initialize():Promise<void>{
-  const g=this.gl,canvas=this.canvas;this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;this.observeLongTasks();this.graphics=loadGraphicsSettings();
+  const g=this.gl,canvas=this.canvas;this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference=this.readBackendPreference();if(this.backendPreference!=='webgl2')await this.initializeWebGPUBackend();
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.geodesicGeneration=0;this.geodesicWorkerPool=null;this.geodesicPendingRenderer=null;this.geodesicEarthInitFailureTaskKind=null;this.geodesicEarthInitFailureTaskKey=null;this.geodesicEarthInitFailureTimestamp=null;
   this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();this.orbitViewProjection=new Float32Array(16);this.orbitModelMatrix=new Float32Array(16);
@@ -130,6 +153,7 @@ export class Solar3DView{
   this.shaderLibrary=createDefaultShaderLibrary();this.hdr=new HDRPipeline(g,1,1,Math.min(2,this.graphics.msaaSamples));this.applyGraphicsSettings(this.graphics);this.markInitializationStage('hdr');
   this.graphicsChangeHandler=(event:Event)=>{const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{},previousPreset=this.graphics.preset;this.graphics={...this.graphics,...value};this.applyGraphicsSettings(this.graphics);if(this.graphics.preset!==previousPreset)this.rebuildGeodesicRenderer(this.graphics);};
   window.addEventListener('graphics-settings-change',this.graphicsChangeHandler);
+  this.backendChangeHandler=(event:Event)=>{const detail=(event as CustomEvent<{backend?:string}>).detail??{};void this.setBackendPreference(detail.backend??'auto');};window.addEventListener('graphics-backend-change',this.backendChangeHandler);
   await this.yieldToBrowser();this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);this.markInitializationStage('surface-shader');
   await this.yieldToBrowser();this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));this.markInitializationStage('atmosphere-shader');
   await this.yieldToBrowser();this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));this.markInitializationStage('cloud-shader');
@@ -173,7 +197,7 @@ export class Solar3DView{
  getGraphicsDiagnostics(){
   const gl=this.gl,renderer=this.geodesicEarthRenderer,pendingRenderer=this.geodesicPendingRenderer,supported=gl.getSupportedExtensions()??[],mode=this.earthRenderMode??'auto';
   const active=mode==='uv'?'UV':renderer?.isReady?'Geodesic':'UV fallback';
-  return{initializationStages:{...(this.initializationStages??{})},initializationElapsedMs:this.initializationStartedAt?performance.now()-this.initializationStartedAt:0,longestSynchronousChunkMs:this.longestSynchronousChunkMs??0,longTaskCount:this.longTaskCount??0,longestLongTaskMs:this.longestLongTaskMs??0,webgl2:true,maxArrayTextureLayers:Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize:Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)),maxVertexTextureImageUnits:Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),maxFragmentTextureImageUnits:Number(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)),maxCombinedTextureImageUnits:Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)),maxVertexUniformVectors:Number(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)),maxFragmentUniformVectors:Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),maxVertexAttributes:Number(gl.getParameter(gl.MAX_VERTEX_ATTRIBS)),extensions:supported.filter(name=>name==='EXT_color_buffer_float'||name==='EXT_texture_filter_anisotropic'),mode,active,rendererState:renderer?.rendererState??(this.geodesicEarthInitError?'failed':'deferred'),pendingRendererState:pendingRenderer?.rendererState??null,pendingRendererError:pendingRenderer?.firstFailure??null,requestedPageSize:this.graphics.geodesic.pageResolution,requestedMeshResolution:this.graphics.geodesic.meshResolution,pageSize:renderer?.gpuPageSize??0,pageBytes:renderer?.gpuPageBytes??0,gpuCacheBytes:renderer?.gpuCacheBytes??0,gpuLayers:renderer?.gpuLayerCapacity??0,failedGpuCacheBytes:renderer?.failedGpuCacheBytes??0,failedGpuLayers:renderer?.failedGpuLayerCapacity??0,failedGpuResidentPages:renderer?.failedGpuResidentPages??0,allocatedTextureArrays:renderer?.allocatedTextureArrays??0,gpuResidentPages:renderer?.gpuResidentTileCount??0,gpuPinnedPages:renderer?.gpuPinnedPages??0,cpuCacheBytes:renderer?.cpuCacheBytes??0,cpuCachePages:renderer?.cpuCacheSize??0,generatedPages:renderer?.loadedTileCount??0,uploadedPages:renderer?.uploadedPageCount??0,workerCount:renderer?.workerCount??0,workerActive:renderer?.activeWorkerCount??0,workerQueued:renderer?.queuedCount??0,workerStartupErrors:renderer?.workerStartupErrors??0,workerRuntimeErrors:renderer?.workerRuntimeErrors??0,workerTaskErrors:renderer?.workerTaskErrors??0,cancelledTasks:renderer?.cancelledTasks??0,disposedTasks:renderer?.disposedTasks??0,meshGenerationMs:renderer?.meshGenerationMs??0,surfaceGenerationMs:renderer?.surfaceGenerationMs??0,firstFailure:renderer?.firstFailure??pendingRenderer?.firstFailure??this.geodesicEarthInitError??null,failureTaskKind:renderer?.failureTaskKind??pendingRenderer?.failureTaskKind??this.geodesicEarthInitFailureTaskKind??null,failureTaskKey:renderer?.failureTaskKey??pendingRenderer?.failureTaskKey??this.geodesicEarthInitFailureTaskKey??null,failureTimestamp:renderer?.failureTimestamp??pendingRenderer?.failureTimestamp??this.geodesicEarthInitFailureTimestamp??null,rendererFailureCount:(renderer?.rendererFailureCount??0)+(pendingRenderer?.rendererFailureCount??0)+(this.geodesicEarthInitError?1:0),rendererErrors:(renderer?.errorCount??0)+(pendingRenderer?.errorCount??0)+(this.geodesicEarthInitError?1:0),uploadErrors:renderer?.uploadErrorCount??0,fallbackReason:active==='Geodesic'?'No fallback active':mode==='uv'?'UV mode selected':renderer?.fallbackReason??this.geodesicEarthInitError??(this.geodesicInitScheduled?'Geodesic renderer is deferred until after the first scene frame.':'Geodesic renderer is unavailable.')};
+  return{backendPreference:this.backendPreference??'auto',activeBackend:this.activeBackend??'WebGL2',webgpuAvailable:Boolean((navigator as any).gpu),webgpuState:this.webgpuBackend?.state??'unavailable',webgpuFormat:this.webgpuBackend?.format??null,webgpuAdapterInfo:this.webgpuBackend?.adapter?.info?.description??this.webgpuBackend?.adapter?.info?.device??null,webgpuError:this.webgpuBackend?.error??this.backendFallbackReason??null,webgpuInitializationMs:this.webgpuBackend?.initializationMs??0,initializationStages:{...(this.initializationStages??{})},initializationElapsedMs:this.initializationStartedAt?performance.now()-this.initializationStartedAt:0,longestSynchronousChunkMs:this.longestSynchronousChunkMs??0,longTaskCount:this.longTaskCount??0,longestLongTaskMs:this.longestLongTaskMs??0,webgl2:true,maxArrayTextureLayers:Number(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS)),maxTextureSize:Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)),maxVertexTextureImageUnits:Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)),maxFragmentTextureImageUnits:Number(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)),maxCombinedTextureImageUnits:Number(gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)),maxVertexUniformVectors:Number(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)),maxFragmentUniformVectors:Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),maxVertexAttributes:Number(gl.getParameter(gl.MAX_VERTEX_ATTRIBS)),extensions:supported.filter(name=>name==='EXT_color_buffer_float'||name==='EXT_texture_filter_anisotropic'),mode,active,rendererState:renderer?.rendererState??(this.geodesicEarthInitError?'failed':'deferred'),pendingRendererState:pendingRenderer?.rendererState??null,pendingRendererError:pendingRenderer?.firstFailure??null,requestedPageSize:this.graphics.geodesic.pageResolution,requestedMeshResolution:this.graphics.geodesic.meshResolution,pageSize:renderer?.gpuPageSize??0,pageBytes:renderer?.gpuPageBytes??0,gpuCacheBytes:renderer?.gpuCacheBytes??0,gpuLayers:renderer?.gpuLayerCapacity??0,failedGpuCacheBytes:renderer?.failedGpuCacheBytes??0,failedGpuLayers:renderer?.failedGpuLayerCapacity??0,failedGpuResidentPages:renderer?.failedGpuResidentPages??0,allocatedTextureArrays:renderer?.allocatedTextureArrays??0,gpuResidentPages:renderer?.gpuResidentTileCount??0,gpuPinnedPages:renderer?.gpuPinnedPages??0,cpuCacheBytes:renderer?.cpuCacheBytes??0,cpuCachePages:renderer?.cpuCacheSize??0,generatedPages:renderer?.loadedTileCount??0,uploadedPages:renderer?.uploadedPageCount??0,workerCount:renderer?.workerCount??0,workerActive:renderer?.activeWorkerCount??0,workerQueued:renderer?.queuedCount??0,workerStartupErrors:renderer?.workerStartupErrors??0,workerRuntimeErrors:renderer?.workerRuntimeErrors??0,workerTaskErrors:renderer?.workerTaskErrors??0,cancelledTasks:renderer?.cancelledTasks??0,disposedTasks:renderer?.disposedTasks??0,meshGenerationMs:renderer?.meshGenerationMs??0,surfaceGenerationMs:renderer?.surfaceGenerationMs??0,firstFailure:renderer?.firstFailure??pendingRenderer?.firstFailure??this.geodesicEarthInitError??null,failureTaskKind:renderer?.failureTaskKind??pendingRenderer?.failureTaskKind??this.geodesicEarthInitFailureTaskKind??null,failureTaskKey:renderer?.failureTaskKey??pendingRenderer?.failureTaskKey??this.geodesicEarthInitFailureTaskKey??null,failureTimestamp:renderer?.failureTimestamp??pendingRenderer?.failureTimestamp??this.geodesicEarthInitFailureTimestamp??null,rendererFailureCount:(renderer?.rendererFailureCount??0)+(pendingRenderer?.rendererFailureCount??0)+(this.geodesicEarthInitError?1:0),rendererErrors:(renderer?.errorCount??0)+(pendingRenderer?.errorCount??0)+(this.geodesicEarthInitError?1:0),uploadErrors:renderer?.uploadErrorCount??0,fallbackReason:active==='Geodesic'?'No fallback active':mode==='uv'?'UV mode selected':renderer?.fallbackReason??this.geodesicEarthInitError??(this.geodesicInitScheduled?'Geodesic renderer is deferred until after the first scene frame.':'Geodesic renderer is unavailable.')};
  }
  applyGraphicsSettings(settings){
   this.hdr.setHDREnabled(settings.hdr);
@@ -383,6 +407,7 @@ export class Solar3DView{
   model[12]=(parentState.position.x-renderOrigin.x)/AU;
   model[13]=(parentState.position.z-renderOrigin.z)/AU;
   model[14]=(parentState.position.y-renderOrigin.y)/AU;model[15]=1;
+  this.webgpuOrbits?.push({id:body.id,points:path,model:Array.from(model),color:body.id==='earth'?[.32,.58,.9]:[.18,.28,.42],opacity:.62*opacity});
   const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
   g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);
   this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
@@ -423,6 +448,7 @@ export class Solar3DView{
   const far=100,near=Math.max(1e-10,Math.min(this.distance*.01,focusRadius>0?focusRadius*.02:this.distance*.01));
   const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
+  const webgpuBodies:WebGPUBodyDraw[]=[];this.webgpuOrbits=[];
   const renderOrigin=focusState?focusState.position:sun;
   const mapper=(body,p,out?:[number,number,number])=>{const x=(p.x-renderOrigin.x)/AU,y=(p.z-renderOrigin.z)/AU,z=(p.y-renderOrigin.y)/AU;if(out){out[0]=x;out[1]=y;out[2]=z;return out;}return[x,y,z] as [number,number,number];};
   const sunRenderPosition=mapper(null,sun);this.currentSunPosition=sunRenderPosition;
@@ -459,6 +485,7 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
+   webgpuBodies.push({id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId});
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
    g.uniform3f(l.uCameraPosition,...eye);
@@ -559,6 +586,7 @@ export class Solar3DView{
   }
   if(sunScreen)this.hdr.setOpticalSource([sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)],sunVisible);
   else this.hdr.setOpticalSource([.5,.5],false);
+  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.visibility='hidden';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
@@ -567,7 +595,7 @@ export class Solar3DView{
  dispose(){
   if(this.disposed)return;
   this.disposed=true;this.longTaskObserver?.disconnect();
-  window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);
+  window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);window.removeEventListener('graphics-backend-change',this.backendChangeHandler);if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
   const g=this.gl;
   for(const mesh of this.meshes??[])for(const buffer of mesh.buffers)g.deleteBuffer(buffer);
   for(const orbit of this.orbitBuffers?.values()??[])g.deleteBuffer(orbit.buffer);
@@ -578,6 +606,7 @@ export class Solar3DView{
   this.geodesicPendingRenderer?.dispose();
   this.geodesicEarthRenderer?.dispose();
   this.geodesicWorkerPool?.dispose();
+  this.webgpuBackend?.dispose();this.webgpuBackend=null;this.webgpuCanvas?.remove();this.webgpuCanvas=null;
   this.labels?.remove();
   this.labelNodes?.clear();
   this.orbitCache?.clear();

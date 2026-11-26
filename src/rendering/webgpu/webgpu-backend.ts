@@ -19,16 +19,17 @@ export interface WebGPUBodyDraw {
   star: boolean;
 }
 
+export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
+
 export interface WebGPUFrame {
   viewProjection: ArrayLike<number>;
   bodies: readonly WebGPUBodyDraw[];
+  orbits: readonly WebGPUOrbitDraw[];
   sunPosition: readonly [number, number, number];
 }
 
-interface BodyGpuResources {
-  uniform: any;
-  bindGroup: any;
-}
+interface BodyGpuResources { uniform: any; bindGroup: any; }
+interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacity: number; points: Float32Array | null; count: number; }
 
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
 const TEXTURE_USAGE = { RENDER_ATTACHMENT: 0x0010 };
@@ -63,6 +64,14 @@ export function createSphereGeometry(latitudeSegments: number, longitudeSegments
     indices: new Uint16Array(indices)
   };
 }
+
+const ORBIT_SHADER = `
+struct OrbitUniforms { viewProjection: mat4x4<f32>, model: mat4x4<f32>, color: vec4<f32>, };
+@group(0) @binding(0) var<uniform> orbit: OrbitUniforms;
+struct VertexInput { @location(0) position: vec3<f32>, };
+@vertex fn vertexMain(input: VertexInput) -> @builtin(position) vec4<f32> { return orbit.viewProjection * orbit.model * vec4<f32>(input.position, 1.0); }
+@fragment fn fragmentMain() -> @location(0) vec4<f32> { return orbit.color; }
+`;
 
 const SHADER = `
 struct BodyUniforms {
@@ -124,6 +133,9 @@ export class WebGPUBackend {
   private indexBuffer: any = null;
   private indexCount = 0;
   private readonly bodyResources = new Map<string, BodyGpuResources>();
+  private readonly orbitResources = new Map<string, OrbitGpuResources>();
+  private orbitPipeline: any = null;
+  private orbitBindGroupLayout: any = null;
   private readonly geometry = createSphereGeometry(44, 60);
   private disposed = false;
   private recoveryAttempted = false;
@@ -216,6 +228,18 @@ export class WebGPUBackend {
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
     });
     this.bindGroupLayout = bindGroupLayout;
+    const orbitModule = this.device.createShaderModule({ code: ORBIT_SHADER });
+    const orbitCompilation = await orbitModule.getCompilationInfo();
+    const orbitErrors = orbitCompilation.messages.filter((message: any) => message.type === 'error');
+    if (orbitErrors.length) throw new Error('WGSL orbit compilation failed: ' + orbitErrors.map((item: any) => item.message).join('; '));
+    this.orbitBindGroupLayout = this.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 144 } }] });
+    this.orbitPipeline = await this.device.createRenderPipelineAsync({
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.orbitBindGroupLayout] }),
+      vertex: { module: orbitModule, entryPoint: 'vertexMain', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
+      fragment: { module: orbitModule, entryPoint: 'fragmentMain', targets: [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }] },
+      primitive: { topology: 'line-strip' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
+    });
   }
 
   private bindGroupLayout: any = null;
@@ -289,6 +313,29 @@ export class WebGPUBackend {
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(this.indexCount, 1, 0, 0, 0);
     }
+    for (const orbit of frame.orbits) {
+      let resources = this.orbitResources.get(orbit.id);
+      const requiredBytes = Math.max(12, (orbit.points.byteLength + 3) & ~3);
+      if (!resources || resources.capacity < requiredBytes) {
+        resources?.vertex.destroy(); resources?.uniform.destroy();
+        const vertex = this.device.createBuffer({ size: requiredBytes, usage: BUFFER_USAGE.VERTEX | BUFFER_USAGE.COPY_DST });
+        const uniform = this.device.createBuffer({ size: 144, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+        const bindGroup = this.device.createBindGroup({ layout: this.orbitBindGroupLayout, entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 144 } }] });
+        resources = { vertex, uniform, bindGroup, capacity: requiredBytes, points: null, count: 0 };
+        this.orbitResources.set(orbit.id, resources);
+      }
+      if (resources.points !== orbit.points || resources.count !== orbit.points.length / 3) {
+        this.device.queue.writeBuffer(resources.vertex, 0, orbit.points);
+        resources.points = orbit.points; resources.count = orbit.points.length / 3;
+      }
+      const uniforms = new Float32Array(36);
+      uniforms.set(Array.from(frame.viewProjection).slice(0, 16), 0);
+      uniforms.set(Array.from(orbit.model).slice(0, 16), 16);
+      uniforms.set([orbit.color[0], orbit.color[1], orbit.color[2], Math.max(0, Math.min(1, orbit.opacity))], 32);
+      this.device.queue.writeBuffer(resources.uniform, 0, uniforms);
+      pass.setPipeline(this.orbitPipeline); pass.setBindGroup(0, resources.bindGroup);
+      pass.setVertexBuffer(0, resources.vertex); pass.draw(resources.count);
+    }
     pass.end();
     this.device.queue.submit([encoder.finish()]);
   }
@@ -309,9 +356,13 @@ export class WebGPUBackend {
   private disposeGpuResources(): void {
     for (const resources of this.bodyResources.values()) resources.uniform.destroy();
     this.bodyResources.clear();
+    for (const resources of this.orbitResources.values()) { resources.vertex.destroy(); resources.uniform.destroy(); }
+    this.orbitResources.clear();
     for (const resource of [this.positionBuffer, this.normalBuffer, this.indexBuffer, this.depthTexture]) resource?.destroy?.();
     this.positionBuffer = this.normalBuffer = this.indexBuffer = this.depthTexture = null;
     this.pipeline = null;
+    this.orbitPipeline = null;
+    this.orbitBindGroupLayout = null;
   }
 
   dispose(): void {

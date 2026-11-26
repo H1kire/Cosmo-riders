@@ -1,24 +1,28 @@
 # WebGPU rendering status
 
-## Current implementation
+## Active first integration
 
-WebGPU is not implemented as an application backend. `Solar3DView` obtains a WebGL2 context and renders the production scene with WebGL2/GLSL. There are no active WebGPU pipelines, WGSL scene passes, adapter/device lifecycle, device-loss recovery, or user-selectable Auto/WebGPU/WebGL2 backend. The graphics settings control quality and effects only. No WebGPU demonstration scene is present.
+Solar3DView owns the existing WebGL2 scene and an independent WebGPU canvas/backend. Auto is the default. It requests a real GPUAdapter and GPUDevice, configures a GPUCanvasContext, compiles WGSL and creates a depth-tested indexed sphere pipeline. Each frame, Solar3DView submits body transforms, camera view-projection, render-origin-relative positions, base colours and star/emissive flags derived from the same PhysicsWorldClient snapshot. Existing orbit paths, parent transforms, orbit fade and adaptive segment counts are also submitted to a WebGPU line-strip pass. No second physics world or camera is created.
 
-The active WebGL2 scene remains responsible for the shared camera and projections, render origin, body selection and rotation, orbit paths, labels, lighting and eclipses, atmosphere and clouds, rings, HDR, bloom, glare, lens flare and tone mapping. WebGL2 must remain the working fallback during a migration.
+The WebGPU canvas is a separate non-interactive overlay. The original WebGL2 canvas remains alive as fallback and retains pointer input and existing scene interaction. Backend preference is stored as cosmo-riders.graphics-backend.v1; cosmo-riders.graphics.v1 remains unchanged. Device loss triggers one recovery attempt, then reveals WebGL2 if recovery fails.
 
-## Required migration boundary
+## Implemented WebGPU passes
 
-WebGPU must consume the existing `Solar3DView` scene state and presentation data. It must not create a second body catalogue, camera, clock or physics state. Port the render passes in stages behind a common scene/backend contract, preserving global/local projection and camera-relative coordinates. Keep the current WebGL2 path active until the shared scene can switch backends without losing selection, focus, orbit, rotation, lighting or post-processing behavior.
+- Indexed sphere geometry with position and normal streams.
+- WGSL vertex transforms using live body model matrices and the shared camera view-projection.
+- Emissive star path and diffuse + ambient planet shading.
+- Depth24Plus attachment and depth testing.
+- Per-body uniform buffers and bind groups cached by body ID.
+- Cached orbit vertex buffers with alpha-blended line-strip rendering, existing parent transforms, opacity and segment LOD.
+- Preferred canvas format, maximum 1920×1080 backing resolution, resize and resource disposal.
+- Runtime backend diagnostics and Auto / WebGPU / WebGL2 selector.
 
-Before making WebGPU selectable, implement and integrate:
+## Not yet at WebGL2 parity
 
-- adapter/device/queue acquisition, capability and format checks, diagnostics, and a clear reason when initialization fails;
-- owned buffers, textures, texture arrays, samplers, bind groups and pipeline lifetimes, with bounded resource budgets and disposal;
-- resize handling, `device.lost` recovery, validation errors and a safe WebGL2 fallback path;
-- WGSL equivalents for the production geometry, materials, lighting/eclipses, atmosphere/clouds, rings, stars/orbits and HDR/post-processing passes;
-- a persisted Auto/WebGPU/WebGL2 preference that reports the active backend and any fallback reason;
-- automated pipeline/device-loss/fallback checks and manual visual/performance review on representative GPUs.
+The WebGPU path currently does not render procedural surface maps, Rust geologic pages, adaptive geodesic quadtree tiles, rings, atmosphere, clouds, analytic eclipses/shadows, HDR, bloom, glare, lens flare or tone mapping. WebGPU spheres use base catalogue colours rather than the full procedural material model. The legacy WebGL2 scene still computes the complete old scene on its separate canvas, which is hidden while WebGPU is selected. These passes must be ported before claiming visual parity.
 
-## Verification status
+The active WebGL2 geodesic renderer remains Earth-only and currently draws its root-face set; adaptive quadtree selection/balancing is not integrated into its active render list.
 
-No WebGPU pipeline or runtime check currently exists. GitHub Actions cannot establish visual parity on the target GTX 1650, and no local browser/GPU check is claimed for this branch. WebGPU must not be described as ready or production-active until the real Solar3DView uses it and the fallback/parity checks pass.
+## Verification
+
+CPU sphere topology has unit tests. A static integration test checks that Solar3DView submits scene body transforms and orbit paths to the native backend. GitHub Actions validates TypeScript, tests and deployment after the branch push. These checks do not prove WebGPU runtime creation on a real browser/adapter or GTX 1650 performance. Manual Edge/Chromium verification remains required. No local browser, GPU, build or test was run for this change.

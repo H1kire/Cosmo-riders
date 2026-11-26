@@ -21,6 +21,10 @@ export interface WebGPUBodyDraw {
   seed: number;
   waterFraction: number;
   iceFraction: number;
+  ironFraction?: number;
+  tectonicActivity?: number;
+  volcanicActivity?: number;
+  erosion?: number;
   lod: number;
   eclipseVisibility?: number;
   shadowOccluders?: Float32Array;
@@ -164,6 +168,7 @@ struct BodyUniforms {
   color: vec4<f32>,
   lightAndEmission: vec4<f32>,
   material: vec4<f32>,
+  surfaceParams: vec4<f32>,
   cameraPosition: vec4<f32>,
   lighting: vec4<f32>,
   sunPosition: vec4<f32>,
@@ -263,15 +268,26 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   if (body.lightAndEmission.w > 0.5) {
     return vec4<f32>(body.color.rgb * 1.7, 1.0);
   }
+  let tectonic = clamp(body.surfaceParams.y, 0.0, 1.0);
+  let volcanic = clamp(body.surfaceParams.z, 0.0, 1.0);
+  let iron = clamp(body.surfaceParams.x, 0.0, 1.0);
+  let erosion = clamp(body.surfaceParams.w, 0.0, 1.0);
   let field = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
-  let detail = fbm3(direction * 31.0);
+  let detail = mix(fbm3(direction * 31.0), fbm3(direction * 13.0), erosion * 0.58);
   let kind = body.material.x;
   var albedo = body.color.rgb;
   if (kind > 0.5 && kind < 1.5) {
-    let land = smoothstep(0.455, 0.545, field);
+    let ridgeNoise = 1.0 - abs(noise3(direction * (18.0 + tectonic * 54.0)) * 2.0 - 1.0);
+    let relief = mix(field, max(field, ridgeNoise * 0.72), tectonic * 0.58);
+    let land = smoothstep(0.455, 0.545, relief);
     let ocean = vec3<f32>(0.012, 0.075, 0.22);
-    let soil = mix(vec3<f32>(0.12, 0.19, 0.075), vec3<f32>(0.42, 0.32, 0.17), detail);
+    let soilBase = mix(vec3<f32>(0.12, 0.19, 0.075), vec3<f32>(0.42, 0.32, 0.17), detail);
+    let ironTint = vec3<f32>(0.18, 0.055, 0.018) * iron;
+    let soil = clamp(soilBase + ironTint, vec3<f32>(0.0), vec3<f32>(1.0));
     albedo = mix(ocean, soil, land);
+    let volcanicField = fbm3(direction * (34.0 + volcanic * 76.0));
+    let volcanicRock = smoothstep(0.76, 0.94, volcanicField) * volcanic;
+    albedo = mix(albedo, vec3<f32>(0.16, 0.045, 0.025), volcanicRock * 0.62);
     let polar = smoothstep(0.78, 0.96, abs(direction.y)) * clamp(body.material.w * 4.0, 0.0, 1.0);
     albedo = mix(albedo, vec3<f32>(0.78, 0.86, 0.94), polar);
   } else if (kind > 6.5 && kind < 7.5) {
@@ -407,7 +423,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 352 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 368 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -565,10 +581,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 352, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 368, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 352 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 368 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -599,7 +615,7 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    const matrix = new Float32Array(88);
+    const matrix = new Float32Array(92);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
@@ -613,10 +629,11 @@ export class WebGPUBackend {
       const length = Math.hypot(dx, dy, dz) || 1;
       matrix.set([dx / length, dy / length, dz / length, body.star ? 1 : 0], 36);
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
-      matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
-      matrix.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
-      matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 52);
-      matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 56);
+      matrix.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
+      matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
+      matrix.set([body.eclipseVisibility ?? 1, 1, 0, 0], 52);
+      matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
+      matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
@@ -625,7 +642,7 @@ export class WebGPUBackend {
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
-      const base = new Float32Array(88);
+      const base = new Float32Array(92);
       base.set(Array.from(body.model).slice(0, 16), 0);
       base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
       base.set([1, 1, 1, 1], 32);
@@ -633,10 +650,11 @@ export class WebGPUBackend {
       const lightLength = Math.hypot(dx, dy, dz) || 1;
       base.set([dx / lightLength, dy / lightLength, dz / lightLength, 0], 36);
       base.set([0, 0, 0, 0], 40);
-      base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
-      base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
-      base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 52);
-      base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 56);
+      base.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
+      base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
+      base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 52);
+      base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
+      base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);

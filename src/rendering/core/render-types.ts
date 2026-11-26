@@ -1,1 +1,38 @@
-export type Vec3=readonly [number,number,number];export type Color3=readonly [number,number,number];export type QualityLevel='low'|'medium'|'high'|'ultra';export interface RenderFrameContext{gl:WebGLRenderingContext|WebGL2RenderingContext;width:number;height:number;pixelRatio:number;timeSeconds:number;cameraPosition:Vec3;viewProjection:Float32Array;}export interface RenderPass{readonly name:string;readonly order:number;enabled:boolean;render(context:RenderFrameContext):void;dispose?():void;}export interface Disposable{dispose():void;}
+export type Vec3 = readonly [number, number, number];
+export type Color3 = readonly [number, number, number];
+export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
+export interface Disposable { dispose(): void; }
+
+/** A single immutable snapshot of the simulation and camera for one GPU frame. */
+export interface RenderFrameContext {
+  readonly device: any;
+  readonly queue: any;
+  readonly encoder: any;
+  readonly colorView: any;
+  readonly depthView: any;
+  readonly width: number;
+  readonly height: number;
+  readonly pixelRatio: number;
+  readonly timeSeconds: number;
+  readonly deltaSeconds: number;
+  readonly cameraPosition: Vec3;
+  readonly viewProjection: Float32Array;
+  readonly scene: unknown;
+}
+
+/** A render pass records commands into the shared frame encoder. */
+export interface RenderPass extends Disposable {
+  readonly name: string;
+  readonly order: number;
+  enabled: boolean;
+  encode(context: RenderFrameContext): void;
+}
+
+export interface RenderEngineOptions {
+  readonly pixelRatioCap?: number;
+  readonly maxWidth?: number;
+  readonly maxHeight?: number;
+  readonly alphaMode?: 'opaque' | 'premultiplied';
+  readonly onDeviceLost?: (reason: string) => void;
+  readonly onError?: (error: Error) => void;
+}

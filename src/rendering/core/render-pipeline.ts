@@ -1,1 +1,41 @@
-import type{RenderFrameContext,RenderPass}from'./render-types.ts';export class RenderPipeline{private passes:RenderPass[]=[];add(pass:RenderPass){if(this.passes.some(p=>p.name===pass.name))throw new Error('Duplicate render pass: '+pass.name);this.passes.push(pass);this.passes.sort((a,b)=>a.order-b.order);return this;}remove(name:string){const i=this.passes.findIndex(p=>p.name===name);if(i<0)return false;this.passes[i].dispose?.();this.passes.splice(i,1);return true;}getPasses(){return this.passes.slice();}render(context:RenderFrameContext){for(const p of this.passes)if(p.enabled)p.render(context);}dispose(){for(const p of this.passes)p.dispose?.();this.passes=[];}}
+import type { RenderFrameContext, RenderPass } from './render-types.ts';
+
+/** Orders all scene and post-processing passes inside one command encoder. */
+export class RenderPipeline {
+  private readonly passes: RenderPass[] = [];
+  private disposed = false;
+
+  add(pass: RenderPass): this {
+    if (this.disposed) throw new Error('RenderPipeline is disposed.');
+    if (this.passes.some(item => item.name === pass.name)) {
+      throw new Error('Duplicate render pass: ' + pass.name);
+    }
+    this.passes.push(pass);
+    this.passes.sort((a, b) => a.order - b.order);
+    return this;
+  }
+
+  remove(name: string): boolean {
+    const index = this.passes.findIndex(pass => pass.name === name);
+    if (index < 0) return false;
+    this.passes[index].dispose();
+    this.passes.splice(index, 1);
+    return true;
+  }
+
+  getPasses(): readonly RenderPass[] { return this.passes.slice(); }
+
+  encode(context: RenderFrameContext): void {
+    if (this.disposed) throw new Error('RenderPipeline is disposed.');
+    for (const pass of this.passes) {
+      if (pass.enabled) pass.encode(context);
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const pass of this.passes) pass.dispose();
+    this.passes.length = 0;
+  }
+}

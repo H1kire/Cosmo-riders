@@ -42,6 +42,14 @@ test('loading progress is driven by completed named stages, not a timer counter'
 });
 
 
+test('first animation frame is not gated by telemetry or maneuver-planner RPCs',async()=>{
+ const lab=await readFile(file('..','lab','lab.ts'),'utf8');
+ const scenario=lab.slice(lab.indexOf("async function createScenario"),lab.indexOf("function resizeCanvas"));
+ assert.ok(scenario.indexOf("drawAll()")<scenario.indexOf("void updateTelemetry().catch"));
+ const startup=lab.slice(lab.lastIndexOf("void createScenario('earth-orbit')"));
+ assert.ok(startup.indexOf("requestAnimationFrame(animate)")<startup.indexOf("void updateManeuverPlanner().catch"));
+});
+
 test('WebGPU startup is non-blocking and scene setup failures release the loading gate',async()=>{
  const [view,main,lab]=await Promise.all([
   readFile(file('..','src','presentation','solar-3d.ts'),'utf8'),

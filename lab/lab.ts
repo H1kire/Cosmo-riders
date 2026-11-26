@@ -173,7 +173,9 @@ async function createScenario(name) {
   $('burn-status').textContent='Двигатель выключен · запас топлива 5 000 кг';
   ($('engine-start') as HTMLButtonElement).disabled=false;($('engine-stop') as HTMLButtonElement).disabled=true;
   trail=[];renderedBodyStates=world.bodyStates;renderedVesselState=vessel;
-  await updateTelemetry();renderSystemNavigation();updatePlanetInformation();drawAll();
+  renderSystemNavigation();updatePlanetInformation();drawAll();
+  // Telemetry is useful but not required to make the first scene interactive.
+  void updateTelemetry().catch(error=>console.error('[Cosmo-riders] Initial telemetry failed:',error));
 }
 function resizeCanvas(canvas) {
   const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
@@ -626,4 +628,4 @@ $('engine-stop').addEventListener('click',()=>{void stopContinuousBurn();});
 window.addEventListener('resize',drawAll);
 
 window.addEventListener('number-format-change',()=>{void updateTelemetry().then(()=>drawAll());});
-void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));await updateManeuverPlanner();requestAnimationFrame(animate);}).catch(error=>{const message=error instanceof Error?error.message:String(error);console.error('[Cosmo-riders] Initial scenario setup failed:',error);window.dispatchEvent(new CustomEvent('cosmo-loading-failed',{detail:{message}}));});
+void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));requestAnimationFrame(animate);void updateManeuverPlanner().catch(error=>console.error('[Cosmo-riders] Maneuver planner initialization failed:',error));}).catch(error=>{const message=error instanceof Error?error.message:String(error);console.error('[Cosmo-riders] Initial scenario setup failed:',error);window.dispatchEvent(new CustomEvent('cosmo-loading-failed',{detail:{message}}));});

@@ -27,16 +27,16 @@ test('planet atmosphere, clouds, rings and orbits are submitted to WebGPU withou
   readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8')
  ]);
- assert.match(source,/webgpuDraw\\.atmosphere=/);
- assert.match(source,/webgpuDraw\\.clouds=/);
- assert.match(source,/this\\.webgpuRings\\.push/);
- assert.match(source,/this\\.webgpuOrbits\\.push/);
+ assert.match(source,/webgpuDraw\.atmosphere=/);
+ assert.match(source,/webgpuDraw\.clouds=/);
+ assert.match(source,/this\.webgpuRings\.push/);
+ assert.match(source,/this\.webgpuOrbits\.push/);
  assert.match(backend,/const drawShell =/);
  assert.match(backend,/const RING_SHADER/);
  assert.match(backend,/ringPipeline/);
  assert.match(backend,/orbitPipeline/);
- assert.doesNotMatch(source,/drawAtmosphere\\(/);
- assert.doesNotMatch(source,/drawClouds\\(/);
+ assert.doesNotMatch(source,/drawAtmosphere\(/);
+ assert.doesNotMatch(source,/drawClouds\(/);
  assert.doesNotMatch(source,/RingRenderer|LINE_VERTEX|LINE_FRAGMENT/);
  assert.doesNotMatch(source,/atmosphereProgram|cloudProgram|lineProgram/);
 });

@@ -56,7 +56,7 @@ The canonical J2000 solar-system catalogue remains declared once in src/physics/
 
 The geodesic Worker independently delegates mesh, stitching and five-channel surface-page generation to Rust. Surface height remains in metres. The physics and surface workloads use separate Workers; neither requires SharedArrayBuffer.
 
-**Rendering migration remains incomplete:** Solar3DView, HDR, lighting, atmosphere, clouds, rings, shadows and post-processing still use WebGL2/GLSL. WebGPU/WGSL is still the target backend, not the active renderer. Browser/WebGL visual parity and performance on the target GPU have not been confirmed by CI.
+**WebGPU is now an active selectable renderer, but the migration is partial.** Auto (default) attempts a native WebGPU adapter/device and renders the existing Solar3DView body's live PhysicsWorld transforms as indexed, depth-tested spheres, plus the current Rust-derived orbit paths as blended line strips. The WGSL pipelines use the shared camera projection and render-origin-relative coordinates. WebGL2 remains an independent fallback surface. Procedural surface maps, the five-channel Rust geologic pages, adaptive geodesic LOD, atmosphere, clouds, rings, eclipse/shadows and HDR/post-processing are not yet ported and remain WebGL2-only. CI validates code and deployment but does not execute a real WebGPU browser adapter or confirm GTX 1650 visual/performance parity.
 
 See:
 - [Architecture](docs/ARCHITECTURE.md)

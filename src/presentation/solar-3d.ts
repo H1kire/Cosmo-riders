@@ -130,9 +130,17 @@ export class Solar3DView{
   }
  }
  private async setBackendPreference(value:string):Promise<void>{
-  const preference=value==='webgpu'||value==='webgl2'?value:'auto';this.backendPreference=preference;try{localStorage.setItem('cosmo-riders.graphics-backend.v1',preference);}catch{}
-  if(preference==='webgl2'){this.activeBackend='WebGL2';this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';return;}
-  const ready=await this.initializeWebGPUBackend();if(!ready){this.activeBackend='WebGL2';this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';}
+  const preference=value==='webgpu'||value==='webgl2'?value:'auto';this.backendPreference=preference;
+  try{localStorage.setItem('cosmo-riders.graphics-backend.v1',preference);}catch{}
+  if(preference==='webgl2'){
+   this.activeBackend='WebGL2';this.canvas.style.opacity='1';
+   this.webgpuBackend?.dispose();this.webgpuBackend=null;
+   this.webgpuCanvas?.remove();this.webgpuCanvas=null;
+   if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
+   return;
+  }
+  const ready=await this.initializeWebGPUBackend();
+  if(!ready){this.activeBackend='WebGL2';this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';}
  }
  private observeLongTasks():void{
   if(typeof PerformanceObserver==='undefined')return;
@@ -597,7 +605,7 @@ export class Solar3DView{
   }
   if(sunScreen)this.hdr.setOpticalSource([sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)],sunVisible);
   else this.hdr.setOpticalSource([.5,.5],false);
-  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.visibility='hidden';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='visible';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
+  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.opacity='0';this.activeBackend='WebGPU';}else{this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

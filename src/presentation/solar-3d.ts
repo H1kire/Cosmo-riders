@@ -467,7 +467,7 @@ export class Solar3DView{
   const far=100,near=Math.max(1e-10,Math.min(this.distance*.01,focusRadius>0?focusRadius*.02:this.distance*.01));
   const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
-  const webgpuBodies:WebGPUBodyDraw[]=[];this.webgpuOrbits=[];
+  const webgpuBodies:WebGPUBodyDraw[]=[];this.webgpuOrbits=[];this.webgpuRings=[];
   const renderOrigin=focusState?focusState.position:sun;
   const mapper=(body,p,out?:[number,number,number])=>{const x=(p.x-renderOrigin.x)/AU,y=(p.z-renderOrigin.z)/AU,z=(p.y-renderOrigin.y)/AU;if(out){out[0]=x;out[1]=y;out[2]=z;return out;}return[x,y,z] as [number,number,number];};
   const sunRenderPosition=mapper(null,sun);this.currentSunPosition=sunRenderPosition;
@@ -563,7 +563,7 @@ export class Solar3DView{
     g.activeTexture(g.TEXTURE0);
     g.useProgram(this.bodyProgram);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    }
-   if(body.hasRings)this.ringRenderer.render(vp,scaleModelMatrix(model,this.ringRenderer.outerScale(body.id)),body.id);
+   if(body.hasRings){const ringModel=scaleModelMatrix(model,this.ringRenderer.outerScale(body.id));this.webgpuRings.push({id:body.id,model:ringModel});this.ringRenderer.render(vp,ringModel,body.id);}
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
    if(this.graphics.atmosphere&&profile){
@@ -605,7 +605,7 @@ export class Solar3DView{
   }
   if(sunScreen)this.hdr.setOpticalSource([sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)],sunVisible);
   else this.hdr.setOpticalSource([.5,.5],false);
-  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.opacity='0';this.activeBackend='WebGPU';}else{this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
+  if(this.backendPreference!=='webgl2'&&this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition});if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.opacity='0';this.activeBackend='WebGPU';}else{this.canvas.style.opacity='1';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.activeBackend='WebGL2';}
   this.hdr.present(w,h);g.flush();this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

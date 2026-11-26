@@ -41,6 +41,9 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   assert.match(backend, /createRenderPipelineAsync/);
   assert.match(backend, /fn noise3\(/);
   assert.match(backend, /fn fbm3\(/);
+  assert.match(backend, /const RING_SHADER/);
+  assert.match(backend, /ringPipeline/);
+  assert.match(solar, /this\.webgpuRings\.push/);
   assert.match(backend, /smoothstep\(0\.455, 0\.545, field\)/);
   assert.match(solar, /waterFraction:body\.surface\?\.waterFraction/);
   assert.match(backend, /depth24plus/);

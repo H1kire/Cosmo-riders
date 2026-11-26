@@ -25,17 +25,20 @@ export interface WebGPUBodyDraw {
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
+export interface WebGPURingDraw { id: string; model: ArrayLike<number>; }
 
 export interface WebGPUFrame {
   viewProjection: ArrayLike<number>;
   bodies: readonly WebGPUBodyDraw[];
   orbits: readonly WebGPUOrbitDraw[];
+  rings: readonly WebGPURingDraw[];
   sunPosition: readonly [number, number, number];
 }
 
 interface BodyGpuResources { uniform: any; bindGroup: any; }
 interface MeshGpuResources { positions: any; normals: any; indices: any; indexCount: number; }
 interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacity: number; points: Float32Array | null; count: number; }
+interface RingGpuResources { uniform: any; bindGroup: any; }
 
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
 const TEXTURE_USAGE = { RENDER_ATTACHMENT: 0x0010 };
@@ -70,6 +73,23 @@ export function createSphereGeometry(latitudeSegments: number, longitudeSegments
     indices: new Uint16Array(indices)
   };
 }
+
+const RING_SHADER = `
+struct RingUniforms { viewProjection: mat4x4<f32>, model: mat4x4<f32>, color: vec4<f32>, params: vec4<f32>, };
+@group(0) @binding(0) var<uniform> ring: RingUniforms;
+struct VertexInput { @location(0) position: vec3<f32>, };
+struct VertexOutput { @builtin(position) clipPosition: vec4<f32>, @location(0) localPosition: vec3<f32>, };
+@vertex fn vertexMain(input: VertexInput) -> VertexOutput { var output: VertexOutput; output.localPosition=input.position; output.clipPosition=ring.viewProjection*ring.model*vec4<f32>(input.position,1.0); return output; }
+@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
+ let radius=length(input.localPosition.xz);
+ let edge=smoothstep(ring.params.x,ring.params.x+0.012,radius)*(1.0-smoothstep(0.985,1.0,radius));
+ let bands=0.72+0.16*sin(radius*410.0)+0.08*sin(radius*1270.0)+0.04*sin(radius*2830.0);
+ let division=1.0-0.82*smoothstep(0.003,0.012,abs(radius-0.78));
+ let alpha=ring.params.y*edge*bands*division;
+ if(alpha<0.012){discard;}
+ return vec4<f32>(ring.color.rgb*(0.62+0.38*bands),alpha);
+}
+`;
 
 const ORBIT_SHADER = `
 struct OrbitUniforms { viewProjection: mat4x4<f32>, model: mat4x4<f32>, color: vec4<f32>, };
@@ -196,6 +216,11 @@ export class WebGPUBackend {
   private readonly meshResources = new Map<number, MeshGpuResources>();
   private readonly bodyResources = new Map<string, BodyGpuResources>();
   private readonly orbitResources = new Map<string, OrbitGpuResources>();
+  private readonly ringResources = new Map<string, RingGpuResources>();
+  private ringPipeline: any = null;
+  private ringBindGroupLayout: any = null;
+  private ringVertexBuffer: any = null;
+  private ringVertexCount = 0;
   private orbitPipeline: any = null;
   private orbitBindGroupLayout: any = null;
   private disposed = false;
@@ -301,6 +326,28 @@ export class WebGPUBackend {
       primitive: { topology: 'line-strip' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
+    const ringModule = this.device.createShaderModule({ code: RING_SHADER });
+    const ringCompilation = await ringModule.getCompilationInfo();
+    const ringErrors = ringCompilation.messages.filter((message: any) => message.type === 'error');
+    if (ringErrors.length) throw new Error('WGSL ring compilation failed: ' + ringErrors.map((item: any) => item.message).join('; '));
+    this.ringBindGroupLayout = this.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 160 } }] });
+    this.ringPipeline = await this.device.createRenderPipelineAsync({
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.ringBindGroupLayout] }),
+      vertex: { module: ringModule, entryPoint: 'vertexMain', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
+      fragment: { module: ringModule, entryPoint: 'fragmentMain', targets: [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }] },
+      primitive: { topology: 'triangle-strip' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
+    });
+    const ringSegments = 768, ringVertices = new Float32Array((ringSegments + 1) * 2 * 3);
+    let ringOffset = 0;
+    for (let index = 0; index <= ringSegments; index++) {
+      const angle = index / ringSegments * Math.PI * 2, cosine = Math.cos(angle), sine = Math.sin(angle);
+      ringVertices[ringOffset++] = cosine * 0.55; ringVertices[ringOffset++] = 0; ringVertices[ringOffset++] = sine * 0.55;
+      ringVertices[ringOffset++] = cosine; ringVertices[ringOffset++] = 0; ringVertices[ringOffset++] = sine;
+    }
+    this.ringVertexBuffer = this.device.createBuffer({ size: ringVertices.byteLength, usage: BUFFER_USAGE.VERTEX | BUFFER_USAGE.COPY_DST });
+    this.device.queue.writeBuffer(this.ringVertexBuffer, 0, ringVertices);
+    this.ringVertexCount = ringVertices.length / 3;
   }
 
   private bindGroupLayout: any = null;
@@ -379,6 +426,30 @@ export class WebGPUBackend {
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
     }
+    const ringConfigs: Record<string, { inner: number; outer: number; color: readonly [number, number, number]; opacity: number }> = {
+      saturn: { inner: 1.24, outer: 2.32, color: [0.72, 0.66, 0.54], opacity: 0.72 },
+      jupiter: { inner: 1.28, outer: 1.82, color: [0.58, 0.53, 0.43], opacity: 0.22 },
+      uranus: { inner: 1.45, outer: 2.05, color: [0.58, 0.68, 0.75], opacity: 0.28 },
+      neptune: { inner: 1.48, outer: 2.0, color: [0.48, 0.55, 0.68], opacity: 0.20 }
+    };
+    for (const ringDraw of frame.rings) {
+      const config = ringConfigs[ringDraw.id];
+      if (!config || !this.ringVertexBuffer) continue;
+      let resources = this.ringResources.get(ringDraw.id);
+      if (!resources) {
+        const uniform = this.device.createBuffer({ size: 160, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+        const bindGroup = this.device.createBindGroup({ layout: this.ringBindGroupLayout, entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 160 } }] });
+        resources = { uniform, bindGroup }; this.ringResources.set(ringDraw.id, resources);
+      }
+      const uniforms = new Float32Array(40);
+      uniforms.set(Array.from(frame.viewProjection).slice(0, 16), 0);
+      uniforms.set(Array.from(ringDraw.model).slice(0, 16), 16);
+      uniforms.set([config.color[0], config.color[1], config.color[2], 1], 32);
+      uniforms.set([config.inner / config.outer, config.opacity, 0, 0], 36);
+      this.device.queue.writeBuffer(resources.uniform, 0, uniforms);
+      pass.setPipeline(this.ringPipeline); pass.setBindGroup(0, resources.bindGroup);
+      pass.setVertexBuffer(0, this.ringVertexBuffer); pass.draw(this.ringVertexCount);
+    }
     for (const orbit of frame.orbits) {
       let resources = this.orbitResources.get(orbit.id);
       const requiredBytes = Math.max(12, (orbit.points.byteLength + 3) & ~3);
@@ -424,12 +495,17 @@ export class WebGPUBackend {
     this.bodyResources.clear();
     for (const resources of this.orbitResources.values()) { resources.vertex.destroy(); resources.uniform.destroy(); }
     this.orbitResources.clear();
+    for (const resources of this.ringResources.values()) resources.uniform.destroy();
+    this.ringResources.clear();
+    this.ringVertexBuffer?.destroy?.(); this.ringVertexBuffer = null; this.ringVertexCount = 0;
     for (const mesh of this.meshResources.values()) { mesh.positions.destroy(); mesh.normals.destroy(); mesh.indices.destroy(); }
     this.meshResources.clear();
     this.depthTexture?.destroy?.(); this.depthTexture = null;
     this.pipeline = null;
     this.orbitPipeline = null;
     this.orbitBindGroupLayout = null;
+    this.ringPipeline = null;
+    this.ringBindGroupLayout = null;
   }
 
   dispose(): void {

@@ -40,7 +40,7 @@ export interface WebGPUFrame {
   sunPosition: readonly [number, number, number];
   sunUv?: readonly [number, number];
   sunVisible?: boolean;
-  postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; exposure?: number; glare?: boolean; lensFlare?: boolean; };
+  postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; bloomIterations?: number; exposure?: number; hdr?: boolean; toneMapping?: 'reinhard' | 'aces'; glare?: boolean; glareStrength?: number; lensFlare?: boolean; lensFlareStrength?: number; };
 }
 
 interface BodyGpuResources { uniform: any; bindGroup: any; }
@@ -51,7 +51,7 @@ interface RingGpuResources { uniform: any; bindGroup: any; }
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
 const TEXTURE_USAGE = { TEXTURE_BINDING: 0x0004, RENDER_ATTACHMENT: 0x0010 };
 const POST_SHADER = `
-struct U { params: vec4<f32>, optical: vec4<f32>, };
+struct U { params: vec4<f32>, optical: vec4<f32>, controls: vec4<f32>, };
 @group(0) @binding(0) var src: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var<uniform> u: U;
@@ -78,17 +78,23 @@ fn halo(p:vec2<f32>,c:vec2<f32>,k:f32)->f32{let d=p-c;return exp(-dot(d,d)*k);}
 @fragment fn composite(v:V)->@location(0) vec4<f32>{
  var h=textureSample(src,samp,v.uv).rgb+textureSample(bloom,samp,v.uv).rgb*u.optical.x;
  let sun=u.optical.yz; let visible=u.optical.w; let d=v.uv-sun; let r=length(d);
- if(visible>0.0){
+ if(visible>0.0 && u.controls.z>0.0){
   let a=atan2(d.y,d.x); let rays=pow(abs(cos(a*4.0)),32.0)*exp(-r*48.0);
   let streak=(exp(-abs(d.x)*900.0)+exp(-abs(d.y)*900.0))*exp(-r*34.0);
-  h+=vec3<f32>(1.0,0.79,0.53)*(rays*0.16+streak*0.035+halo(v.uv,sun,10500.0)*0.18)*0.09*visible;
+  h+=vec3<f32>(1.0,0.79,0.53)*(rays*0.16+streak*0.035+halo(v.uv,sun,10500.0)*0.18)*u.controls.z*visible;
+ }
+ if(visible>0.0 && u.controls.w>0.0){
   let axis=vec2<f32>(0.5)-sun;
   let ghosts=halo(v.uv,sun+axis*0.48,2600.0)*0.18+halo(v.uv,sun+axis*0.92,4200.0)*0.12+halo(v.uv,sun-axis*0.32,6500.0)*0.08;
   let streak2=exp(-abs(v.uv.y-sun.y)*1800.0)*exp(-abs(v.uv.x-sun.x)*28.0);
-  h+=vec3<f32>(0.48,0.68,1.0)*(ghosts+streak2*0.035)*0.055*visible;
+  h+=vec3<f32>(0.48,0.68,1.0)*(ghosts+streak2*0.035)*u.controls.w*visible;
  }
  h*=max(0.0,u.params.w);
- return vec4<f32>(pow(max(aces(h),vec3<f32>(0.0)),vec3<f32>(1.0/2.2)),1.0);
+ var mapped=h;
+ if(u.controls.x<0.5){mapped=clamp(h,vec3<f32>(0.0),vec3<f32>(1.0));}
+ else if(u.controls.y>0.5){mapped=aces(h);}
+ else{mapped=h/(vec3<f32>(1.0)+h);}
+ return vec4<f32>(pow(max(mapped,vec3<f32>(0.0)),vec3<f32>(1.0/2.2)),1.0);
 }
 `;
 
@@ -470,7 +476,7 @@ export class WebGPUBackend {
     if(errors.length)throw new Error('WGSL post-processing compilation failed: '+errors.map((m:any)=>m.message).join('; '));
     this.postLayout=this.device.createBindGroupLayout({entries:[
       {binding:0,visibility:2,texture:{sampleType:'float'}},{binding:1,visibility:2,sampler:{type:'filtering'}},
-      {binding:2,visibility:2,buffer:{type:'uniform',minBindingSize:32}},{binding:3,visibility:2,texture:{sampleType:'float'}}
+      {binding:2,visibility:2,buffer:{type:'uniform',minBindingSize:48}},{binding:3,visibility:2,texture:{sampleType:'float'}}
     ]});
     const layout=this.device.createPipelineLayout({bindGroupLayouts:[this.postLayout]});
     const make=(entry:string,format:string)=>this.device.createRenderPipelineAsync({layout,vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:entry,targets:[{format}]},primitive:{topology:'triangle-list'}});
@@ -478,7 +484,7 @@ export class WebGPUBackend {
     this.postPipelines.blur=await make('blur','rgba16float');
     this.postPipelines.composite=await make('composite',this.format);
     this.postSampler=this.device.createSampler({magFilter:'linear',minFilter:'linear',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge'});
-    this.postUniforms=Array.from({length:4},()=>this.device.createBuffer({size:32,usage:BUFFER_USAGE.UNIFORM|BUFFER_USAGE.COPY_DST}));
+    this.postUniforms=Array.from({length:4},()=>this.device.createBuffer({size:48,usage:BUFFER_USAGE.UNIFORM|BUFFER_USAGE.COPY_DST}));
     this.rebuildPostGroups();
   }
 
@@ -486,7 +492,7 @@ export class WebGPUBackend {
     if(!this.postLayout||!this.postSampler||this.postUniforms.length!==4||!this.sceneTexture||!this.pongTexture)return;
     const make=(source:any,bloom:any,index:number)=>this.device.createBindGroup({layout:this.postLayout,entries:[
       {binding:0,resource:source.createView()},{binding:1,resource:this.postSampler},
-      {binding:2,resource:{buffer:this.postUniforms[index],offset:0,size:32}},{binding:3,resource:bloom.createView()}
+      {binding:2,resource:{buffer:this.postUniforms[index],offset:0,size:48}},{binding:3,resource:bloom.createView()}
     ]});
     this.postGroups=[make(this.sceneTexture,this.sceneTexture,0),make(this.brightTexture,this.brightTexture,1),make(this.pingTexture,this.pingTexture,2),make(this.sceneTexture,this.pongTexture,3)];
   }
@@ -494,9 +500,15 @@ export class WebGPUBackend {
   private encodePost(encoder:any,frame:WebGPUFrame):void {
     if(!this.postPipelines.composite||this.postGroups.length!==4)return;
     const settings=frame.postProcessing??{},enabled=settings.bloom!==false,uv=frame.sunUv??[0.5,0.5];
-    const visible=frame.sunVisible&&(settings.glare!==false||settings.lensFlare!==false)?1:0;
+    const visible=frame.sunVisible?1:0;
     const strength=enabled?(settings.bloomStrength??0.28):0,exposure=settings.exposure??1;
-    const write=(i:number,dx:number,dy:number)=>this.device.queue.writeBuffer(this.postUniforms[i],0,new Float32Array([settings.bloomThreshold??1.55,dx,dy,exposure,strength,uv[0],uv[1],visible]));
+    const hdr=settings.hdr!==false,acesEnabled=settings.toneMapping!=='reinhard';
+    const glare=settings.glare===false?0:(settings.glareStrength??0.09);
+    const flare=settings.lensFlare===false?0:(settings.lensFlareStrength??0.055);
+    const write=(i:number,dx:number,dy:number)=>this.device.queue.writeBuffer(this.postUniforms[i],0,new Float32Array([
+      settings.bloomThreshold??1.55,dx,dy,exposure,strength,uv[0],uv[1],visible,
+      hdr?1:0,acesEnabled?1:0,glare,flare
+    ]));
     write(0,0,0);write(1,1/Math.max(1,this.canvas.width),0);write(2,0,1/Math.max(1,this.canvas.height));write(3,0,0);
     const draw=(target:any,pipeline:any,group:any)=>{const p=encoder.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});p.setPipeline(pipeline);p.setBindGroup(0,group);p.draw(3);p.end();};
     if(enabled){draw(this.brightTexture,this.postPipelines.bright,this.postGroups[0]);draw(this.pingTexture,this.postPipelines.blur,this.postGroups[1]);draw(this.pongTexture,this.postPipelines.blur,this.postGroups[2]);}

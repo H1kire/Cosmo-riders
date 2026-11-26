@@ -347,7 +347,7 @@ export class WebGPUBackend {
     this.state = 'initializing';
     try {
       await this.initialize();
-      return this.state === 'ready';
+      return true;
     } catch {
       return false;
     }

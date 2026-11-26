@@ -109,14 +109,25 @@ export class Solar3DView{
   if(!canvas.parentElement)this.canvas.parentElement?.append(canvas);this.webgpuCanvas=canvas;
   const backend=new WebGPUBackend(canvas);this.webgpuBackend=backend;
   try{await backend.ready;if(this.disposed){backend.dispose();return false;}if(backend.state!=='ready')throw new Error(backend.error??'WebGPU initialization did not reach ready state.');
-   this.backendFallbackReason=null;this.activeBackend='WebGPU';canvas.style.display='block';canvas.style.visibility='visible';this.canvas.style.visibility='hidden';
+   this.backendFallbackReason=null;this.activeBackend='WebGPU';canvas.style.display='block';canvas.style.visibility='visible';this.canvas.style.opacity='0';
    this.webgpuLossHandler=()=>{void this.handleWebGPUDeviceLoss();};window.addEventListener('graphics-backend-lost',this.webgpuLossHandler);return true;
-  }catch(error){this.backendFallbackReason=error instanceof Error?error.message:String(error);backend.dispose();if(this.webgpuBackend===backend)this.webgpuBackend=null;canvas.style.visibility='hidden';canvas.style.display='none';this.canvas.style.visibility='visible';this.activeBackend='WebGL2';return false;}
+  }catch(error){this.backendFallbackReason=error instanceof Error?error.message:String(error);backend.dispose();if(this.webgpuBackend===backend)this.webgpuBackend=null;canvas.style.visibility='hidden';canvas.style.display='none';canvas.remove();if(this.webgpuCanvas===canvas)this.webgpuCanvas=null;this.canvas.style.opacity='1';this.activeBackend='WebGL2';return false;}
  }
  private async handleWebGPUDeviceLoss():Promise<void>{
-  const backend=this.webgpuBackend;if(!backend||this.disposed)return;const recovered=await backend.recover();if(this.disposed)return;
-  if(recovered&&backend.state==='ready'){this.activeBackend='WebGPU';this.backendFallbackReason=null;if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';this.canvas.style.visibility='hidden';}
-  else{this.backendFallbackReason=backend.error??'WebGPU device recovery failed; WebGL2 fallback activated.';this.activeBackend='WebGL2';if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='hidden';this.canvas.style.visibility='visible';}
+  const backend=this.webgpuBackend;if(!backend||this.disposed)return;
+  const recovered=await backend.recover();if(this.disposed)return;
+  if(recovered&&backend.state==='ready'){
+   this.activeBackend='WebGPU';this.backendFallbackReason=null;
+   if(this.webgpuCanvas)this.webgpuCanvas.style.visibility='visible';
+   this.canvas.style.opacity='0';
+  }else{
+   this.backendFallbackReason=backend.error??'WebGPU device recovery failed; WebGL2 fallback activated.';
+   this.activeBackend='WebGL2';
+   if(this.webgpuCanvas){this.webgpuCanvas.style.visibility='hidden';this.webgpuCanvas.remove();this.webgpuCanvas=null;}
+   backend.dispose();this.webgpuBackend=null;
+   if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
+   this.canvas.style.opacity='1';
+  }
  }
  private async setBackendPreference(value:string):Promise<void>{
   const preference=value==='webgpu'||value==='webgl2'?value:'auto';this.backendPreference=preference;try{localStorage.setItem('cosmo-riders.graphics-backend.v1',preference);}catch{}

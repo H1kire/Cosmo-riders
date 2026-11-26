@@ -40,3 +40,16 @@ test('loading progress is driven by completed named stages, not a timer counter'
  assert.ok(docs.includes('first Solar System frame is therefore independent'));
   assert.ok(docs.includes('moved off the main thread'));
 });
+
+
+test('WebGPU startup is non-blocking and scene setup failures release the loading gate',async()=>{
+ const [view,main,lab]=await Promise.all([
+  readFile(file('..','src','presentation','solar-3d.ts'),'utf8'),
+  readFile(file('..','lab','main.ts'),'utf8'),
+  readFile(file('..','lab','lab.ts'),'utf8')
+ ]);
+ assert.ok(view.includes("void this.initializeWebGPUBackend()"));
+ assert.ok(!view.includes("await this.initializeWebGPUBackend()"));
+ assert.ok(main.includes("'cosmo-loading-failed'"));
+ assert.ok(lab.includes("'cosmo-loading-failed'"));
+});

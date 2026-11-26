@@ -19,11 +19,12 @@ async function startApplication():Promise<void>{
     loading.complete('application');
     loading.stage('first-frame');
     // Чекаємо саме на перший успішно відмальований кадр, а не просто на таймер RAF.
-    await new Promise<void>((resolve,reject)=>{
-      const cleanup=()=>{window.removeEventListener('cosmo-loading-stage',onFirstFrame);window.removeEventListener('cosmo-loading-failed',onFailure);};
-      const onFirstFrame=(event:Event)=>{const detail=(event as CustomEvent<{id?:string;complete?:boolean}>).detail;if(detail?.id==='first-frame'&&detail.complete){cleanup();resolve();}};
-      const onFailure=(event:Event)=>{cleanup();const detail=(event as CustomEvent<{message?:string}>).detail;reject(new Error(detail?.message??'Initial scene setup failed.'));};
-      window.addEventListener('cosmo-loading-stage',onFirstFrame);window.addEventListener('cosmo-loading-failed',onFailure);
+    await new Promise<void>(resolve=>{
+      const onFirstFrame=(event:Event)=>{
+        const detail=(event as CustomEvent<{id?:string;complete?:boolean}>).detail;
+        if(detail?.id==='first-frame'&&detail.complete){window.removeEventListener('cosmo-loading-stage',onFirstFrame);resolve();}
+      };
+      window.addEventListener('cosmo-loading-stage',onFirstFrame);
     });
     loading.ready();
   }catch(error){

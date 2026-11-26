@@ -241,7 +241,9 @@ test('Solar3DView uses precomputed Rust orbit paths instead of TypeScript Kepler
  assert.doesNotMatch(view,/orbitalElementsToState|rotateStateToParentEquator/);
  assert.match(view,/world\.orbitPaths\?\.get\(body\.id\)/);
  assert.match(worker,/get_orbit_path\(command\.bodyId,command\.segments\)/);
- assert.match(client,/this\.bridge\.orbitPath\(id,1024\)/);
+ assert.match(client,/ensureOrbitPath\(id,segments\)/);
+ assert.match(client,/this\.bridge\.orbitPath\(id,count\)/);
+ assert.doesNotMatch(client,/this\.orbitPaths\.set\(id,await this\.bridge\.orbitPath/);
 });
 
 test('Rust owns circular-orbit speed and thrust-to-weight calculations',async()=>{
@@ -251,6 +253,8 @@ test('Rust owns circular-orbit speed and thrust-to-weight calculations',async()=
  assert.ok(Math.abs(speed-Math.sqrt(earth/7_000_000))<1e-10);
  const twr=thrust_to_weight_ratio(20_000,1_000,9.80665);
  assert.ok(Math.abs(twr-20_000/(1_000*9.80665))<1e-12);
+ assert.equal(thrust_to_weight_ratio(0,1_000,9.80665),0,'an idle engine has zero thrust-to-weight ratio');
+ assert.throws(()=>thrust_to_weight_ratio(-1,1_000,9.80665));
  world.dispose_physics_world();
 });
 

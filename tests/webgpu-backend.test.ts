@@ -33,7 +33,7 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   assert.match(solar, /this\.canvas\.style\.opacity='0'/);
   assert.match(solar, /pointerEvents:'none'/);
   assert.match(solar, /webgpuBodies\.push\(\{id:body\.id,model/);
-  assert.match(solar, /webgpuOrbits\?\.push\(\{id:body\.id,points:path/);
+  assert.match(solar, /webgpuOrbits\.push\(\{id:body\.id,points:path/);
   assert.match(solar, /webgpuBackend\.render\(\{viewProjection:vp,bodies:webgpuBodies,orbits:this\.webgpuOrbits/);
   assert.match(backend, /requestAdapter/);
   assert.match(backend, /requestDevice/);

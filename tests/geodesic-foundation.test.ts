@@ -528,22 +528,27 @@ test('every preset mesh resolution builds all eight stitching templates',()=>{
  }
 });
 
-test('orbit rendering uses smooth visibility, adaptive tessellation and persistent GPU buffers',async()=>{
- const {readFile}=await import('node:fs/promises');
- const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- assert.ok(source.includes('smoothVisibility'));
- assert.ok(source.includes('Math.min(1024'));
- assert.ok(source.includes('orbitSegmentCounts'));
- assert.ok(source.includes('orbitVisibilityStates'));
- assert.ok(source.includes('projected<.02:projected>.08'));
- assert.ok(source.includes('cached.path!==path'));
- assert.ok(source.includes('uModel'));
- assert.ok(!source.includes('bufferSubData'));
- assert.ok(source.includes('g.deleteBuffer(orbit.buffer)'));
- assert.ok(!source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12'));
-});
+test('orbit rendering uses smooth visibility, adaptive tessellation and WebGPU-managed persistent buffers',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const [source,backend]=await Promise.all([
+   readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8'),
+   readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8')
+  ]);
+  assert.ok(source.includes('smoothVisibility'));
+  assert.ok(source.includes('Math.min(1024'));
+  assert.ok(source.includes('orbitSegmentCounts'));
+  assert.ok(source.includes('orbitVisibilityStates'));
+  assert.ok(source.includes('projected<.02:projected>.08'));
+  assert.ok(source.includes('this.webgpuOrbits.push({id:body.id,points:path'));
+  assert.ok(backend.includes('resources.points !== orbit.points'));
+  assert.ok(backend.includes('this.orbitResources.set(orbit.id, resources)'));
+  assert.ok(backend.includes('pass.draw(resources.count)'));
+  assert.ok(!source.includes('this.orbitBuffers'));
+  assert.ok(!source.includes('g.deleteBuffer(orbit.buffer)'));
+  assert.ok(!source.includes('projectedOrbitRadius(body.orbitalElements.semiMajorAxisM/AU,viewportHeight,parentDistance)<0.12'));
+ });
 
-test('GPU texture arrays are allocated incrementally and geodesic setup does not build meshes synchronously',async()=>{
+ test('GPU texture arrays are allocated incrementally and geodesic setup does not build meshes synchronously',async()=>{
  const {readFile}=await import('node:fs/promises');
  const [cache,renderer,solar]=await Promise.all([
   readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8'),

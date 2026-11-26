@@ -22,22 +22,23 @@ function extractBlock(source:string,marker:string):string{
  assert.fail('unbalanced source block: '+marker);
 }
 
-test('planet render loop isolates WebGL programs and keeps the UV fallback conditional',async()=>{
- const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- const loop=extractBlock(source,'for(const body of bodies){\n   g.useProgram(this.bodyProgram);');
- assert.match(loop,/^\{\s*g\.useProgram\(this\.bodyProgram\);\s*const state=states\.get\(body\.id\);/);
- assert.match(loop,/if\(body\.id==='earth'&&this\.geodesicEarthRenderer&&this\.earthRenderMode!=='uv'\)/);
- assert.match(loop,/(?:pendingRenderer|activeRenderer)\.render\(frame\)/);
- assert.match(loop,/if\(!renderedGeodesicEarth\)\s*\{[\s\S]*?g\.disable\(g\.CULL_FACE\);[\s\S]*?g\.depthMask\(true\);[\s\S]*?g\.bindTexture\(g\.TEXTURE_2D_ARRAY,null\);[\s\S]*?g\.useProgram\(this\.bodyProgram\);this\.bindMesh\(mesh,l\);g\.drawElements\(g\.TRIANGLES,mesh\.count,g\.UNSIGNED_SHORT,0\);\s*\}/);
- const atmosphere=extractBlock(source,' drawAtmosphere(body,profile,p,radius,mesh,vp,eye,light,occluders){');
- const clouds=extractBlock(source,' drawClouds(body,layers,p,radius,mesh,vp,light,occluders,timeSeconds,baseModel){');
- assert.match(atmosphere,/g\.useProgram\(this\.atmosphereProgram\)/);
- assert.match(atmosphere,/this\.bindMesh\(mesh,l\);\s*g\.drawElements\(/);
- assert.match(clouds,/g\.useProgram\(this\.cloudProgram\)/);
- assert.match(clouds,/this\.bindMesh\(mesh,l\);\s*g\.drawElements\(/);
- const rings=await readFile(new URL('../src/rendering/rings/ring-renderer.ts',import.meta.url),'utf8');
- assert.match(rings,/g\.useProgram\(this\.program\)/);
- assert.match(rings,/g\.drawArrays\(g\.TRIANGLE_STRIP,0,this\.count\)/);
+test('planet atmosphere, clouds, rings and orbits are submitted to WebGPU without duplicate GLSL passes',async()=>{
+ const [source,backend]=await Promise.all([
+  readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8')
+ ]);
+ assert.match(source,/webgpuDraw\\.atmosphere=/);
+ assert.match(source,/webgpuDraw\\.clouds=/);
+ assert.match(source,/this\\.webgpuRings\\.push/);
+ assert.match(source,/this\\.webgpuOrbits\\.push/);
+ assert.match(backend,/const drawShell =/);
+ assert.match(backend,/const RING_SHADER/);
+ assert.match(backend,/ringPipeline/);
+ assert.match(backend,/orbitPipeline/);
+ assert.doesNotMatch(source,/drawAtmosphere\\(/);
+ assert.doesNotMatch(source,/drawClouds\\(/);
+ assert.doesNotMatch(source,/RingRenderer|LINE_VERTEX|LINE_FRAGMENT/);
+ assert.doesNotMatch(source,/atmosphereProgram|cloudProgram|lineProgram/);
 });
 
 test('both published entry points gate application import behind the start screen',async()=>{

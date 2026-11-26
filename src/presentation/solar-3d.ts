@@ -420,14 +420,14 @@ export class Solar3DView{
    const state=states.get(body.id);if(!state)continue;
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
-   const px=radius*(renderHeight/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
+   const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
    const projectedScreen=this.project(vp,p,w/dpr,h/dpr);
    const level=selectMeshLod(px,this.graphics.maxMeshLod),mesh=this.meshes[level];
    
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,lod:level};
+   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level};
    webgpuBodies.push({id:body.id,model,...webgpuBody});
    const webgpuDraw=webgpuBodies[webgpuBodies.length-1];
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));

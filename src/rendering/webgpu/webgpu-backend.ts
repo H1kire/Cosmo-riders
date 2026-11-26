@@ -25,6 +25,7 @@ export interface WebGPUBodyDraw {
   tectonicActivity?: number;
   volcanicActivity?: number;
   erosion?: number;
+  detail?: number;
   lod: number;
   eclipseVisibility?: number;
   shadowOccluders?: Float32Array;
@@ -194,7 +195,21 @@ struct VertexOutput {
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
-  let world = body.model * vec4<f32>(input.position, 1.0);
+  var displacedPosition = input.position;
+  let kind = body.material.x;
+  if (body.lightAndEmission.w < 0.5 && !(kind > 2.5 && kind < 4.5)) {
+    let detailScale = max(0.35, body.lighting.w);
+    let broadRelief = noise3(input.position * (8.0 * detailScale));
+    let fineRelief = noise3(input.position * (27.0 * detailScale));
+    var reliefScale = 0.0016;
+    if (kind > 7.5 && kind < 8.5) { reliefScale = 0.0040; }
+    else if (kind > 6.5 && kind < 7.5) { reliefScale = 0.0024; }
+    else if (kind > 4.5 && kind < 5.5) { reliefScale = 0.00055; }
+    reliefScale *= 0.55 + clamp(body.surfaceParams.y, 0.0, 1.0) * 0.45;
+    let elevation = (broadRelief - 0.5) * 0.7 + (fineRelief - 0.5) * 0.3;
+    displacedPosition = input.position * (1.0 + elevation * reliefScale);
+  }
+  let world = body.model * vec4<f32>(displacedPosition, 1.0);
   output.clipPosition = body.viewProjection * world;
   output.worldNormal = normalize((body.model * vec4<f32>(input.normal, 0.0)).xyz);
   output.lightDirection = normalize(body.lightAndEmission.xyz);
@@ -276,12 +291,13 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let volcanic = clamp(body.surfaceParams.z, 0.0, 1.0);
   let iron = clamp(body.surfaceParams.x, 0.0, 1.0);
   let erosion = clamp(body.surfaceParams.w, 0.0, 1.0);
-  let baseField = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
-  let detail = mix(fbm3(direction * 31.0), fbm3(direction * 13.0), erosion * 0.58);
+  let detailScale = max(0.35, body.lighting.w);
+  let baseField = fbm3(direction * (4.2 * detailScale)) * 0.66 + fbm3(direction * (12.7 * detailScale)) * 0.34;
+  let detail = mix(fbm3(direction * (31.0 * detailScale)), fbm3(direction * (13.0 * detailScale)), erosion * 0.58);
   let kind = body.material.x;
   var albedo = body.color.rgb;
   if (kind > 0.5 && kind < 1.5) {
-    let ridgeNoise = 1.0 - abs(noise3(direction * (18.0 + tectonic * 54.0)) * 2.0 - 1.0);
+    let ridgeNoise = 1.0 - abs(noise3(direction * ((18.0 + tectonic * 54.0) * detailScale)) * 2.0 - 1.0);
     let field = mix(baseField, max(baseField, ridgeNoise * 0.72), tectonic * 0.58);
     let land = smoothstep(0.455, 0.545, field);
     let ocean = vec3<f32>(0.012, 0.075, 0.22);
@@ -289,7 +305,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     let ironTint = vec3<f32>(0.18, 0.055, 0.018) * iron;
     let soil = clamp(soilBase + ironTint, vec3<f32>(0.0), vec3<f32>(1.0));
     albedo = mix(ocean, soil, land);
-    let volcanicField = fbm3(direction * (34.0 + volcanic * 76.0));
+    let volcanicField = fbm3(direction * ((34.0 + volcanic * 76.0) * detailScale));
     let volcanicRock = smoothstep(0.76, 0.94, volcanicField) * volcanic;
     albedo = mix(albedo, vec3<f32>(0.16, 0.045, 0.025), volcanicRock * 0.62);
     let polar = smoothstep(0.78, 0.96, abs(direction.y)) * clamp(body.material.w * 4.0, 0.0, 1.0);
@@ -635,7 +651,7 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      matrix.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, 0], 52);
+      matrix.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
@@ -656,7 +672,7 @@ export class WebGPUBackend {
       base.set([0, 0, 0, 0], 40);
       base.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      base.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, 0], 52);
+      base.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0]) => {

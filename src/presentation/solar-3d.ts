@@ -519,6 +519,16 @@ export class Solar3DView{
     g.uniform1f(l.uErosion,isStar?0:(body.surface?.erosion??0));
    g.uniform3f(l.uSunPosition,...sunRenderPosition);g.uniform1f(l.uSunRadius,696340000/AU);
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
+    const webgpuShadowOccluders=new Float32Array(32);
+    for(let occluderIndex=0;occluderIndex<occluders.count;occluderIndex++){
+     const sourceOffset=occluderIndex*3,targetOffset=occluderIndex*4;
+     webgpuShadowOccluders[targetOffset]=occluders.positions[sourceOffset];
+     webgpuShadowOccluders[targetOffset+1]=occluders.positions[sourceOffset+1];
+     webgpuShadowOccluders[targetOffset+2]=occluders.positions[sourceOffset+2];
+     webgpuShadowOccluders[targetOffset+3]=occluders.radii[occluderIndex];
+    }
+    webgpuDraw.shadowOccluders=webgpuShadowOccluders;
+    webgpuDraw.shadowsEnabled=this.graphics.shadows;
    let webgpuEclipseVisibility=1;
    if(this.graphics.shadows&&!isStar){
     const observerPosition=[state.position.x,state.position.y,state.position.z] as [number,number,number];

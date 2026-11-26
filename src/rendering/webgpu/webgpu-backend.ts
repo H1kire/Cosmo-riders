@@ -23,6 +23,8 @@ export interface WebGPUBodyDraw {
   iceFraction: number;
   lod: number;
   eclipseVisibility?: number;
+  shadowOccluders?: Float32Array;
+  shadowsEnabled?: boolean;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; };
   clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
 }
@@ -48,6 +50,7 @@ interface MeshGpuResources { positions: any; normals: any; indices: any; indexCo
 interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacity: number; points: Float32Array | null; count: number; }
 interface RingGpuResources { uniform: any; bindGroup: any; }
 
+const ZERO_SHADOW_OCCLUDERS = new Float32Array(32);
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
 const TEXTURE_USAGE = { TEXTURE_BINDING: 0x0004, RENDER_ATTACHMENT: 0x0010 };
 const POST_SHADER = `
@@ -163,6 +166,8 @@ struct BodyUniforms {
   material: vec4<f32>,
   cameraPosition: vec4<f32>,
   lighting: vec4<f32>,
+  sunPosition: vec4<f32>,
+  shadowOccluders: array<vec4<f32>, 8>,
 };
 
 @group(0) @binding(0) var<uniform> body: BodyUniforms;
@@ -216,6 +221,27 @@ fn fbm3(p: vec3<f32>) -> f32 {
   }
   return value;
 }
+
+fn surfaceShadowVisibility(worldPosition: vec3<f32>) -> f32 {
+  if (body.sunPosition.w < 0.5) { return 1.0; }
+  let toSun = body.sunPosition.xyz - worldPosition;
+  let sunDistance = length(toSun);
+  if (sunDistance <= 0.000001) { return 1.0; }
+  let lightDirection = toSun / sunDistance;
+  var visibility = 1.0;
+  for (var index = 0u; index < 8u; index = index + 1u) {
+    let occluder = body.shadowOccluders[index];
+    if (occluder.w <= 0.0) { continue; }
+    let toOccluder = occluder.xyz - worldPosition;
+    let alongRay = dot(toOccluder, lightDirection);
+    if (alongRay <= 0.0 || alongRay >= sunDistance) { continue; }
+    let perpendicular = length(toOccluder - lightDirection * alongRay);
+    let penumbra = max(occluder.w * 0.075, 0.0000001);
+    visibility *= smoothstep(occluder.w - penumbra, occluder.w + penumbra, perpendicular);
+    if (visibility < 0.001) { break; }
+  }
+  return visibility;
+}
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let direction = normalize(input.localDirection);
@@ -223,7 +249,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(input.worldNormal);
     let viewDirection = normalize(body.cameraPosition.xyz - input.worldPosition);
     let rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0), 2.35);
-    let shadowFactor = mix(1.0, body.lighting.x, clamp(body.lighting.y, 0.0, 1.0));
+    let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
     let daylight = 0.18 + 0.82 * max(dot(normal, normalize(input.lightDirection)), 0.0) * shadowFactor;
     if (body.material.x < 9.5) {
       let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
@@ -269,7 +295,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     albedo *= 0.78 + detail * 0.42;
   }
   let diffuse = max(dot(normalize(input.worldNormal), normalize(input.lightDirection)), 0.0);
-  let shadowFactor = mix(1.0, body.lighting.x, clamp(body.lighting.y, 0.0, 1.0));
+  let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
   let illumination = 0.10 + diffuse * 0.90 * shadowFactor;
   return vec4<f32>(albedo * illumination, 1.0);
 }
@@ -381,7 +407,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 208 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 352 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -539,10 +565,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 208, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 352, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 208 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 352 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -573,7 +599,7 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    const matrix = new Float32Array(52);
+    const matrix = new Float32Array(88);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
@@ -589,6 +615,8 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
       matrix.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
+      matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 52);
+      matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 56);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
@@ -597,7 +625,7 @@ export class WebGPUBackend {
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
-      const base = new Float32Array(52);
+      const base = new Float32Array(88);
       base.set(Array.from(body.model).slice(0, 16), 0);
       base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
       base.set([1, 1, 1, 1], 32);
@@ -607,6 +635,8 @@ export class WebGPUBackend {
       base.set([0, 0, 0, 0], 40);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
       base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 48);
+      base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 52);
+      base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 56);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);

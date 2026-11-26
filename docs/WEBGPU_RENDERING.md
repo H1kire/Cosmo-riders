@@ -10,7 +10,7 @@ The WebGPU canvas is a separate non-interactive overlay. The original WebGL2 can
 
 - Indexed sphere geometry with position and normal streams.
 - WGSL vertex transforms using live body model matrices and the shared camera view-projection.
-- Emissive star path and diffuse + ambient planet shading.
+- Emissive star path, diffuse + ambient planet shading and sphere-space procedural Earth land/ocean/polar ice, Mars rust terrain, lunar relief variation and giant-planet banding.
 - Depth24Plus attachment and depth testing.
 - Per-body uniform buffers and bind groups cached by body ID.
 - Cached orbit vertex buffers with alpha-blended line-strip rendering, existing parent transforms, opacity and segment LOD.
@@ -19,7 +19,7 @@ The WebGPU canvas is a separate non-interactive overlay. The original WebGL2 can
 
 ## Not yet at WebGL2 parity
 
-The WebGPU path currently does not render procedural surface maps, Rust geologic pages, adaptive geodesic quadtree tiles, rings, atmosphere, clouds, analytic eclipses/shadows, HDR, bloom, glare, lens flare or tone mapping. WebGPU spheres use base catalogue colours rather than the full procedural material model. The legacy WebGL2 scene still computes the complete old scene on its separate canvas, which is hidden while WebGPU is selected. These passes must be ported before claiming visual parity.
+The WebGPU path currently does not render procedural surface maps, Rust geologic pages, adaptive geodesic quadtree tiles, rings, atmosphere, clouds, analytic eclipses/shadows, HDR, bloom, glare, lens flare or tone mapping. WebGPU uses a compact WGSL procedural material approximation driven by body seed and surface fractions; it is not yet the complete production GLSL material or the Rust five-channel geologic texture pipeline. The legacy WebGL2 scene still computes the complete old scene on its separate canvas, which is hidden while WebGPU is selected. These passes must be ported before claiming visual parity.
 
 The active WebGL2 geodesic renderer remains Earth-only and currently draws its root-face set; adaptive quadtree selection/balancing is not integrated into its active render list.
 

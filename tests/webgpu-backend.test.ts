@@ -39,6 +39,10 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   assert.match(backend, /requestDevice/);
   assert.match(backend, /getContext\('webgpu'\)/);
   assert.match(backend, /createRenderPipelineAsync/);
+  assert.match(backend, /fn noise3\(/);
+  assert.match(backend, /fn fbm3\(/);
+  assert.match(backend, /smoothstep\(0\.455, 0\.545, field\)/);
+  assert.match(solar, /waterFraction:body\.surface\?\.waterFraction/);
   assert.match(backend, /depth24plus/);
   assert.match(backend, /device\.lost/);
   assert.match(backend, /pass\.draw\(resources\.count\)/);

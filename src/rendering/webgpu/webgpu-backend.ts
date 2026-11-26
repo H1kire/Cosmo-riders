@@ -17,6 +17,10 @@ export interface WebGPUBodyDraw {
   position: readonly [number, number, number];
   color: readonly [number, number, number];
   star: boolean;
+  kind: number;
+  seed: number;
+  waterFraction: number;
+  iceFraction: number;
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
@@ -79,6 +83,7 @@ struct BodyUniforms {
   viewProjection: mat4x4<f32>,
   color: vec4<f32>,
   lightAndEmission: vec4<f32>,
+  material: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> body: BodyUniforms;
@@ -92,6 +97,7 @@ struct VertexOutput {
   @builtin(position) clipPosition: vec4<f32>,
   @location(0) worldNormal: vec3<f32>,
   @location(1) lightDirection: vec3<f32>,
+  @location(2) localDirection: vec3<f32>,
 };
 
 @vertex
@@ -101,17 +107,74 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
   output.clipPosition = body.viewProjection * world;
   output.worldNormal = normalize((body.model * vec4<f32>(input.normal, 0.0)).xyz);
   output.lightDirection = normalize(body.lightAndEmission.xyz);
+  output.localDirection = input.normal;
   return output;
 }
 
+fn hash3(p: vec3<f32>) -> f32 {
+  return fract(sin(dot(p, vec3<f32>(127.1, 311.7, 74.7)) + body.material.y * 19.19) * 43758.5453);
+}
+fn noise3(p: vec3<f32>) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (vec3<f32>(3.0) - 2.0 * f);
+  let a = mix(hash3(i), hash3(i + vec3<f32>(1.0, 0.0, 0.0)), u.x);
+  let b = mix(hash3(i + vec3<f32>(0.0, 1.0, 0.0)), hash3(i + vec3<f32>(1.0, 1.0, 0.0)), u.x);
+  let c = mix(hash3(i + vec3<f32>(0.0, 0.0, 1.0)), hash3(i + vec3<f32>(1.0, 0.0, 1.0)), u.x);
+  let d = mix(hash3(i + vec3<f32>(0.0, 1.0, 1.0)), hash3(i + vec3<f32>(1.0, 1.0, 1.0)), u.x);
+  return mix(mix(a, b, u.y), mix(c, d, u.y), u.z);
+}
+fn fbm3(p: vec3<f32>) -> f32 {
+  var q = p;
+  var amplitude = 0.5;
+  var value = 0.0;
+  for (var octave = 0; octave < 5; octave = octave + 1) {
+    value += amplitude * noise3(q);
+    q = q * 2.03 + vec3<f32>(13.1, 7.7, 19.3);
+    amplitude *= 0.5;
+  }
+  return value;
+}
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   if (body.lightAndEmission.w > 0.5) {
     return vec4<f32>(body.color.rgb * 1.7, 1.0);
   }
+  let direction = normalize(input.localDirection);
+  let field = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
+  let detail = fbm3(direction * 31.0);
+  let kind = body.material.x;
+  var albedo = body.color.rgb;
+  if (kind > 0.5 && kind < 1.5) {
+    let land = smoothstep(0.455, 0.545, field);
+    let ocean = vec3<f32>(0.012, 0.075, 0.22);
+    let soil = mix(vec3<f32>(0.12, 0.19, 0.075), vec3<f32>(0.42, 0.32, 0.17), detail);
+    albedo = mix(ocean, soil, land);
+    let polar = smoothstep(0.78, 0.96, abs(direction.y)) * clamp(body.material.w * 4.0, 0.0, 1.0);
+    albedo = mix(albedo, vec3<f32>(0.78, 0.86, 0.94), polar);
+  } else if (kind > 6.5 && kind < 7.5) {
+    let ridges = fbm3(direction * 22.0);
+    albedo = mix(vec3<f32>(0.24, 0.065, 0.035), vec3<f32>(0.66, 0.25, 0.11), field * 0.7 + ridges * 0.3);
+    let frost = smoothstep(0.84, 0.98, abs(direction.y));
+    albedo = mix(albedo, vec3<f32>(0.72, 0.61, 0.49), frost * 0.55);
+  } else if (kind > 7.5 && kind < 8.5) {
+    let crater = smoothstep(0.43, 0.72, fbm3(direction * 38.0));
+    albedo = body.color.rgb * (0.62 + detail * 0.32 - crater * 0.16);
+  } else if (kind > 2.5 && kind < 3.5) {
+    let bands = 0.5 + 0.5 * sin(direction.y * 58.0 + fbm3(direction * 8.0) * 5.0);
+    albedo = mix(body.color.rgb * 0.58, body.color.rgb * 1.32, bands);
+  } else if (kind > 3.5 && kind < 4.5) {
+    let bands = 0.5 + 0.5 * sin(direction.y * 34.0 + fbm3(direction * 6.0) * 3.0);
+    albedo = mix(body.color.rgb * 0.72, body.color.rgb * 1.18, bands);
+  } else if (kind > 4.5 && kind < 5.5) {
+    let haze = fbm3(direction * 18.0);
+    albedo = mix(body.color.rgb * 0.72, body.color.rgb * 1.22, haze);
+  } else {
+    albedo *= 0.78 + detail * 0.42;
+  }
   let diffuse = max(dot(normalize(input.worldNormal), normalize(input.lightDirection)), 0.0);
-  let illumination = 0.12 + diffuse * 0.88;
-  return vec4<f32>(body.color.rgb * illumination, 1.0);
+  let illumination = 0.10 + diffuse * 0.90;
+  return vec4<f32>(albedo * illumination, 1.0);
 }
 `;
 
@@ -206,7 +269,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 160 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 176 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -260,10 +323,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 160, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 176, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 160 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 176 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -298,7 +361,7 @@ export class WebGPUBackend {
     pass.setVertexBuffer(1, this.normalBuffer);
     pass.setIndexBuffer(this.indexBuffer, 'uint16');
 
-    const matrix = new Float32Array(40);
+    const matrix = new Float32Array(44);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
       matrix.set(Array.from(body.model).slice(0, 16), 0);
@@ -309,6 +372,7 @@ export class WebGPUBackend {
       const dz = frame.sunPosition[2] - body.position[2];
       const length = Math.hypot(dx, dy, dz) || 1;
       matrix.set([dx / length, dy / length, dz / length, body.star ? 1 : 0], 36);
+      matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(this.indexCount, 1, 0, 0, 0);

@@ -38,6 +38,9 @@ export interface WebGPUFrame {
   orbits: readonly WebGPUOrbitDraw[];
   rings: readonly WebGPURingDraw[];
   sunPosition: readonly [number, number, number];
+  sunUv?: readonly [number, number];
+  sunVisible?: boolean;
+  postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; exposure?: number; glare?: boolean; lensFlare?: boolean; };
 }
 
 interface BodyGpuResources { uniform: any; bindGroup: any; }
@@ -46,7 +49,48 @@ interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacit
 interface RingGpuResources { uniform: any; bindGroup: any; }
 
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
-const TEXTURE_USAGE = { RENDER_ATTACHMENT: 0x0010 };
+const TEXTURE_USAGE = { TEXTURE_BINDING: 0x0004, RENDER_ATTACHMENT: 0x0010 };
+const POST_SHADER = `
+struct U { params: vec4<f32>, optical: vec4<f32>, };
+@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var<uniform> u: U;
+@group(0) @binding(3) var bloom: texture_2d<f32>;
+struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, };
+@vertex fn vs(@builtin(vertex_index) i:u32)->V {
+ var p=array<vec2<f32>,3>(vec2<f32>(-1.0,-1.0),vec2<f32>(3.0,-1.0),vec2<f32>(-1.0,3.0));
+ var o:V; let q=p[i]; o.pos=vec4<f32>(q,0.0,1.0); o.uv=vec2<f32>((q.x+1.0)*0.5,1.0-(q.y+1.0)*0.5); return o;
+}
+@fragment fn bright(v:V)->@location(0) vec4<f32>{
+ let c=textureSample(src,samp,v.uv).rgb; let l=max(max(c.r,c.g),c.b);
+ return vec4<f32>(c*(max(l-u.params.x,0.0)/max(l,0.0001)),1.0);
+}
+@fragment fn blur(v:V)->@location(0) vec4<f32>{
+ let d=u.params.yz; var c=textureSample(src,samp,v.uv).rgb*0.227027;
+ c+=textureSample(src,samp,v.uv+d*1.384615).rgb*0.316216;
+ c+=textureSample(src,samp,v.uv-d*1.384615).rgb*0.316216;
+ c+=textureSample(src,samp,v.uv+d*3.230769).rgb*0.070270;
+ c+=textureSample(src,samp,v.uv-d*3.230769).rgb*0.070270;
+ return vec4<f32>(c,1.0);
+}
+fn aces(x:vec3<f32>)->vec3<f32>{return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),vec3<f32>(0.0),vec3<f32>(1.0));}
+fn halo(p:vec2<f32>,c:vec2<f32>,k:f32)->f32{let d=p-c;return exp(-dot(d,d)*k);}
+@fragment fn composite(v:V)->@location(0) vec4<f32>{
+ var h=textureSample(src,samp,v.uv).rgb+textureSample(bloom,samp,v.uv).rgb*u.optical.x;
+ let sun=u.optical.yz; let visible=u.optical.w; let d=v.uv-sun; let r=length(d);
+ if(visible>0.0){
+  let a=atan2(d.y,d.x); let rays=pow(abs(cos(a*4.0)),32.0)*exp(-r*48.0);
+  let streak=(exp(-abs(d.x)*900.0)+exp(-abs(d.y)*900.0))*exp(-r*34.0);
+  h+=vec3<f32>(1.0,0.79,0.53)*(rays*0.16+streak*0.035+halo(v.uv,sun,10500.0)*0.18)*0.09*visible;
+  let axis=vec2<f32>(0.5)-sun;
+  let ghosts=halo(v.uv,sun+axis*0.48,2600.0)*0.18+halo(v.uv,sun+axis*0.92,4200.0)*0.12+halo(v.uv,sun-axis*0.32,6500.0)*0.08;
+  let streak2=exp(-abs(v.uv.y-sun.y)*1800.0)*exp(-abs(v.uv.x-sun.x)*28.0);
+  h+=vec3<f32>(0.48,0.68,1.0)*(ghosts+streak2*0.035)*0.055*visible;
+ }
+ h*=max(0.0,u.params.w);
+ return vec4<f32>(pow(max(aces(h),vec3<f32>(0.0)),vec3<f32>(1.0/2.2)),1.0);
+}
+`;
 
 export function createSphereGeometry(latitudeSegments: number, longitudeSegments: number): SphereGeometryData {
   const positions: number[] = [];
@@ -239,6 +283,15 @@ export class WebGPUBackend {
   private pipeline: any = null;
   private effectPipeline: any = null;
   private depthTexture: any = null;
+  private sceneTexture: any = null;
+  private brightTexture: any = null;
+  private pingTexture: any = null;
+  private pongTexture: any = null;
+  private postSampler: any = null;
+  private postLayout: any = null;
+  private postPipelines: any = {};
+  private postUniforms: any[] = [];
+  private postGroups: any[] = [];
   private readonly meshResources = new Map<number, MeshGpuResources>();
   private readonly bodyResources = new Map<string, BodyGpuResources>();
   private readonly orbitResources = new Map<string, OrbitGpuResources>();
@@ -312,11 +365,8 @@ export class WebGPUBackend {
       alphaMode: 'opaque'
     });
     this.depthTexture?.destroy();
-    this.depthTexture = this.device.createTexture({
-      size: [width, height, 1],
-      format: 'depth24plus',
-      usage: TEXTURE_USAGE.RENDER_ATTACHMENT
-    });
+    this.depthTexture = this.device.createTexture({ size: [width, height, 1], format: 'depth24plus', usage: TEXTURE_USAGE.RENDER_ATTACHMENT });
+    this.createPostTargets(width, height);
   }
 
   private async createPipeline(): Promise<void> {
@@ -341,7 +391,7 @@ export class WebGPUBackend {
       fragment: {
         module,
         entryPoint: 'fragmentMain',
-        targets: [{ format: this.format }]
+        targets: [{ format: 'rgba16float' }]
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
@@ -359,7 +409,7 @@ export class WebGPUBackend {
       fragment: {
         module,
         entryPoint: 'fragmentMain',
-        targets: [{ format: this.format, blend: {
+        targets: [{ format: 'rgba16float', blend: {
           color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
           alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
         } }]
@@ -402,6 +452,55 @@ export class WebGPUBackend {
     this.ringVertexBuffer = this.device.createBuffer({ size: ringVertices.byteLength, usage: BUFFER_USAGE.VERTEX | BUFFER_USAGE.COPY_DST });
     this.device.queue.writeBuffer(this.ringVertexBuffer, 0, ringVertices);
     this.ringVertexCount = ringVertices.length / 3;
+    await this.createPostPipelines();
+  }
+
+  private createPostTargets(width:number,height:number):void {
+    for(const texture of [this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture]) texture?.destroy?.();
+    const make=(w:number,h:number)=>this.device.createTexture({size:[w,h,1],format:'rgba16float',usage:TEXTURE_USAGE.RENDER_ATTACHMENT|TEXTURE_USAGE.TEXTURE_BINDING});
+    this.sceneTexture=make(width,height);
+    const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));
+    this.brightTexture=make(bw,bh);this.pingTexture=make(bw,bh);this.pongTexture=make(bw,bh);
+    this.rebuildPostGroups();
+  }
+
+  private async createPostPipelines():Promise<void>{
+    const module=this.device.createShaderModule({code:POST_SHADER});
+    const info=await module.getCompilationInfo();const errors=info.messages.filter((m:any)=>m.type==='error');
+    if(errors.length)throw new Error('WGSL post-processing compilation failed: '+errors.map((m:any)=>m.message).join('; '));
+    this.postLayout=this.device.createBindGroupLayout({entries:[
+      {binding:0,visibility:2,texture:{sampleType:'float'}},{binding:1,visibility:2,sampler:{type:'filtering'}},
+      {binding:2,visibility:2,buffer:{type:'uniform',minBindingSize:32}},{binding:3,visibility:2,texture:{sampleType:'float'}}
+    ]});
+    const layout=this.device.createPipelineLayout({bindGroupLayouts:[this.postLayout]});
+    const make=(entry:string,format:string)=>this.device.createRenderPipelineAsync({layout,vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:entry,targets:[{format}]},primitive:{topology:'triangle-list'}});
+    this.postPipelines.bright=await make('bright','rgba16float');
+    this.postPipelines.blur=await make('blur','rgba16float');
+    this.postPipelines.composite=await make('composite',this.format);
+    this.postSampler=this.device.createSampler({magFilter:'linear',minFilter:'linear',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge'});
+    this.postUniforms=Array.from({length:4},()=>this.device.createBuffer({size:32,usage:BUFFER_USAGE.UNIFORM|BUFFER_USAGE.COPY_DST}));
+    this.rebuildPostGroups();
+  }
+
+  private rebuildPostGroups():void {
+    if(!this.postLayout||!this.postSampler||this.postUniforms.length!==4||!this.sceneTexture||!this.pongTexture)return;
+    const make=(source:any,bloom:any,index:number)=>this.device.createBindGroup({layout:this.postLayout,entries:[
+      {binding:0,resource:source.createView()},{binding:1,resource:this.postSampler},
+      {binding:2,resource:{buffer:this.postUniforms[index],offset:0,size:32}},{binding:3,resource:bloom.createView()}
+    ]});
+    this.postGroups=[make(this.sceneTexture,this.sceneTexture,0),make(this.brightTexture,this.brightTexture,1),make(this.pingTexture,this.pingTexture,2),make(this.sceneTexture,this.pongTexture,3)];
+  }
+
+  private encodePost(encoder:any,frame:WebGPUFrame):void {
+    if(!this.postPipelines.composite||this.postGroups.length!==4)return;
+    const settings=frame.postProcessing??{},enabled=settings.bloom!==false,uv=frame.sunUv??[0.5,0.5];
+    const visible=frame.sunVisible&&(settings.glare!==false||settings.lensFlare!==false)?1:0;
+    const strength=enabled?(settings.bloomStrength??0.28):0,exposure=settings.exposure??1;
+    const write=(i:number,dx:number,dy:number)=>this.device.queue.writeBuffer(this.postUniforms[i],0,new Float32Array([settings.bloomThreshold??1.55,dx,dy,exposure,strength,uv[0],uv[1],visible]));
+    write(0,0,0);write(1,1/Math.max(1,this.canvas.width),0);write(2,0,1/Math.max(1,this.canvas.height));write(3,0,0);
+    const draw=(target:any,pipeline:any,group:any)=>{const p=encoder.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});p.setPipeline(pipeline);p.setBindGroup(0,group);p.draw(3);p.end();};
+    if(enabled){draw(this.brightTexture,this.postPipelines.bright,this.postGroups[0]);draw(this.pingTexture,this.postPipelines.blur,this.postGroups[1]);draw(this.pongTexture,this.postPipelines.blur,this.postGroups[2]);}
+    draw(this.context.getCurrentTexture(),this.postPipelines.composite,this.postGroups[3]);
   }
 
   private bindGroupLayout: any = null;
@@ -449,7 +548,7 @@ export class WebGPUBackend {
     const encoder = this.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: this.context.getCurrentTexture().createView(),
+        view: this.sceneTexture.createView(),
         clearValue: { r: 0.008, g: 0.016, b: 0.033, a: 1 },
         loadOp: 'clear',
         storeOp: 'store'
@@ -566,6 +665,7 @@ export class WebGPUBackend {
       pass.setVertexBuffer(0, resources.vertex); pass.draw(resources.count);
     }
     pass.end();
+    this.encodePost(encoder, frame);
     this.device.queue.submit([encoder.finish()]);
   }
 
@@ -593,6 +693,10 @@ export class WebGPUBackend {
     for (const mesh of this.meshResources.values()) { mesh.positions.destroy(); mesh.normals.destroy(); mesh.indices.destroy(); }
     this.meshResources.clear();
     this.depthTexture?.destroy?.(); this.depthTexture = null;
+    for(const texture of [this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture])texture?.destroy?.();
+    this.sceneTexture=this.brightTexture=this.pingTexture=this.pongTexture=null;
+    for(const buffer of this.postUniforms)buffer.destroy?.();
+    this.postUniforms=[];this.postGroups=[];this.postLayout=null;this.postSampler=null;this.postPipelines={};
     this.pipeline = null;
     this.effectPipeline = null;
     this.orbitPipeline = null;

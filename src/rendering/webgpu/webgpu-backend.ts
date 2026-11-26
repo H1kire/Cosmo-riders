@@ -44,6 +44,7 @@ export interface WebGPUFrame {
   orbits: readonly WebGPUOrbitDraw[];
   rings: readonly WebGPURingDraw[];
   sunPosition: readonly [number, number, number];
+  sunRadius?: number;
   sunUv?: readonly [number, number];
   sunVisible?: boolean;
   postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; bloomIterations?: number; exposure?: number; hdr?: boolean; toneMapping?: 'reinhard' | 'aces'; glare?: boolean; glareStrength?: number; lensFlare?: boolean; lensFlareStrength?: number; };
@@ -241,8 +242,10 @@ fn surfaceShadowVisibility(worldPosition: vec3<f32>) -> f32 {
     let alongRay = dot(toOccluder, lightDirection);
     if (alongRay <= 0.0 || alongRay >= sunDistance) { continue; }
     let perpendicular = length(toOccluder - lightDirection * alongRay);
-    let penumbra = max(occluder.w * 0.075, 0.0000001);
-    visibility *= smoothstep(occluder.w - penumbra, occluder.w + penumbra, perpendicular);
+    let angularSunRadius = body.lighting.z * alongRay / max(sunDistance - alongRay, 0.0000001);
+    let penumbra = occluder.w + angularSunRadius;
+    let umbra = max(0.0, occluder.w - angularSunRadius);
+    visibility *= smoothstep(umbra, max(umbra + 0.0000001, penumbra), perpendicular);
     if (visibility < 0.001) { break; }
   }
   return visibility;
@@ -632,7 +635,7 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      matrix.set([body.eclipseVisibility ?? 1, 1, 0, 0], 52);
+      matrix.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, 0], 52);
       matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
@@ -653,7 +656,7 @@ export class WebGPUBackend {
       base.set([0, 0, 0, 0], 40);
       base.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 52);
+      base.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, 0], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0]) => {

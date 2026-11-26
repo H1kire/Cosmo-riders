@@ -458,5 +458,4 @@ export class Solar3DView{
   this.webgpuBackend?.dispose();this.webgpuBackend=null;this.webgpuCanvas=null;
   this.labels?.remove();this.labelNodes?.clear();this.orbitCache?.clear();this.stellarSourceDefinitions?.clear();
  }
- }
 }

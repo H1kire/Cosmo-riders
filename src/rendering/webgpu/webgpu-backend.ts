@@ -260,7 +260,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
       let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
       return vec4<f32>(body.color.rgb * (0.35 + scattering * 1.8), clamp(scattering, 0.0, 0.82));
     }
-    let cloudNoise = fbm3(direction * body.material.w + vec3<f32>(body.cameraPosition.w * 0.018, 0.0, body.cameraPosition.w * 0.011));
+    let cloudDrift = vec3<f32>(body.cameraPosition.w * body.surfaceParams.x, 0.0, body.cameraPosition.w * body.surfaceParams.y);
+    let cloudNoise = fbm3(direction * body.material.w + cloudDrift);
     let cloudMask = smoothstep(1.0 - body.material.y, 1.0 - body.material.y + 0.16, cloudNoise);
     let cloudAlpha = cloudMask * body.material.z * (0.22 + 0.78 * daylight);
     return vec4<f32>(body.color.rgb * (0.55 + 0.65 * daylight), clamp(cloudAlpha, 0.0, 0.95));
@@ -655,12 +656,13 @@ export class WebGPUBackend {
       base.set([body.eclipseVisibility ?? 1, 1, 0, 0], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
-      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
+      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0]) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);
         for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
         shell.set([color[0], color[1], color[2], 1], 32);
         shell.set(params, 40);
+        shell.set(surfaceParams, 44);
         this.device.queue.writeBuffer(resources.uniform, 0, shell);
         pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
         pass.setBindGroup(0, resources.bindGroup);
@@ -674,7 +676,7 @@ export class WebGPUBackend {
       for (let cloudIndex = 0; cloudIndex < (body.clouds?.length ?? 0); cloudIndex++) {
         const cloud = body.clouds![cloudIndex];
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
-          [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)]);
+          [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)], [cloud.wind[0], cloud.wind[1], 0, 0]);
       }
     }
     const ringConfigs: Record<string, { inner: number; outer: number; color: readonly [number, number, number]; opacity: number }> = {

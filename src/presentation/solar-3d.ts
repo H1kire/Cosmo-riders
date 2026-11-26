@@ -1,4 +1,3 @@
-import { RingRenderer } from '../rendering/rings/ring-renderer.ts';
 import { AU } from '../physics/constants.ts';
 import { LightingSystem, focusedSolarExposureMultiplier, planetaryDisplayGain } from '../rendering/lighting/lighting-system.ts';
 import { createDefaultShaderLibrary } from '../rendering/shaders/index.ts';
@@ -14,10 +13,9 @@ import type { SurfaceProfile } from '../rendering/geodesic/surface-tile.ts';
 import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 import { WebGPUBackend, type WebGPUBodyDraw } from '../rendering/webgpu/webgpu-backend.ts';
 
-const LINE_VERTEX = `attribute vec3 aPosition;uniform mat4 uViewProjection;uniform mat4 uModel;void main(){gl_Position=uViewProjection*uModel*vec4(aPosition,1.);}`;
-const LINE_FRAGMENT = `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`;
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
 const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4,titan:5};
+const RING_OUTER_SCALES:Record<string,number>={saturn:2.32,jupiter:1.82,uranus:2.05,neptune:2.0};
 const TEXTURE_DETAIL_CAPS={low:.65,medium:.95,high:1.25,ultra:1.5};
 const NAMES={sun:'Солнце',mercury:'Меркурий',venus:'Венера',earth:'Земля',moon:'Луна',mars:'Марс',jupiter:'Юпитер',saturn:'Сатурн',uranus:'Уран',neptune:'Нептун'};
 const sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],norm=a=>{const m=Math.hypot(...a)||1;return a.map(v=>v/m);};
@@ -156,7 +154,7 @@ export class Solar3DView{
   const g=this.gl,canvas=this.canvas;this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference=this.readBackendPreference();const webgpuReady=await this.initializeWebGPUBackend();if(!webgpuReady)throw new Error('Cosmo-riders требует WebGPU: ' +(this.backendFallbackReason??'инициализация WebGPU не удалась.'));
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.geodesicGeneration=0;this.geodesicWorkerPool=null;this.geodesicPendingRenderer=null;this.geodesicEarthInitFailureTaskKind=null;this.geodesicEarthInitFailureTaskKey=null;this.geodesicEarthInitFailureTimestamp=null;
-  this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();this.orbitViewProjection=new Float32Array(16);this.orbitModelMatrix=new Float32Array(16);
+  this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();
   this.orbitCache=new Map();this.stellarSourceDefinitions=new Map();this.projected=[];this.labelNodes=new Map();
   await this.yieldToBrowser();
   this.shaderLibrary=createDefaultShaderLibrary();this.markInitializationStage('webgpu-post-processing');
@@ -166,11 +164,10 @@ export class Solar3DView{
   await this.yieldToBrowser();this.bodyProgram=makeProgram(g,PLANET_SURFACE_VERTEX,PLANET_SURFACE_FRAGMENT);this.markInitializationStage('surface-shader');
   await this.yieldToBrowser();this.atmosphereProgram=makeProgram(g,ATMOSPHERE_VERTEX,this.shaderLibrary.compose(ATMOSPHERE_FRAGMENT));this.markInitializationStage('atmosphere-shader');
   await this.yieldToBrowser();this.cloudProgram=makeProgram(g,CLOUD_VERTEX,this.shaderLibrary.compose(CLOUD_FRAGMENT));this.markInitializationStage('cloud-shader');
-  await this.yieldToBrowser();this.lineProgram=makeProgram(g,LINE_VERTEX,LINE_FRAGMENT);this.ringRenderer=new RingRenderer(g);this.markInitializationStage('line-and-ring-shaders');
+  await this.yieldToBrowser();this.markInitializationStage('webgpu-orbits-and-rings');
   this.bodyLoc=this.locations(this.bodyProgram,['aPosition','aNormal','uViewProjection','uModel','uColor','uCameraPosition','uLightPositions[0]','uLightColors[0]','uLightIntensities[0]','uLightCount','uKind','uDetail','uSeed','uWaterFraction','uIceFraction','uIronFraction','uTectonicActivity','uVolcanicActivity','uErosion','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uBodyExposure']);
   this.atmosphereLoc=this.locations(this.atmosphereProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uCameraPosition','uAtmosphereColor','uMie','uMieAnisotropy','uIntensity','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uPlanetCenter','uGroundRadius','uAtmosphereRadius','uRayleighScaleHeight','uMieScaleHeight','uAtmosphereSamples','uLightIntensity']);
   this.cloudLoc=this.locations(this.cloudProgram,['aPosition','aNormal','uViewProjection','uModel','uLightColor','uTime','uWind','uCoverage','uOpacity','uScale','uSeed','uSunPosition','uSunRadius','uOccluders[0]','uOccluderRadii[0]','uOccluderCount','uShadows','uLightIntensity']);
-  this.lineLoc=this.locations(this.lineProgram,['aPosition','uViewProjection','uModel','uColor']);
   this.atmosphereSystem=new AtmosphereSystem();this.cloudSystem=new CloudSystem();this.lighting=new LightingSystem();
   this.yaw=.72;this.pitch=1.28;this.distance=38;this.target=[0,0,0];this.focusOffset=[0,0,0];this.cameraOrigin=[0,0,0];this.drag=null;this.focusId=null;this.focusTransition=null;this.meshes=[];
   this.meshes.push(makeSphere(g,10,14));this.markInitializationStage('sphere-low');await this.yieldToBrowser();
@@ -392,29 +389,8 @@ export class Solar3DView{
    }
    this.orbitCache.set(body.id,path);this.orbitElementRefs.set(body.id,elements);
   }
-  let cached=this.orbitBuffers.get(body.id);
-  if(!cached){
-   const buffer=this.gl.createBuffer();if(!buffer)return;
-   cached={buffer,count:segments+1,path:null};
-   this.orbitBuffers.set(body.id,cached);
-  }
-  if(cached.path!==path||cached.count!==segments+1){
-   cached.path=path;cached.count=segments+1;this.gl.bindBuffer(this.gl.ARRAY_BUFFER,cached.buffer);
-   this.gl.bufferData(this.gl.ARRAY_BUFFER,path,this.gl.STATIC_DRAW);
-  }
-  const model=this.orbitModelMatrix;model.fill(0);
-  model[0]=1;model[5]=1;model[10]=1;
-  model[12]=(parentState.position.x-renderOrigin.x)/AU;
-  model[13]=(parentState.position.z-renderOrigin.z)/AU;
-  model[14]=(parentState.position.y-renderOrigin.y)/AU;model[15]=1;
-  this.webgpuOrbits?.push({id:body.id,points:path,model:Array.from(model),color:body.id==='earth'?[.32,.58,.9]:[.18,.28,.42],opacity:.62*opacity});
-  const g=this.gl,l=this.lineLoc;g.useProgram(this.lineProgram);g.bindBuffer(g.ARRAY_BUFFER,cached.buffer);
-  g.enableVertexAttribArray(l.aPosition);g.vertexAttribPointer(l.aPosition,3,g.FLOAT,false,0,0);
-  this.orbitViewProjection.set(vp);g.uniformMatrix4fv(l.uViewProjection,false,this.orbitViewProjection);
-  g.uniformMatrix4fv(l.uModel,false,model);
-  g.uniform4f(l.uColor,body.id==='earth'?.32:.18,body.id==='earth'?.58:.28,body.id==='earth'?.9:.42,.62*opacity);
-  g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE_MINUS_SRC_ALPHA);g.depthMask(false);
-  g.drawArrays(g.LINE_STRIP,0,cached.count);g.depthMask(true);g.disable(g.BLEND);
+  const model=[1,0,0,0,0,1,0,0,0,0,1,0,(parentState.position.x-renderOrigin.x)/AU,(parentState.position.z-renderOrigin.z)/AU,(parentState.position.y-renderOrigin.y)/AU,1];
+  this.webgpuOrbits.push({id:body.id,points:path,model,color:body.id==='earth'?[.32,.58,.9]:[.18,.28,.42],opacity:.62*opacity});
  }
  render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();
@@ -565,7 +541,7 @@ export class Solar3DView{
     g.activeTexture(g.TEXTURE0);
     g.useProgram(this.bodyProgram);this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0);
    }
-   if(body.hasRings){const ringModel=scaleModelMatrix(model,this.ringRenderer.outerScale(body.id));this.webgpuRings.push({id:body.id,model:ringModel});this.ringRenderer.render(vp,ringModel,body.id);}
+   if(body.hasRings){const ringModel=scaleModelMatrix(model,RING_OUTER_SCALES[body.id]??2.0);this.webgpuRings.push({id:body.id,model:ringModel});}
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
    if(this.graphics.atmosphere&&profile){
@@ -623,10 +599,8 @@ export class Solar3DView{
   window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);window.removeEventListener('graphics-backend-change',this.backendChangeHandler);if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
   const g=this.gl;
   for(const mesh of this.meshes??[])for(const buffer of mesh.buffers)g.deleteBuffer(buffer);
-  for(const orbit of this.orbitBuffers?.values()??[])g.deleteBuffer(orbit.buffer);
-  this.orbitBuffers?.clear();this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitElementRefs?.clear();
-  for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram,this.lineProgram])if(program)g.deleteProgram(program);
-  this.ringRenderer?.dispose();
+  this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitElementRefs?.clear();
+  for(const program of [this.bodyProgram,this.atmosphereProgram,this.cloudProgram])if(program)g.deleteProgram(program);
   this.geodesicPendingRenderer?.dispose();
   this.geodesicEarthRenderer?.dispose();
   this.geodesicWorkerPool?.dispose();

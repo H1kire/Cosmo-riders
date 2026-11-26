@@ -11,6 +11,15 @@ import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_p
 
 const read=(path:string)=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
+test('PhysicsBridge rejects pending work on Worker errors and message deserialization failures',async()=>{
+ const bridge=await read('src/wasm/physics/physics-bridge.ts');
+ assert.match(bridge,/worker\.onerror=/);
+ assert.match(bridge,/worker\.onmessageerror=/);
+ assert.match(bridge,/this\.failPending\(/);
+ assert.match(bridge,/try\{this\.worker\.postMessage/);
+ assert.match(bridge,/this\.pending\.delete\(id\)/);
+});
+
 test('Rust exports the numerical and geodesic worker API',async()=>{
  const wasm=await read('crates/cosmo-core/src/wasm.rs');
  for(const symbol of ['propagate_kepler','state_to_orbital_elements','orbital_elements_to_state','generate_surface_tile','build_geodesic_tile_mesh'])assert.ok(wasm.includes('fn '+symbol+'('),symbol+' export is missing');

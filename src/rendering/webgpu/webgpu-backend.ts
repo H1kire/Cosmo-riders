@@ -21,6 +21,7 @@ export interface WebGPUBodyDraw {
   seed: number;
   waterFraction: number;
   iceFraction: number;
+  lod: number;
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
@@ -33,6 +34,7 @@ export interface WebGPUFrame {
 }
 
 interface BodyGpuResources { uniform: any; bindGroup: any; }
+interface MeshGpuResources { positions: any; normals: any; indices: any; indexCount: number; }
 interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacity: number; points: Float32Array | null; count: number; }
 
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
@@ -191,15 +193,11 @@ export class WebGPUBackend {
   initializationMs = 0;
   private pipeline: any = null;
   private depthTexture: any = null;
-  private positionBuffer: any = null;
-  private normalBuffer: any = null;
-  private indexBuffer: any = null;
-  private indexCount = 0;
+  private readonly meshResources = new Map<number, MeshGpuResources>();
   private readonly bodyResources = new Map<string, BodyGpuResources>();
   private readonly orbitResources = new Map<string, OrbitGpuResources>();
   private orbitPipeline: any = null;
   private orbitBindGroupLayout: any = null;
-  private readonly geometry = createSphereGeometry(44, 60);
   private disposed = false;
   private recoveryAttempted = false;
 
@@ -314,10 +312,16 @@ export class WebGPUBackend {
       device.queue.writeBuffer(buffer, 0, data);
       return buffer;
     };
-    this.positionBuffer = makeBuffer(this.geometry.positions, BUFFER_USAGE.VERTEX);
-    this.normalBuffer = makeBuffer(this.geometry.normals, BUFFER_USAGE.VERTEX);
-    this.indexBuffer = makeBuffer(this.geometry.indices, BUFFER_USAGE.INDEX);
-    this.indexCount = this.geometry.indices.length;
+    const levels: Array<[number, number]> = [[10, 14], [22, 30], [44, 60], [128, 192]];
+    levels.forEach(([latitude, longitude], lod) => {
+      const geometry = createSphereGeometry(latitude, longitude);
+      this.meshResources.set(lod, {
+        positions: makeBuffer(geometry.positions, BUFFER_USAGE.VERTEX),
+        normals: makeBuffer(geometry.normals, BUFFER_USAGE.VERTEX),
+        indices: makeBuffer(geometry.indices, BUFFER_USAGE.INDEX),
+        indexCount: geometry.indices.length
+      });
+    });
   }
 
   private resourcesFor(id: string): BodyGpuResources {
@@ -357,13 +361,11 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    pass.setVertexBuffer(0, this.positionBuffer);
-    pass.setVertexBuffer(1, this.normalBuffer);
-    pass.setIndexBuffer(this.indexBuffer, 'uint16');
-
     const matrix = new Float32Array(44);
     for (const body of frame.bodies) {
       const resources = this.resourcesFor(body.id);
+      const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
+      pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
       matrix.set(Array.from(body.model).slice(0, 16), 0);
       matrix.set(Array.from(frame.viewProjection).slice(0, 16), 16);
       matrix.set([body.color[0], body.color[1], body.color[2], 1], 32);
@@ -375,7 +377,7 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
-      pass.drawIndexed(this.indexCount, 1, 0, 0, 0);
+      pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
     }
     for (const orbit of frame.orbits) {
       let resources = this.orbitResources.get(orbit.id);
@@ -422,8 +424,9 @@ export class WebGPUBackend {
     this.bodyResources.clear();
     for (const resources of this.orbitResources.values()) { resources.vertex.destroy(); resources.uniform.destroy(); }
     this.orbitResources.clear();
-    for (const resource of [this.positionBuffer, this.normalBuffer, this.indexBuffer, this.depthTexture]) resource?.destroy?.();
-    this.positionBuffer = this.normalBuffer = this.indexBuffer = this.depthTexture = null;
+    for (const mesh of this.meshResources.values()) { mesh.positions.destroy(); mesh.normals.destroy(); mesh.indices.destroy(); }
+    this.meshResources.clear();
+    this.depthTexture?.destroy?.(); this.depthTexture = null;
     this.pipeline = null;
     this.orbitPipeline = null;
     this.orbitBindGroupLayout = null;

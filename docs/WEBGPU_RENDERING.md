@@ -8,7 +8,7 @@ The WebGPU canvas is a separate non-interactive overlay. The original WebGL2 can
 
 ## Implemented WebGPU passes
 
-- Indexed sphere geometry with position and normal streams.
+- Four cached indexed sphere geometry LODs selected by the existing Solar3DView projected-size selector, with position and normal streams.
 - WGSL vertex transforms using live body model matrices and the shared camera view-projection.
 - Emissive star path, diffuse + ambient planet shading and sphere-space procedural Earth land/ocean/polar ice, Mars rust terrain, lunar relief variation and giant-planet banding.
 - Depth24Plus attachment and depth testing.

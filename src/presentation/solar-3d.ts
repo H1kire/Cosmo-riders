@@ -504,7 +504,7 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   webgpuBodies.push({id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0});
+   webgpuBodies.push({id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,lod:level});
    g.uniformMatrix4fv(l.uModel,false,new Float32Array(model));
    const light=this.lighting.sampleAt(p,'sun');
    g.uniform3f(l.uCameraPosition,...eye);

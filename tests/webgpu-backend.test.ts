@@ -44,6 +44,9 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   assert.match(backend, /smoothstep\(0\.455, 0\.545, field\)/);
   assert.match(solar, /waterFraction:body\.surface\?\.waterFraction/);
   assert.match(backend, /depth24plus/);
+  assert.match(backend, /const levels: Array<\[number, number\]> = \[\[10, 14\], \[22, 30\], \[44, 60\], \[128, 192\]\]/);
+  assert.match(backend, /body\.lod/);
+  assert.match(solar, /lod:level/);
   assert.match(backend, /device\.lost/);
   assert.match(backend, /pass\.draw\(resources\.count\)/);
 });

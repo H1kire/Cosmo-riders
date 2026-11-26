@@ -50,7 +50,7 @@ test('first animation frame is not gated by telemetry or maneuver-planner RPCs',
  assert.ok(startup.indexOf("requestAnimationFrame(animate)")<startup.indexOf("void updateManeuverPlanner().catch"));
 });
 
-test('WebGPU startup is non-blocking and scene setup failures release the loading gate',async()=>{
+test('required WebGPU startup failures release the loading gate',async()=>{
  const [view,main,lab]=await Promise.all([
   readFile(file('..','src','presentation','solar-3d.ts'),'utf8'),
   readFile(file('..','lab','main.ts'),'utf8'),

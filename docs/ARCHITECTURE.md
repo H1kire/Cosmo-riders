@@ -5,7 +5,7 @@
 - TypeScript owns browser application state, DOM, camera input, scene coordination, diagnostics and GPU command submission.
 - Rust owns the live simulation state, numerical physics, geodesic topology, mesh construction and deterministic surface-page generation.
 - WebAssembly exposes Rust functionality to isolated Workers. Physics snapshots and generated channels cross the boundary as typed arrays.
-- Solar3DView submits shared scene state to an independent WebGPU/WGSL sphere and orbit backend or the retained WebGL2/GLSL renderer. Auto is the default and falls back to WebGL2. WebGPU currently covers depth-tested body spheres and orbit lines; production materials and effects remain WebGL2-only.
+- Solar3DView submits shared scene state to an independent WebGPU/WGSL sphere and orbit backend or the retained WebGL2/GLSL renderer. Auto is the default and falls back to WebGL2. WebGPU currently covers depth-tested body spheres, orbit lines, giant-planet rings and a compact sphere-space procedural material; the full production material and effect stack is not yet ported.
 
 ## Simulation data flow
 
@@ -19,7 +19,7 @@ The TypeScript `PhysicsWorld` in `src/physics/` is retained as a comparison refe
 
 ## Rendering and surfaces
 
-Solar3DView owns shared body states, camera, render origin, selection, orbit paths and body rotation. A separate WebGPU canvas receives body transforms, orbit paths and camera matrices from the same frame and renders indexed spheres and cached orbit line strips through WGSL with depth testing, alpha blending and diffuse/emissive shading. The retained WebGL2 canvas remains fallback and still renders the complete legacy scene; it is hidden while WebGPU is active. Material, geodesic, atmosphere, cloud, ring, eclipse and HDR passes are not yet ported.
+Solar3DView owns shared body states, camera, render origin, selection, orbit paths and body rotation. A separate WebGPU canvas receives body transforms, orbit paths and camera matrices from the same frame and renders indexed spheres and cached orbit line strips through WGSL with depth testing, alpha blending and diffuse/emissive shading. The retained WebGL2 canvas remains fallback and still renders the complete legacy scene; it is hidden while WebGPU is active. The compact WebGPU procedural material is an approximation; the full production material, geologic texture sampling, adaptive geodesic, atmosphere, cloud, eclipse and HDR passes are not yet ported. Saturn/Jupiter/Uranus/Neptune ring strips have a native WebGPU pass.
 
 The geodesic pipeline is connected only for Earth. It generates twenty root-face meshes and five surface channels through the bounded surface Worker pool and uploads them into bounded WebGL2 texture arrays. The UV sphere remains the active fallback while pages prepare or if generation fails. Quadtree selection, neighbor balancing and stitching exist as CPU components, but the active renderer still draws the twenty root faces. Other bodies use the procedural sphere path. Per-body geodesic integration and GPU-driven adaptive LOD are not complete.
 
@@ -42,6 +42,6 @@ Surface profiles are deterministic procedural visual models based on catalogue m
 
 - Scientific local ephemerides (DE440/DE441 or a validated equivalent), time/frame transformations and independent Horizons checks are absent.
 - N-body close-encounter regularization, collision impact response, user-facing mode switching and dynamic orbit trails are absent.
-- WebGPU currently renders body spheres and orbit lines only; WebGL2 remains responsible for procedural/geologic materials, atmosphere, clouds, rings, shadows and HDR effects.
+- WebGPU renders body spheres with four projected-size LODs, orbit line strips, four giant-planet ring systems and a compact procedural surface approximation. WebGL2 remains responsible for five-channel geologic texture sampling, active adaptive geodesic surfaces, atmosphere, clouds, shadows and HDR effects.
 - The active geodesic renderer is Earth-only and does not yet use adaptive quadtree leaves.
 - WebGPU runtime, GTX 1650 browser performance, visual parity and rendered seam quality require manual GPU verification.

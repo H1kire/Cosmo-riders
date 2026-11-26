@@ -11,7 +11,7 @@ The game source is TypeScript (`src/`, `lab/`, `tests/`, and `scripts/`). Vite c
 
 ## Project structure
 - `src/physics/` — SI-only vector, gravity, orbital, ephemeris, propulsion and maneuver calculations.
-- `src/presentation/` — number/TeX formatting and the WebGL 3D planetary renderer.
+- `src/presentation/` — number/TeX formatting and the shared WebGL2/WebGPU 3D planetary scene.
 - `lab/` — browser flight operations interface, 3D solar-system view and auxiliary telemetry canvases.
 - `tests/` — deterministic regression tests.
 - `docs/PHYSICS_AUDIT.md` — validation scope and known limitations.
@@ -56,7 +56,7 @@ The canonical J2000 solar-system catalogue remains declared once in src/physics/
 
 The geodesic Worker independently delegates mesh, stitching and five-channel surface-page generation to Rust. Surface height remains in metres. The physics and surface workloads use separate Workers; neither requires SharedArrayBuffer.
 
-**WebGPU is now an active selectable renderer, but the migration is partial.** Auto (default) attempts a native WebGPU adapter/device and renders the existing Solar3DView body's live PhysicsWorld transforms as indexed, depth-tested spheres, plus the current Rust-derived orbit paths as blended line strips. The WGSL pipelines use the shared camera projection and render-origin-relative coordinates. WebGL2 remains an independent fallback surface. Procedural surface maps, the five-channel Rust geologic pages, adaptive geodesic LOD, atmosphere, clouds, rings, eclipse/shadows and HDR/post-processing are not yet ported and remain WebGL2-only. CI validates code and deployment but does not execute a real WebGPU browser adapter or confirm GTX 1650 visual/performance parity.
+**WebGPU is now an active selectable renderer, but the migration is partial.** Auto (default) attempts a native WebGPU adapter/device and renders the existing Solar3DView body's live PhysicsWorld transforms as indexed, depth-tested spheres with four projected-size LODs, plus Rust-derived orbit paths and annular rings for Saturn, Jupiter, Uranus and Neptune. WGSL includes a compact sphere-space procedural material approximation for Earth, Mars, the Moon and giant-planet bands. The shared camera projection and render-origin-relative coordinates are used; WebGL2 remains an independent fallback surface. The full five-channel Rust geologic texture path, active adaptive geodesic quadtree LOD, atmosphere, clouds, eclipse/shadows and HDR/post-processing are not yet ported. CI validates code and deployment but does not execute a real WebGPU browser adapter or confirm GTX 1650 visual/performance parity.
 
 See:
 - [Architecture](docs/ARCHITECTURE.md)

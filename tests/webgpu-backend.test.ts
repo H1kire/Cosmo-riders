@@ -30,7 +30,7 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   const solar = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
   const backend = await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts', import.meta.url), 'utf8');
   assert.match(solar, /new WebGPUBackend\(canvas\)/);
-  assert.match(solar, /this\.canvas\.classList\.add\('solar-webgpu-canvas'\)/);
+  assert.match(solar, /canvas\.classList\.add\('solar-webgpu-canvas'\)/);
   assert.match(solar, /pointerEvents:'auto'/);
   assert.doesNotMatch(solar, /getContext\('webgl2'\)/);
   assert.doesNotMatch(solar, /this\.canvas\.style\.opacity='0'/);

@@ -58,21 +58,17 @@ test('both published entry points gate application import behind the start scree
 });
 
 
-test('Solar3DView stages initialization, caps canvas resolution, and delegates post-processing to WebGPU',async()=>{
+test('Solar3DView initializes directly on WebGPU without WebGL resources',async()=>{
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- assert.match(source,/readonly ready:Promise<void>/);assert.match(source,/this\.ready=this\.initialize\(\)/);assert.match(source,/private async initialize\(\):Promise<void>/);
- assert.ok((source.match(/await this\.yieldToBrowser\(\)/g)??[]).length>=5);assert.ok(source.includes('1920*1080'));assert.ok(source.includes('antialias:false'));assert.ok(source.includes('this.webgpuBackend.render('));assert.ok(source.includes('postProcessing:{bloom:'));assert.ok(!source.includes('HDRPipeline'));assert.ok(source.includes('PerformanceObserver'));assert.ok(source.includes('longestSynchronousChunkMs'));assert.ok(source.includes('longestLongTaskMs'));
-});
-
-test('quality replacement keeps the ready Earth renderer visible while sharing its worker pool',async()=>{
- const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- const manager=await readFile(new URL('../src/rendering/geodesic/virtual-surface-manager.ts',import.meta.url),'utf8');
- assert.match(source,/if\(active\?\.isReady\)this\.geodesicPendingRenderer=replacement/);
- assert.match(source,/if\(pendingRenderer\.isReady\)[\s\S]*?activeRenderer\.dispose\(\)/);
- assert.match(source,/const sharedPool=candidatePool&&candidatePool\.workerCount>0\?candidatePool:undefined/);
- assert.match(source,/workerPool:sharedPool/);
- assert.match(manager,/this\.ownsPool=!options\.pool/);
- assert.match(manager,/this\.abortController\.abort\(\)/);
+ assert.match(source,/readonly ready:Promise<void>/);
+ assert.match(source,/this\.ready=this\.initialize\(\)/);
+ assert.match(source,/const webgpuReady=await this\.initializeWebGPUBackend\(\)/);
+ assert.match(source,/this\.webgpuBackend\.render\(/);
+ assert.match(source,/postProcessing:\{bloom:/);
+ assert.match(source,/PerformanceObserver/);
+ assert.doesNotMatch(source,/getContext\('webgl2'\)/);
+ assert.doesNotMatch(source,/makeSphere\(|makeProgram\(|GeodesicPlanetRenderer/);
+ assert.doesNotMatch(source,/g\.drawElements|g\.useProgram/);
 });
 
 test('all geodesic quality presets can hold twenty pages within both cache budgets',()=>{

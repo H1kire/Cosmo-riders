@@ -463,15 +463,15 @@ test('geodesic renderer source connects Worker, CPU cache, GPU arrays and indexe
  assert.ok(renderer.includes('markGpuReady'));
 });
 
-test('Solar3DView preserves UV fallback and scopes geodesic rendering to Earth',async()=>{
+test('Solar3DView uses only its primary canvas for native WebGPU rendering',async()=>{
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
- assert.ok(source.includes("this.earthRenderMode='auto'"));
- assert.ok(source.includes("body.id==='earth'"));
- assert.ok(source.includes("if(!renderedGeodesicEarth)"));
- assert.ok(source.includes('g.bindTexture(g.TEXTURE_2D_ARRAY,null)'));
- assert.ok(source.includes("this.geodesicEarthRenderer?.dispose()"));
- assert.ok(source.includes("this.bindMesh(mesh,l);g.drawElements(g.TRIANGLES,mesh.count,g.UNSIGNED_SHORT,0)"));
+ assert.ok(source.includes("const canvas=this.canvas;canvas.classList.add('solar-webgpu-canvas')"));
+ assert.ok(source.includes('new WebGPUBackend(canvas)'));
+ assert.ok(!source.includes("getContext('webgl2')"));
+ assert.ok(!source.includes('GeodesicPlanetRenderer'));
+ assert.ok(!source.includes('g.drawElements'));
+ assert.ok(!source.includes('g.useProgram'));
 });
 
 test('all quality presets stay within stitch limits and reserve twenty root texture pages',()=>{
@@ -560,5 +560,7 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and WebGPU-m
  assert.ok(renderer.includes('this.gpu.initializeStep()'));
  assert.ok(renderer.includes('gpuOperationsThisFrame<this.maxUploadsPerFrame'));
  assert.ok(!renderer.includes('buildGeodesicTileMesh(tile,this.meshResolution'));
- assert.ok(solar.includes('requestAnimationFrame(()=>requestAnimationFrame('));
+ assert.ok(solar.includes('new WebGPUBackend(canvas)'));
+ assert.ok(!solar.includes('GeodesicPlanetRenderer'));
+
 });

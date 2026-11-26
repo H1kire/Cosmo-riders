@@ -56,7 +56,7 @@ test('required WebGPU startup failures release the loading gate',async()=>{
   readFile(file('..','lab','main.ts'),'utf8'),
   readFile(file('..','lab','lab.ts'),'utf8')
  ]);
- assert.match(view,/const webgpuReady=await this\.initializeWebGPUBackend\(\);if\(!webgpuReady\)throw new Error\('Cosmo-riders требует WebGPU:/,"WebGPU must be ready before the scene can start");
+ assert.match(view,/const webgpuReady=await this\.initializeWebGPUBackend\(\);[\s\S]*?if\(!webgpuReady\)throw new Error\('Cosmo-riders требует WebGPU:/,"WebGPU must be ready before the scene can start");
  assert.ok(main.includes("'cosmo-loading-failed'"));
  assert.ok(lab.includes("'cosmo-loading-failed'"));
 });

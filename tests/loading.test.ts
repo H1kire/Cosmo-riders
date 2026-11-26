@@ -48,8 +48,7 @@ test('WebGPU startup is non-blocking and scene setup failures release the loadin
   readFile(file('..','lab','main.ts'),'utf8'),
   readFile(file('..','lab','lab.ts'),'utf8')
  ]);
- assert.ok(view.includes("void this.initializeWebGPUBackend()"));
- assert.ok(!view.includes("await this.initializeWebGPUBackend()"));
+ assert.ok(view.includes("if(this.backendPreference!=='webgl2')void this.initializeWebGPUBackend();"),"initial WebGPU setup must be fire-and-forget");
  assert.ok(main.includes("'cosmo-loading-failed'"));
  assert.ok(lab.includes("'cosmo-loading-failed'"));
 });

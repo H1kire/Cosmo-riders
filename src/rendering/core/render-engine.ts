@@ -18,6 +18,7 @@ export class RenderEngine {
   private frameNumber = 0;
   private lastFrameTime = 0;
   private recoveryPromise: Promise<boolean> | null = null;
+  private depthTexture: any = null;
   private disposed = false;
 
   constructor(canvas: HTMLCanvasElement, options: RenderEngineOptions = {}) {
@@ -73,11 +74,12 @@ export class RenderEngine {
     const height = Math.max(1, Math.min(this.options.maxHeight, Math.round(rect.height * ratio)));
     this.canvas.width = width;
     this.canvas.height = height;
-    this.context.configure({
-      device: this.device,
-      format: this.format,
-      alphaMode: this.options.alphaMode,
-      usage: (globalThis as any).GPUTextureUsage?.RENDER_ATTACHMENT
+    this.context.configure({ device: this.device, format: this.format, alphaMode: this.options.alphaMode });
+    this.depthTexture?.destroy?.();
+    this.depthTexture = this.device.createTexture({
+      size: [width, height, 1],
+      format: 'depth24plus',
+      usage: (globalThis as any).GPUTextureUsage?.RENDER_ATTACHMENT ?? 0x10
     });
   }
 
@@ -106,12 +108,7 @@ export class RenderEngine {
       this.lastFrameTime = now;
       const encoder = this.device.createCommandEncoder({ label: 'Cosmo-riders frame ' + this.frameNumber });
       const colorView = this.context.getCurrentTexture().createView();
-      const depthTexture = this.device.createTexture({
-        size: [width, height, 1],
-        format: 'depth24plus',
-        usage: (globalThis as any).GPUTextureUsage.RENDER_ATTACHMENT
-      });
-      const depthView = depthTexture.createView();
+      const depthView = this.depthTexture.createView();
       const clear = input.clearColor ?? [0.008, 0.016, 0.033, 1];
       const context: RenderFrameContext = {
         device: this.device,
@@ -137,7 +134,6 @@ export class RenderEngine {
       clearPass.end();
       this.pipeline.encode(context);
       this.device.queue.submit([encoder.finish()]);
-      depthTexture.destroy();
       this.frameNumber++;
       return true;
     } catch (cause) {
@@ -159,6 +155,7 @@ export class RenderEngine {
         this.context = null;
         this.state = 'initializing';
         await this.initialize();
+        await this.pipeline.restore(this.device);
         this.frameNumber = 0;
         this.lastFrameTime = 0;
         return true;
@@ -176,6 +173,8 @@ export class RenderEngine {
     if (this.disposed) return;
     this.disposed = true;
     this.pipeline.dispose();
+    this.depthTexture?.destroy?.();
+    this.depthTexture = null;
     this.context?.unconfigure?.();
     this.device?.destroy?.();
     this.state = 'disposed';

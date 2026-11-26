@@ -26,6 +26,7 @@ export interface RenderPass extends Disposable {
   readonly order: number;
   enabled: boolean;
   encode(context: RenderFrameContext): void;
+  onDeviceRestored?(device: any): void | Promise<void>;
 }
 
 export interface RenderEngineOptions {

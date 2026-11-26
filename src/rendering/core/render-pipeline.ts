@@ -32,6 +32,10 @@ export class RenderPipeline {
     }
   }
 
+  async restore(device: any): Promise<void> {
+    for (const pass of this.passes) await pass.onDeviceRestored?.(device);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

@@ -626,4 +626,4 @@ $('engine-stop').addEventListener('click',()=>{void stopContinuousBurn();});
 window.addEventListener('resize',drawAll);
 
 window.addEventListener('number-format-change',()=>{void updateTelemetry().then(()=>drawAll());});
-void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));await updateManeuverPlanner();requestAnimationFrame(animate);});
+void createScenario('earth-orbit').then(async()=>{await world.setTimeScale(Number($('time-scale').value));await updateManeuverPlanner();requestAnimationFrame(animate);}).catch(error=>{const message=error instanceof Error?error.message:String(error);console.error('[Cosmo-riders] Initial scenario setup failed:',error);window.dispatchEvent(new CustomEvent('cosmo-loading-failed',{detail:{message}}));});

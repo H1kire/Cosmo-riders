@@ -13,6 +13,8 @@ const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[
 export class PhysicsWorldClient{
  readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
  simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly rotationAngles=new Map<string,number|null>();readonly renderRotationAngles=new Map<string,number|null>();readonly renderVessels=new Map<string,VesselSnapshot>();
+ private readonly orbitPathRequests=new Map<string,Promise<Float64Array>>();
+ private disposed=false;
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
@@ -27,7 +29,7 @@ export class PhysicsWorldClient{
    const parent=metadata.parentId?this.bodies.get(metadata.parentId):null;
    const period=metadata.rotationPeriodSeconds??(metadata.tidalLock&&metadata.semiMajorAxisM&&parent?await this.bridge.orbitalPeriod(metadata.semiMajorAxisM,metadata.mu+parent.mu):null);
    this.orbitalPeriods.set(id,period);
-   if(metadata.parentId&&metadata.orbitalElements)this.orbitPaths.set(id,await this.bridge.orbitPath(id,1024));
+   // Orbit geometry is generated on demand when the body is actually visible.
   }));
   await this.refresh(await this.bridge.snapshot());this.renderRotationAngles.clear();for(const [id,angle] of this.rotationAngles)this.renderRotationAngles.set(id,angle);
  }
@@ -39,6 +41,14 @@ export class PhysicsWorldClient{
  async addVessel(d:{id:string;primaryBodyId:string;position:V3;velocity:V3;massKg?:number}):Promise<VesselSnapshot>{
   await this.bridge.addVessel({id:d.id,primaryBodyId:d.primaryBodyId,position:[d.position.x,d.position.y,d.position.z],velocity:[d.velocity.x,d.velocity.y,d.velocity.z],massKg:d.massKg??1000});
   await this.refresh(await this.bridge.snapshot());return this.vessels.get(d.id)!;
+ }
+ ensureOrbitPath(id:string,segments=512):Promise<Float64Array>{
+  const cached=this.orbitPaths.get(id);if(cached)return Promise.resolve(cached);
+  const existing=this.orbitPathRequests.get(id);if(existing)return existing;
+  const body=this.bodies.get(id);if(!body?.parentId||!body.orbitalElements)return Promise.reject(new Error('Body has no orbital path: '+id));
+  const count=Math.max(16,Math.min(1024,Math.floor(segments)));
+  const request=this.bridge.orbitPath(id,count).then(path=>{if(this.disposed)throw new Error('PhysicsWorldClient was disposed while generating an orbit path.');this.orbitPaths.set(id,path);return path;}).finally(()=>this.orbitPathRequests.delete(id));
+  this.orbitPathRequests.set(id,request);return request;
  }
  getBodyState(id:string):PhysicsState{const s=this.bodyStates.get(id);if(!s)throw new Error('Unknown body state: '+id);return s;}
  getVesselState(id:string):VesselSnapshot{const s=this.vessels.get(id);if(!s)throw new Error('Unknown vessel: '+id);return s;}
@@ -65,5 +75,5 @@ export class PhysicsWorldClient{
  propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as unknown as Promise<PropulsionSnapshot>;}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
- async dispose():Promise<void>{await this.bridge.dispose();}
+ async dispose():Promise<void>{if(this.disposed)return;this.disposed=true;this.orbitPathRequests.clear();this.orbitPaths.clear();await this.bridge.dispose();}
 }

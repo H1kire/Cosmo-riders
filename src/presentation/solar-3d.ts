@@ -163,7 +163,7 @@ export class Solar3DView{
   await new Promise<void>(resolve=>requestAnimationFrame(()=>{this.syncSliceStartedAt=performance.now();resolve();}));
  }
  private async initialize():Promise<void>{
-  const g=this.gl,canvas=this.canvas;this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference=this.readBackendPreference();if(this.backendPreference!=='webgl2')await this.initializeWebGPUBackend();
+  const g=this.gl,canvas=this.canvas;this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference=this.readBackendPreference();if(this.backendPreference!=='webgl2')void this.initializeWebGPUBackend();
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;
   this.earthRenderMode='auto' as PlanetSurfaceMode;this.geodesicEarthRenderer=null;this.geodesicEarthInitError=null;this.geodesicPreset=this.graphics.preset;this.geodesicGeneration=0;this.geodesicWorkerPool=null;this.geodesicPendingRenderer=null;this.geodesicEarthInitFailureTaskKind=null;this.geodesicEarthInitFailureTaskKey=null;this.geodesicEarthInitFailureTimestamp=null;
   this.orbitBuffers=new Map();this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();this.orbitViewProjection=new Float32Array(16);this.orbitModelMatrix=new Float32Array(16);
@@ -403,7 +403,7 @@ export class Solar3DView{
   let path=this.orbitCache.get(body.id);
   const elementsChanged=this.orbitElementRefs.get(body.id)!==elements;
   if(!path||path.length!==(segments+1)*3||elementsChanged){
-   const source=world.orbitPaths?.get(body.id);if(!source||source.length<6)return;
+   let source=world.orbitPaths?.get(body.id);if(!source){if(typeof world.ensureOrbitPath==='function')void world.ensureOrbitPath(body.id,segments).catch(error=>{this.orbitPathErrors??=new Map();this.orbitPathErrors.set(body.id,error instanceof Error?error.message:String(error));});return;}if(source.length<6)return;
    const sourceSegments=source.length/3-1;path=new Float32Array((segments+1)*3);
    for(let i=0;i<=segments;i++){
     const sourceIndex=Math.round(i*sourceSegments/segments),o=sourceIndex*3;

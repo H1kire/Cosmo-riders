@@ -236,12 +236,19 @@ export class WebGPUBackend {
     try {
       const gpu = (navigator as any).gpu;
       if (!gpu) throw new Error('navigator.gpu недоступен в этом браузере или origin.');
-      this.adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+      // Chromium on Windows may ignore powerPreference; omit it to avoid a noisy no-op option.
+      // A single default adapter request is deterministic and avoids retry loops.
+      this.adapter = await gpu.requestAdapter();
       if (!this.adapter) throw new Error('WebGPU adapter недоступен.');
       const limits = this.adapter.limits ?? {};
       const maxBuffer = Number(limits.maxBufferSize ?? 0);
       if (maxBuffer > 0 && maxBuffer < 1024 * 1024) throw new Error('WebGPU adapter сообщает слишком малый maxBufferSize.');
       this.device = await this.adapter.requestDevice();
+      this.device.addEventListener?.('uncapturederror', (event: any) => {
+        const message = event?.error?.message || 'Uncaptured WebGPU validation error.';
+        this.error = 'WebGPU validation error: ' + message;
+        console.error('[Cosmo-riders][WebGPU]', this.error);
+      });
       this.device.lost.then((info: any) => {
         if (this.disposed) return;
         this.state = 'lost';

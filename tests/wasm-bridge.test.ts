@@ -250,7 +250,7 @@ test('Solar3DView uses precomputed Rust orbit paths instead of TypeScript Kepler
  assert.doesNotMatch(view,/orbitalElementsToState|rotateStateToParentEquator/);
  assert.match(view,/world\.orbitPaths\?\.get\(body\.id\)/);
  assert.match(worker,/get_orbit_path\(command\.bodyId,command\.segments\)/);
- assert.match(client,/ensureOrbitPath\(id,segments\)/);
+ assert.match(client,/ensureOrbitPath\(id:string,segments=/);
  assert.match(client,/this\.bridge\.orbitPath\(id,count\)/);
  assert.doesNotMatch(client,/this\.orbitPaths\.set\(id,await this\.bridge\.orbitPath/);
 });

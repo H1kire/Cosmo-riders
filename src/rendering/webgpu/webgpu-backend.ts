@@ -481,7 +481,6 @@ export class WebGPUBackend {
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
-      const resources = this.resourcesFor(body.id);
       const base = new Float32Array(48);
       base.set(Array.from(body.model).slice(0, 16), 0);
       base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
@@ -491,7 +490,8 @@ export class WebGPUBackend {
       base.set([dx / lightLength, dy / lightLength, dz / lightLength, 0], 36);
       base.set([0, 0, 0, 0], 40);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 44);
-      const drawShell = (scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
+      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number]) => {
+        const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);
         for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
         shell.set([color[0], color[1], color[2], 1], 32);
@@ -503,11 +503,12 @@ export class WebGPUBackend {
       };
       if (body.atmosphere) {
         const atmosphere = body.atmosphere;
-        drawShell(1 + Math.max(0.0001, atmosphere.thicknessRatio), atmosphere.color,
+        drawShell(body.id + ':atmosphere', 1 + Math.max(0.0001, atmosphere.thicknessRatio), atmosphere.color,
           [9, atmosphere.intensity, atmosphere.thicknessRatio, atmosphere.mie]);
       }
-      for (const cloud of body.clouds ?? []) {
-        drawShell(1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
+      for (let cloudIndex = 0; cloudIndex < (body.clouds?.length ?? 0); cloudIndex++) {
+        const cloud = body.clouds![cloudIndex];
+        drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
           [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)]);
       }
     }

@@ -276,14 +276,14 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let volcanic = clamp(body.surfaceParams.z, 0.0, 1.0);
   let iron = clamp(body.surfaceParams.x, 0.0, 1.0);
   let erosion = clamp(body.surfaceParams.w, 0.0, 1.0);
-  let field = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
+  let baseField = fbm3(direction * 4.2) * 0.66 + fbm3(direction * 12.7) * 0.34;
   let detail = mix(fbm3(direction * 31.0), fbm3(direction * 13.0), erosion * 0.58);
   let kind = body.material.x;
   var albedo = body.color.rgb;
   if (kind > 0.5 && kind < 1.5) {
     let ridgeNoise = 1.0 - abs(noise3(direction * (18.0 + tectonic * 54.0)) * 2.0 - 1.0);
-    let relief = mix(field, max(field, ridgeNoise * 0.72), tectonic * 0.58);
-    let land = smoothstep(0.455, 0.545, relief);
+    let field = mix(baseField, max(baseField, ridgeNoise * 0.72), tectonic * 0.58);
+    let land = smoothstep(0.455, 0.545, field);
     let ocean = vec3<f32>(0.012, 0.075, 0.22);
     let soilBase = mix(vec3<f32>(0.12, 0.19, 0.075), vec3<f32>(0.42, 0.32, 0.17), detail);
     let ironTint = vec3<f32>(0.18, 0.055, 0.018) * iron;

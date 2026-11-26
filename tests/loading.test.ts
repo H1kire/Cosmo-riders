@@ -56,7 +56,7 @@ test('WebGPU startup is non-blocking and scene setup failures release the loadin
   readFile(file('..','lab','main.ts'),'utf8'),
   readFile(file('..','lab','lab.ts'),'utf8')
  ]);
- assert.ok(view.includes("if(this.backendPreference!=='webgl2')void this.initializeWebGPUBackend();"),"initial WebGPU setup must be fire-and-forget");
+ assert.match(view,/const webgpuReady=await this\.initializeWebGPUBackend\(\);if\(!webgpuReady\)throw new Error\('Cosmo-riders требует WebGPU:/,"WebGPU must be ready before the scene can start");
  assert.ok(main.includes("'cosmo-loading-failed'"));
  assert.ok(lab.includes("'cosmo-loading-failed'"));
 });

@@ -18,7 +18,7 @@ export class RenderPipeline {
   remove(name: string): boolean {
     const index = this.passes.findIndex(pass => pass.name === name);
     if (index < 0) return false;
-    this.passes[index].dispose();
+    this.passes[index].dispose?.();
     this.passes.splice(index, 1);
     return true;
   }
@@ -55,7 +55,7 @@ export class RenderPipeline {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const pass of this.passes) pass.dispose();
+    for (const pass of this.passes) pass.dispose?.();
     this.passes.length = 0;
   }
 }

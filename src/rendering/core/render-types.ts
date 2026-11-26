@@ -20,12 +20,16 @@ export interface RenderFrameContext {
   readonly scene: unknown;
 }
 
-/** A render pass records commands into the shared frame encoder. */
-export interface RenderPass extends Disposable {
+/** A render pass records commands into the shared frame encoder.
+ * Optional legacy hooks keep incremental migration type-safe.
+ */
+export interface RenderPass {
   readonly name: string;
   readonly order: number;
   enabled: boolean;
-  encode(context: RenderFrameContext): void;
+  encode?(context: RenderFrameContext): void;
+  render?(context: RenderFrameContext): void;
+  dispose?(): void;
   onDeviceRestored?(device: any): void | Promise<void>;
 }
 

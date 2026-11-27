@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {AU,DAY,G,CelestialBody,PhysicsWorld,add,dot,gravitationalAcceleration,gravitationalParameter,magnitude,orbitalElementsToState,orbitalPeriod,propagateKepler,sphereOfInfluence,stateToOrbitalElements,vector3,createSolarSystemWorld,SOLAR_SYSTEM_DATA,SOLAR_SYSTEM_REFERENCE,executeIdealizedBurn,hohmannTransfer,engineThrustAtPressure,thrustToWeightRatio} from '../src/physics/index.ts';
 import {formatScientific} from '../src/presentation/math-format.ts';
+import {rotateStateToParentEquator} from '../src/physics/orbital-frame.ts';
 const earthMass=5.9722e24,earthMu=gravitationalParameter(earthMass);
 test('SI constants and gravitational parameter',()=>{assert.equal(AU,149597870700);assert.equal(G,6.67430e-11);assert.ok(Number.isFinite(earthMu)&&earthMu>0);});
 test('vector arithmetic',()=>{const a=vector3(1,2,3),b=vector3(4,5,6);assert.deepEqual(add(a,b),vector3(5,7,9));assert.equal(dot(a,b),32);assert.equal(magnitude(vector3(3,4,0)),5);});
@@ -236,4 +237,18 @@ test('J2000 Moon mean elements match the JPL planetary satellite table',()=>{
  assert.ok(Math.abs(moon.longitudeAscendingNode*180/Math.PI-125.08)<1e-10);
  assert.ok(Math.abs(moon.argumentOfPeriapsis*180/Math.PI-318.15)<1e-10);
  assert.ok(Math.abs(moon.meanAnomaly*180/Math.PI-135.27)<1e-10);
+});
+
+
+test('JS ephemeris transforms Laplace-plane satellite states into the shared ecliptic frame',()=>{
+ const parent=new CelestialBody({id:'laplace-parent',name:'Parent',massKg:1e20,meanRadiusM:1e6,poleRightAscensionRad:0,poleDeclinationRad:Math.PI/2});
+ const body=new CelestialBody({id:'laplace-moon',name:'Laplace moon',massKg:1e12,meanRadiusM:1e4,orbitalReferenceFrame:'laplace',orbitalPlanePoleRightAscensionRad:Math.PI/2,orbitalPlanePoleDeclinationRad:0});
+ const state={position:vector3(1,0,0),velocity:vector3(0,1,0)};
+ const transformed=rotateStateToParentEquator(state,body,parent);
+ const epsilon=23.4392911*Math.PI/180,pole=[0,Math.cos(epsilon),-Math.sin(epsilon)];
+ const normalDot=transformed.position.x*pole[0]+transformed.position.y*pole[1]+transformed.position.z*pole[2];
+ assert.ok(Math.abs(normalDot)<1e-12);
+ assert.ok(Math.abs(magnitude(transformed.position)-1)<1e-12);
+ assert.ok(Math.abs(magnitude(transformed.velocity)-1)<1e-12);
+ assert.ok(Math.abs(transformed.velocity.z)>0.1);
 });

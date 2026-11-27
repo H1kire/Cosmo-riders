@@ -48,7 +48,7 @@ fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate],lod_level:u32)->Sample{
  let latitude=d.y.abs();let frost=smooth(0.68,0.96,latitude)*p.ice_fraction;let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
  // Мікродеталі додаються поступово з підвищенням геодезичного рівня деталізації.
  let micro=fbm(d.scale(24.0),seed.wrapping_add(401),lod_level.saturating_add(1).clamp(1,6));
- let mut height:f64;let mut color:[f64;3];let mut rough:f64;let material:u8;
+ let mut height:f64;let mut color:[f64;3];let mut rough:f64;let mut material:u8;
  if p.kind=="oceanic"||p.water_fraction>0.45{
   let continental=smooth(-0.08,0.13,macro_n-0.48+plate.elevation+tectonic*0.09);let trench=boundary*boundary*p.tectonic_activity*0.11;let mountains=boundary.powf(0.7)*p.tectonic_activity*0.16;
   height=(macro_n-0.5)*0.18+(regional-0.5)*0.065+mountains-trench+volcanic*0.035;

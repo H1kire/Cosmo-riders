@@ -76,12 +76,16 @@ test('surface relief stays inside body-specific physical elevation limits',()=>{
  }
 });
 
-test('higher geodesic LOD reveals deterministic additional microdetail',()=>{
- const root=generateSurfaceTile({planetId:'earth',seed:profile.seed,tile:tileId(0),resolution:64,gutter:1,profile});
- const child=generateSurfaceTile({planetId:'earth',seed:profile.seed,tile:tileId(0,'0'),resolution:64,gutter:1,profile});
- assert.ok(root.height.every(Number.isFinite));
- assert.ok(child.height.every(Number.isFinite));
+test('higher geodesic LOD reveals deterministic additional microdetail',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/geodesic/surface-tile.ts',import.meta.url),'utf8');
+ const rootRequest={planetId:'earth',seed:profile.seed,tile:tileId(0),resolution:64,gutter:1,profile};
+ const root=generateSurfaceTile(rootRequest),repeat=generateSurfaceTile(rootRequest);
+ const child=generateSurfaceTile({...rootRequest,tile:tileId(0,'0')});
+ assert.deepEqual(root.height,repeat.height,'surface generation must remain deterministic');
+ assert.ok(root.height.every(Number.isFinite)&&child.height.every(Number.isFinite));
  assert.notDeepEqual(root.height,child.height);
+ assert.ok(source.includes('Math.min(6,lodLevel+1)'),'microdetail octave count must follow geodesic LOD');
  assert.ok(root.height.some(value=>Math.abs(value)<9000),'root relief must preserve natural elevation variation instead of saturating the cap');
  assert.equal(createGeologicalProfile(earth as never).algorithmVersion,2);
 });

@@ -15,6 +15,7 @@ export class PhysicsWorldClient{
  simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly rotationAngles=new Map<string,number|null>();readonly renderRotationAngles=new Map<string,number|null>();readonly renderVessels=new Map<string,VesselSnapshot>();
  private readonly orbitPathRequests=new Map<string,Promise<Float64Array>>();
  private readonly orbitPathTimes=new Map<string,{simulationTimeSeconds:number;requestedAtMs:number}>();
+ private orbitPathGeneration=0;
  private disposed=false;
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
@@ -52,19 +53,22 @@ export class PhysicsWorldClient{
   if(cached&&!needsRefresh)return Promise.resolve(cached);
   const existing=this.orbitPathRequests.get(id);if(existing)return existing;
   const body=this.bodies.get(id);if(!body?.parentId||!body.orbitalElements)return Promise.reject(new Error('Body has no orbital path: '+id));
-  const requestedTime=this.simulationTimeSeconds,requestedAtMs=now;
-  const request=this.bridge.orbitPath(id,count).then(path=>{
+  const requestedTime=this.simulationTimeSeconds,requestedAtMs=now,generation=this.orbitPathGeneration;
+  let request:Promise<Float64Array>;
+  request=this.bridge.orbitPath(id,count).then(path=>{
    if(this.disposed)throw new Error('PhysicsWorldClient was disposed while generating an orbit path.');
-   this.orbitPaths.set(id,path);
-   this.orbitPathTimes.set(id,{simulationTimeSeconds:requestedTime,requestedAtMs});
+   if(generation===this.orbitPathGeneration){
+    this.orbitPaths.set(id,path);
+    this.orbitPathTimes.set(id,{simulationTimeSeconds:requestedTime,requestedAtMs});
+   }
    return path;
-  }).finally(()=>this.orbitPathRequests.delete(id));
+  }).finally(()=>{if(this.orbitPathRequests.get(id)===request)this.orbitPathRequests.delete(id);});
   this.orbitPathRequests.set(id,request);return request;
  }
  getBodyState(id:string):PhysicsState{const s=this.bodyStates.get(id);if(!s)throw new Error('Unknown body state: '+id);return s;}
  getVesselState(id:string):VesselSnapshot{const s=this.vessels.get(id);if(!s)throw new Error('Unknown vessel: '+id);return s;}
  getSphereOfInfluence(id:string):number|null{return this.sphereOfInfluence.get(id)??null;}
- async enableNBody():Promise<void>{await this.bridge.enableNBody();await this.refresh(await this.bridge.snapshot());this.orbitPaths.clear();this.orbitPathTimes.clear();this.renderBodyStates.clear();for(const [id,state] of this.bodyStates)this.renderBodyStates.set(id,state);}
+ async enableNBody():Promise<void>{this.orbitPathGeneration++;this.orbitPathRequests.clear();this.orbitPaths.clear();this.orbitPathTimes.clear();await this.bridge.enableNBody();await this.refresh(await this.bridge.snapshot());this.renderBodyStates.clear();for(const [id,state] of this.bodyStates)this.renderBodyStates.set(id,state);}
  async nBodyEnabled():Promise<boolean>{return this.bridge.nBodyEnabled();}
  async setTimeScale(v:number):Promise<void>{await this.bridge.setTimeScale(v);this.timeScale=v;}
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}
@@ -86,5 +90,5 @@ export class PhysicsWorldClient{
  propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as unknown as Promise<PropulsionSnapshot>;}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
- async dispose():Promise<void>{if(this.disposed)return;this.disposed=true;this.orbitPathRequests.clear();this.orbitPaths.clear();this.orbitPathTimes.clear();await this.bridge.dispose();}
+ async dispose():Promise<void>{if(this.disposed)return;this.disposed=true;this.orbitPathGeneration++;this.orbitPathRequests.clear();this.orbitPaths.clear();this.orbitPathTimes.clear();await this.bridge.dispose();}
 }

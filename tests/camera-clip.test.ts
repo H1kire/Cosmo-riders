@@ -11,14 +11,14 @@ test('focused planetary camera keeps near plane below close surface clearance',(
  assert.ok(near<radius);
  assert.ok(far>radius+altitude);
  assert.ok(far>384_400_000/AU,'focused Earth view retains the Moon inside the far plane');
- assert.ok(far/near<2_000_000);
+ assert.equal(far,100,'focused views preserve the complete solar-system range');
 });
 
-test('focused camera clip range scales with distance instead of always spanning 100 AU',()=>{
+test('focused camera adapts near plane while preserving the 100 AU scene range',()=>{
  const [near,far]=calculateCameraClipPlanes(1,6_371_000/AU);
  assert.ok(near>0);
- assert.ok(far<10);
- assert.ok(far>1);
+ assert.ok(near<6_371_000/AU);
+ assert.equal(far,100);
 });
 
 test('unfocused system-map camera retains the wide solar-system far plane',()=>{

@@ -73,6 +73,14 @@ function loadGraphicsSettings():GraphicsSettings{
 }
 export class Solar3DView{
  [key: string]: any;
+ private readonly surfaceProfileCache = new Map<string,{source:object;profile:ReturnType<typeof createGeologicalProfile>}>();
+ private surfaceProfileFor(body:Parameters<typeof createGeologicalProfile>[0]){
+  const cached=this.surfaceProfileCache.get(body.id);
+  if(cached?.source===body)return cached.profile;
+  const profile=createGeologicalProfile(body);
+  this.surfaceProfileCache.set(body.id,{source:body,profile});
+  return profile;
+ }
  readonly ready:Promise<void>;
  constructor(canvas){
   this.canvas=canvas;this.disposed=false;this.webgpuBackend=null;this.webgpuCanvas=canvas;this.backendPreference='webgpu';this.activeBackend='WebGPU';this.backendFallbackReason=null;this.ready=this.initialize();
@@ -444,7 +452,7 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level,gasGiant:gasGiantProfileForId(body.id)??undefined,ringShadow:body.hasRings?{innerRadiusAU:body.meanRadiusM/AU*(RING_INNER_SCALES[body.id]??1.2),outerRadiusAU:body.meanRadiusM/AU*(RING_OUTER_SCALES[body.id]??2),opacity:RING_SHADOW_OPACITY[body.id]??.25}:undefined,surfaceProfile:createGeologicalProfile(body)};
+   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level,gasGiant:gasGiantProfileForId(body.id)??undefined,ringShadow:body.hasRings?{innerRadiusAU:body.meanRadiusM/AU*(RING_INNER_SCALES[body.id]??1.2),outerRadiusAU:body.meanRadiusM/AU*(RING_OUTER_SCALES[body.id]??2),opacity:RING_SHADOW_OPACITY[body.id]??.25}:undefined,surfaceProfile:this.surfaceProfileFor(body)};
    webgpuBodies.push({id:body.id,model,...webgpuBody});
    const webgpuDraw=webgpuBodies[webgpuBodies.length-1];
    const occluders=this.collectOccluders(body,state,sunState,bodies,states,renderOrigin);
@@ -506,7 +514,7 @@ export class Solar3DView{
  }
  dispose(){
   if(this.disposed)return;
-  this.disposed=true;this.longTaskObserver?.disconnect();
+  this.disposed=true;this.surfaceProfileCache.clear();this.longTaskObserver?.disconnect();
   window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);
   if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
   this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitElementRefs?.clear();

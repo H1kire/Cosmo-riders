@@ -1,4 +1,4 @@
-use crate::physics::{orbital_elements_to_state,propagate_kepler,PropagatedState,Vec3};
+use crate::physics::{orbital_elements_to_state,propagate_kepler,state_to_elements,PropagatedState,Vec3};
 use crate::nbody::{NBody,NBodySystem};
 use crate::propulsion::{integrate_engines,Engine};
 use serde::{Deserialize,Serialize};
@@ -121,19 +121,27 @@ impl PhysicsWorld{
   let i=*self.indices.get(id).ok_or_else(||format!("Unknown body: {id}"))?;
   let body=&self.bodies[i];
   let parent_id=body.parent_id.as_ref().ok_or("A root body has no parent-relative orbit.")?;
-  let parent=&self.bodies[*self.indices.get(parent_id).ok_or("Orbit parent not found.")?];
-  let e=body.orbital_elements.as_ref().ok_or("Body has no classical orbital elements.")?;
+  let pi=*self.indices.get(parent_id).ok_or("Orbit parent not found.")?;
+  let parent=&self.bodies[pi];
   let mu=G*(body.mass_kg+parent.mass_kg);
+  let relative_position=self.states[i].p().sub(self.states[pi].p());
+  let relative_velocity=self.states[i].vel().sub(self.states[pi].vel());
+  let elements=state_to_elements(relative_position,relative_velocity,mu)?;
+  if !elements.semi_major_axis.is_finite()||elements.semi_major_axis<=0.0||elements.eccentricity>=1.0{
+   return Err("Current osculating orbit is not a bound ellipse.".into())
+  }
+  let half_nu=elements.true_anomaly*.5;
+  let eccentric_anomaly=2.0*((1.0-elements.eccentricity).sqrt()*half_nu.sin())
+   .atan2((1.0+elements.eccentricity).sqrt()*half_nu.cos());
+  let mean_anomaly=eccentric_anomaly-elements.eccentricity*eccentric_anomaly.sin();
   let mut out=Vec::with_capacity((segments as usize+1)*3);
   for n in 0..=segments{
-   let mean=e.mean_anomaly+std::f64::consts::TAU*n as f64/segments as f64;
-   let(r,v)=orbital_elements_to_state(e.semi_major_axis_m,e.eccentricity,e.inclination,e.longitude_ascending_node,e.argument_of_periapsis,mean,mu)?;
-   let state=parent_equator(PropagatedState{position:r,velocity:v,iterations:0},body,parent);
-   out.extend_from_slice(&[state.position.x,state.position.y,state.position.z]);
+   let mean=mean_anomaly+std::f64::consts::TAU*n as f64/segments as f64;
+   let(r,_)=orbital_elements_to_state(elements.semi_major_axis,elements.eccentricity,elements.inclination,elements.longitude_ascending_node,elements.argument_of_periapsis,mean,mu)?;
+   out.extend_from_slice(&[r.x,r.y,r.z]);
   }
   Ok(out)
  }
-
  pub fn initialize_ephemerides(&mut self)->Result<(),String>{if self.initialized{return Ok(())}for i in 0..self.bodies.len(){let b=&self.bodies[i];if let Some(pid)=&b.parent_id{let pi=*self.indices.get(pid).ok_or_else(||format!("Parent body not found: {pid}"))?;let p=&self.bodies[pi];let ps=self.states[pi];let rel=if let Some(e)=&b.orbital_elements{let(r,v)=orbital_elements_to_state(e.semi_major_axis_m,e.eccentricity,e.inclination,e.longitude_ascending_node,e.argument_of_periapsis,e.mean_anomaly,G*(b.mass_kg+p.mass_kg))?;parent_equator(PropagatedState{position:r,velocity:v,iterations:0},b,p)}else{PropagatedState{position:v(b.position)?.sub(v(p.position)?),velocity:v(b.velocity)?.sub(v(p.velocity)?),iterations:0}};self.initial[i]=Some(rel);self.states[i]=BodyState::new(ps.p().add(rel.position),ps.vel().add(rel.velocity));}else{self.states[i]=BodyState{position:b.position,velocity:b.velocity}}}self.initialized=true;Ok(())}
  pub fn enable_n_body(&mut self)->Result<(),String>{
   self.ready()?;if self.nbody.is_some(){return Ok(())}

@@ -587,3 +587,16 @@ test('active WebGPU geodesic system uses screen-error LOD, balanced topology and
  assert.ok(backend.includes('frame.cameraForward'));
  assert.ok(solar.includes('cameraForward:norm(sub(this.target,eye))'));
 });
+
+
+test('active WebGPU geodesic material shader uses energy-conserving GGX PBR terms',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('fn distributionGGX'));
+ assert.ok(source.includes('fn geometrySmith'));
+ assert.ok(source.includes('fn fresnelSchlick'));
+ assert.ok(source.includes('let diffuseWeight = (vec3<f32>(1.0) - fresnel) * (1.0 - metallic)'));
+ assert.ok(source.includes('let direct = (diffuse + specular) * nDotL'));
+ assert.ok(source.includes('let ambientDiffuse = baseColor * diffuseWeight * hemisphere'));
+ assert.ok(!source.includes('let exponent = mix(96.0, 5.0, roughness)'));
+});

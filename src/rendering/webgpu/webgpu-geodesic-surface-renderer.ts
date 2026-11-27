@@ -148,8 +148,17 @@ struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirectio
 @group(0) @binding(4) var roughTex: texture_2d_array<f32>;
 @group(0) @binding(5) var materialTex: texture_2d_array<f32>;
 @group(0) @binding(6) var surfaceSampler: sampler;
+
+const PI: f32 = 3.141592653589793;
 struct VIn { @location(0) direction: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>, };
-struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) worldNormal: vec3<f32>, @location(2) @interpolate(flat) layer: i32, @location(3) worldPosition: vec3<f32>, };
+struct VOut {
+  @builtin(position) clip: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+  @location(1) worldNormal: vec3<f32>,
+  @location(2) @interpolate(flat) layer: i32,
+  @location(3) worldPosition: vec3<f32>,
+};
+
 @vertex fn vs(input: VIn) -> VOut {
   var out: VOut;
   let layer = i32(u.params.y);
@@ -158,8 +167,8 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   let gutter = floor(max(pageSize - resolution, 0.0) * 0.5);
   let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(gutter);
   let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSize) - vec2<i32>(1));
-  let h = textureLoad(heightTex, heightCoord, layer, 0).r;
-  let radiusRatio = 1.0 + (h * u.params.z) / max(u.params.x, 1.0);
+  let heightM = textureLoad(heightTex, heightCoord, layer, 0).r;
+  let radiusRatio = 1.0 + (heightM * u.params.z) / max(u.params.x, 1.0);
   let local = input.direction * radiusRatio;
   let world = u.model * vec4<f32>(local, 1.0);
   out.clip = u.vp * world;
@@ -169,22 +178,56 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   out.layer = layer;
   return out;
 }
+
+fn fresnelSchlick(cosTheta: f32, f0: vec3<f32>) -> vec3<f32> {
+  return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - clamp(cosTheta, 0.0, 1.0), 5.0);
+}
+fn distributionGGX(nDotH: f32, roughness: f32) -> f32 {
+  let alpha = roughness * roughness;
+  let alpha2 = alpha * alpha;
+  let denominator = nDotH * nDotH * (alpha2 - 1.0) + 1.0;
+  return alpha2 / max(PI * denominator * denominator, 0.000001);
+}
+fn geometrySchlickGGX(nDotV: f32, roughness: f32) -> f32 {
+  let r = roughness + 1.0;
+  let k = (r * r) * 0.125;
+  return nDotV / max(nDotV * (1.0 - k) + k, 0.000001);
+}
+fn geometrySmith(nDotV: f32, nDotL: f32, roughness: f32) -> f32 {
+  return geometrySchlickGGX(nDotV, roughness) * geometrySchlickGGX(nDotL, roughness);
+}
+
 @fragment fn fs(input: VOut) -> @location(0) vec4<f32> {
   let layer = input.layer;
-  let base = textureSample(albedoTex, surfaceSampler, input.uv, layer).rgb;
+  let baseColor = textureSample(albedoTex, surfaceSampler, input.uv, layer).rgb;
   let encodedNormal = textureSample(normalTex, surfaceSampler, input.uv, layer).xyz * 2.0 - vec3<f32>(1.0);
   let mapNormal = normalize((u.model * vec4<f32>(encodedNormal, 0.0)).xyz);
-  let roughness = textureSample(roughTex, surfaceSampler, input.uv, layer).r;
-  let material = textureSample(materialTex, surfaceSampler, input.uv, layer).r;
+  let geometricNormal = normalize(input.worldNormal);
+  let normal = normalize(mix(geometricNormal, mapNormal, 0.96));
+  let roughness = clamp(textureSample(roughTex, surfaceSampler, input.uv, layer).r, 0.045, 1.0);
+  let materialId = i32(round(textureSample(materialTex, surfaceSampler, input.uv, layer).r * 255.0));
+  let metallic = select(0.0, 0.12, materialId == 2);
   let light = normalize(u.lightDirection.xyz);
-  let ndl = max(dot(mapNormal, light), 0.0);
-  let viewDirection = normalize(u.cameraPosition.xyz - input.worldPosition);
-  let halfDirection = normalize(light + viewDirection);
-  let exponent = mix(96.0, 5.0, roughness);
-  let specular = pow(max(dot(mapNormal, halfDirection), 0.0), exponent) * (1.0 - roughness) * 0.16;
-  let materialId = i32(round(material * 255.0));
-  let materialTint = select(1.0, 0.96, materialId == 1);
-  let diffuse = base * (0.045 + ndl * (0.92 - roughness * 0.12));
-  return vec4<f32>(diffuse * materialTint + vec3<f32>(specular), 1.0);
+  let view = normalize(u.cameraPosition.xyz - input.worldPosition);
+  let halfVector = normalize(light + view);
+  let nDotL = max(dot(normal, light), 0.0);
+  let nDotV = max(dot(normal, view), 0.0001);
+  let nDotH = max(dot(normal, halfVector), 0.0);
+  let hDotV = max(dot(halfVector, view), 0.0);
+  let f0 = mix(vec3<f32>(0.04), baseColor, metallic);
+  let fresnel = fresnelSchlick(hDotV, f0);
+  let distribution = distributionGGX(nDotH, roughness);
+  let geometry = geometrySmith(nDotV, nDotL, roughness);
+  let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * max(nDotL, 0.0001), 0.0001);
+  let diffuseWeight = (vec3<f32>(1.0) - fresnel) * (1.0 - metallic);
+  let diffuse = diffuseWeight * baseColor / PI;
+  let direct = (diffuse + specular) * nDotL;
+
+  // Небесне заповнення зберігає читабельність нічного боку без фальшивого другого джерела світла.
+  let hemisphere = mix(0.018, 0.075, clamp(normal.y * 0.5 + 0.5, 0.0, 1.0));
+  let ambientDiffuse = baseColor * diffuseWeight * hemisphere * (1.0 - roughness * 0.22);
+  let ambientSpecular = fresnel * (0.012 + (1.0 - roughness) * 0.018);
+  let radiance = direct + ambientDiffuse + ambientSpecular;
+  return vec4<f32>(radiance, 1.0);
 }
 `;

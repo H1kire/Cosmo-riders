@@ -81,8 +81,20 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
   rough=.12+continental*.76;material=continental>.5?2:3;
  }else if(p.kind==='icy'||p.kind==='ice-giant'){
   const fracture=1-Math.abs(fbm([d[0]*24,d[1]*24,d[2]*24],seed+151,4)-.5)*2;
-  height=(macro-.5)*.09+fracture*.035+boundary*p.tectonicActivity*.035;
-  color=[.38+detail*.2,.58+detail*.22,.68+detail*.25];rough=.28;material=4;
+  const craterField=fbm([d[0]*7.5,d[1]*7.5,d[2]*7.5],seed+163,5);
+  const craterBasin=1-smooth(.28,.62,craterField),craterRim=smooth(.48,.72,craterField)*(1-smooth(.76,.94,craterField));
+  const ridge=1-Math.abs(fbm([d[0]*38,d[1]*38,d[2]*38],seed+173,4)*2-1);
+  const cryovolcanic=fbm([d[0]*16,d[1]*16,d[2]*16],seed+181,4)*p.volcanicActivity;
+  const ice=clamp(p.iceFraction),rock=clamp(p.silicateFraction*.72+p.ironFraction*.55);
+  height=(macro-.5)*(.045+rock*.05)+fracture*p.tectonicActivity*.045+ridge*p.tectonicActivity*.035
+   -craterBasin*p.age*.055+craterRim*p.age*.018+cryovolcanic*.04;
+  const iceTone=.24+ice*.48+detail*.1;
+  color=[iceTone*(.78+rock*.22),iceTone*(.9-rock*.18),iceTone*(1.02-rock*.3)];
+  color=color.map((value,index)=>value*(1-rock*.38)+(index===0?.075:index===1?.085:.095)*rock) as [number,number,number];
+  const fractureShade=clamp(fracture*p.tectonicActivity*.42);
+  color=color.map(value=>value*(1-fractureShade*.3)+.035*fractureShade) as [number,number,number];
+  color=color.map((value,index)=>value+(index===0?.72:index===1?.82:.94-value)*clamp(cryovolcanic*.16)) as [number,number,number];
+  rough=clamp(.24+(1-ice)*.58+p.age*.08);material=4;
  }else if(p.kind==='volcanic'){
   const lava=smooth(.62,.86,fbm([d[0]*13,d[1]*13,d[2]*13],seed+181,5)+volcanic*.4);
   height=(macro-.5)*.08+volcanic*.16+boundary*.035;

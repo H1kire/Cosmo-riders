@@ -165,4 +165,18 @@ mod tests {
   assert_eq!(a.albedo,b.albedo);assert_eq!(a.normal,b.normal);assert_eq!(a.height,b.height);
   assert!(a.height.iter().all(|v|v.is_finite()&&*v>=-11000.0&&*v<=9000.0));
  }
+
+ #[test]
+ fn normals_are_finite_unit_vectors_from_the_displaced_height_field(){
+  let output=generate_tile(0,"1",24,2,&earth()).unwrap();
+  assert_eq!(output.normal.len(),output.height.len()*3);
+  for normal in output.normal.chunks_exact(3){
+   let x=normal[0] as f64/127.5-1.0;
+   let y=normal[1] as f64/127.5-1.0;
+   let z=normal[2] as f64/127.5-1.0;
+   let length=(x*x+y*y+z*z).sqrt();
+   assert!(length.is_finite()&&(length-1.0).abs()<0.025);
+  }
+  assert!(output.height.iter().any(|height|height.abs()>1.0));
+ }
 }

@@ -14,6 +14,7 @@ export interface WebGPUGeodesicDraw {
   readonly cameraPosition?: readonly [number, number, number];
   readonly pageResolution?: number;
   readonly gutter?: number;
+  readonly morph?: number;
 }
 
 /** WebGPU-only indexed geodesic tile pipeline using all five generated surface channels. */
@@ -120,7 +121,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const data = new Float32Array(48);
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
-    data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, 0], 32);
+    data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, Math.max(0, Math.min(1, draw.morph ?? 1))], 32);
     data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), 0], 36);
     data.set([...(draw.cameraPosition ?? [0, 0, 0]), 1], 40);
     const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
@@ -168,7 +169,7 @@ struct VOut {
   let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(gutter);
   let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSize) - vec2<i32>(1));
   let heightM = textureLoad(heightTex, heightCoord, layer, 0).r;
-  let radiusRatio = 1.0 + (heightM * u.params.z) / max(u.params.x, 1.0);
+  let radiusRatio = 1.0 + (heightM * u.params.z * u.params.w) / max(u.params.x, 1.0);
   let local = input.direction * radiusRatio;
   let world = u.model * vec4<f32>(local, 1.0);
   out.clip = u.vp * world;
@@ -203,7 +204,7 @@ fn geometrySmith(nDotV: f32, nDotL: f32, roughness: f32) -> f32 {
   let encodedNormal = textureSample(normalTex, surfaceSampler, input.uv, layer).xyz * 2.0 - vec3<f32>(1.0);
   let mapNormal = normalize((u.model * vec4<f32>(encodedNormal, 0.0)).xyz);
   let geometricNormal = normalize(input.worldNormal);
-  let normal = normalize(mix(geometricNormal, mapNormal, 0.96));
+  let normal = normalize(mix(geometricNormal, mapNormal, 0.96 * clamp(u.params.w, 0.0, 1.0)));
   let roughness = clamp(textureSample(roughTex, surfaceSampler, input.uv, layer).r, 0.045, 1.0);
   let materialId = i32(round(textureSample(materialTex, surfaceSampler, input.uv, layer).r * 255.0));
   let metallic = select(0.0, 0.12, materialId == 2);

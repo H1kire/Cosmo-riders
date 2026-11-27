@@ -27,6 +27,7 @@ interface PlanetTopology {
 }
 const MAX_PAGE_LAYERS = 256;
 const METERS_PER_AU = 149597870700;
+const clockNow = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
 
 /** WebGPU geodesic renderer with screen-error Quadtree LOD, 2:1 balancing and edge stitching. */
 export class WebGPUGeodesicSurfaceSystem {
@@ -37,6 +38,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private readonly active = new Set<string>();
   private readonly desiredMeshes = new Map<string, Set<string>>();
   private readonly pendingMeshes = new Set<string>();
+  private readonly meshMorphStartedAt = new Map<string, number>();
   private renderer: WebGPUGeodesicSurfaceRenderer | null = null;
   private rendererPromise: Promise<void> | null = null;
   private disposed = false;
@@ -149,7 +151,10 @@ export class WebGPUGeodesicSurfaceSystem {
         this.pendingMeshes.add(meshKey);
         void runtime.requestTileMesh(tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask, 10 + tile.id.level)
           .then(mesh => {
-            if (!this.disposed && this.desiredMeshes.get(body.id)?.has(meshKey)) renderer.uploadMesh(mesh, meshKey);
+            if (!this.disposed && this.desiredMeshes.get(body.id)?.has(meshKey)) {
+            renderer.uploadMesh(mesh, meshKey);
+            this.meshMorphStartedAt.set(meshKey, clockNow());
+          }
           })
           .catch(() => undefined)
           .finally(() => this.pendingMeshes.delete(meshKey));
@@ -167,7 +172,8 @@ export class WebGPUGeodesicSurfaceSystem {
       renderer.draw(pass, item.key, {
         viewProjection, model, radiusM: profile.meanRadiusM, pageLayer: item.layer!, lightDirection,
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
-        pageResolution: this.settings.pageResolution, gutter: 2
+        pageResolution: this.settings.pageResolution, gutter: 2,
+        morph: Math.min(1, Math.max(0, (clockNow() - (this.meshMorphStartedAt.get(item.key) ?? clockNow())) / 280))
       });
     }
     return true;
@@ -178,7 +184,10 @@ export class WebGPUGeodesicSurfaceSystem {
     if (!this.renderer) return;
     for (const id of this.runtimes.keys()) {
       const desired = this.desiredMeshes.get(id) ?? new Set<string>();
-      for (const key of this.renderer.meshKeysForBody(id)) if (!desired.has(key)) this.renderer.releaseMesh(key);
+      for (const key of this.renderer.meshKeysForBody(id)) if (!desired.has(key)) {
+        this.renderer.releaseMesh(key);
+        this.meshMorphStartedAt.delete(key);
+      }
     }
   }
 
@@ -225,6 +234,7 @@ export class WebGPUGeodesicSurfaceSystem {
     this.pages.dispose();
     this.pendingMeshes.clear();
     this.desiredMeshes.clear();
+    this.meshMorphStartedAt.clear();
   }
 }
 

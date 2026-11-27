@@ -600,3 +600,16 @@ test('active WebGPU geodesic material shader uses energy-conserving GGX PBR term
  assert.ok(source.includes('let ambientDiffuse = baseColor * diffuseWeight * hemisphere'));
  assert.ok(!source.includes('let exponent = mix(96.0, 5.0, roughness)'));
 });
+
+
+test('WebGPU geodesic tiles smoothly reveal height displacement and mapped normals after upload',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const renderer=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8');
+ const system=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
+ assert.ok(renderer.includes('readonly morph?: number'));
+ assert.ok(renderer.includes('heightM * u.params.z * u.params.w'));
+ assert.ok(renderer.includes('0.96 * clamp(u.params.w, 0.0, 1.0)'));
+ assert.ok(system.includes('meshMorphStartedAt.set(meshKey, clockNow())'));
+ assert.ok(system.includes('/ 280'));
+ assert.ok(system.includes('meshMorphStartedAt.delete(key)'));
+});

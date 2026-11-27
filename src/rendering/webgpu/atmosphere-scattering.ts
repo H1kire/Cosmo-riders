@@ -52,9 +52,10 @@ fn raySphereInterval(origin: vec3<f32>, direction: vec3<f32>, radius: f32) -> ve
 
 fn atmosphereScattering(worldPosition: vec3<f32>, worldNormal: vec3<f32>) -> vec4<f32> {
   let center = body.model[3].xyz;
-  let planetRadius = max(length(body.model[0].xyz), 0.0000001);
   let atmosphereRatio = clamp(body.material.z, 0.00001, 0.25);
-  let outerRadius = planetRadius * (1.0 + atmosphereRatio);
+  let outerRadius = max(length(body.model[0].xyz), 0.0000001);
+  // Shell-модель уже масштабована до зовнішнього радіуса; відновлюємо радіус поверхні.
+  let planetRadius = outerRadius / (1.0 + atmosphereRatio);
   let cameraOffset = body.cameraPosition.xyz - center;
   let viewRay = normalize(worldPosition - body.cameraPosition.xyz);
 

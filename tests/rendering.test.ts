@@ -228,3 +228,15 @@ test('active cloud shader keeps solar angular radius separate from cloud banding
  assert.ok(backend.includes('[solarIrradiance, 1, frame.sunRadius ?? 0,'));
  assert.ok(backend.includes('cloud.erosion, cloud.banding)'));
 });
+
+
+test('active atmosphere profiles use per-body Rayleigh and Mie scale heights',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.ok(source.includes("id:'earth',height:110000"));
+ assert.ok(source.includes('rayleighScaleHeightM:8400,mieScaleHeightM:1200'));
+ assert.ok(source.includes('rayleighScaleHeightM:20000,mieScaleHeightM:9000'));
+ assert.ok(source.includes('rayleighScaleHeightM:15900,mieScaleHeightM:6500'));
+ assert.ok(!source.includes('rayleighScaleHeightM:height*.12'));
+ assert.ok(!source.includes('mieScaleHeightM:height*.08'));
+});

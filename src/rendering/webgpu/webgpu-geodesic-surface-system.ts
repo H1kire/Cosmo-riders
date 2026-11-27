@@ -112,7 +112,8 @@ export class WebGPUGeodesicSurfaceSystem {
     viewportHeightPx: number,
     shadowOccluders: Float32Array = new Float32Array(32),
     sunRadius = 0,
-    shadowsEnabled = true
+    shadowsEnabled = true,
+    targetErrorPx = this.settings.meshResolution >= 64 ? 1.5 : 2.5
   ): boolean {
     if (this.disposed || profile.kind === 'gas-giant' || profile.kind === 'ice-giant') return false;
     this.frameShadowOccluders.set(shadowOccluders);
@@ -175,7 +176,7 @@ export class WebGPUGeodesicSurfaceSystem {
         viewportHeightPx
       }, {
         planetRadiusM: profile.meanRadiusM,
-        targetErrorPx: this.settings.meshResolution >= 64 ? 1.5 : 2.5,
+        targetErrorPx: Math.max(0.5, Math.min(8, targetErrorPx)),
         maxDepth: 12,
         maxTiles: transitionBudget,
         previousSplitKeys: topology.splitKeys

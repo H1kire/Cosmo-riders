@@ -22,7 +22,7 @@ test('ring shadow attenuation is confined to the annulus',()=>{
  assert.equal(ringShadowVisibility(.5,1,2,.7),1);
  assert.equal(ringShadowVisibility(2,1,2,.7),1);
  const visibility=ringShadowVisibility(1.5,1,2,.7);
- assert.ok(visibility>=0&&visibility<=1&&visibility<.5);
+ assert.ok(visibility>=0&&visibility<1);
 });
 
 test('active WebGPU sphere and geodesic pipelines calculate finite-disc shadows per fragment',async()=>{

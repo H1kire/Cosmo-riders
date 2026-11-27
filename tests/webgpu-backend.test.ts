@@ -150,7 +150,7 @@ test('GPU cache diagnostics flow from the shared page cache into the graphics pa
 
 test('frame-time summary reports average, percentiles, peak and FPS',()=>{
  const stats=summarizeFrameTimes([16,20,12,40,Number.NaN,-1]);
- assert.equal(stats.sampleCount,4);assert.equal(stats.averageMs,22);assert.equal(stats.medianMs,20);
+ assert.equal(stats.sampleCount,4);assert.equal(stats.averageMs,22);assert.equal(stats.medianMs,18);
  assert.equal(stats.p95Ms,40);assert.equal(stats.peakMs,40);assert.ok(Math.abs(stats.fps-1000/22)<1e-9);
  assert.deepEqual(summarizeFrameTimes([]),{sampleCount:0,averageMs:0,medianMs:0,p95Ms:0,peakMs:0,fps:0});
 });

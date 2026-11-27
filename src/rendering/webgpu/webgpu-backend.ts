@@ -16,8 +16,9 @@ export function summarizeFrameTimes(samples: readonly number[]) {
   const valid=samples.filter(value=>Number.isFinite(value)&&value>=0).slice().sort((a,b)=>a-b);
   if(!valid.length)return{sampleCount:0,averageMs:0,medianMs:0,p95Ms:0,peakMs:0,fps:0};
   const averageMs=valid.reduce((sum,value)=>sum+value,0)/valid.length;
+  const medianMs=valid.length%2?valid[Math.floor(valid.length/2)]:(valid[valid.length/2-1]+valid[valid.length/2])/2;
   const percentile=(fraction:number)=>valid[Math.min(valid.length-1,Math.max(0,Math.ceil(valid.length*fraction)-1))];
-  return{sampleCount:valid.length,averageMs,medianMs:percentile(.5),p95Ms:percentile(.95),peakMs:valid[valid.length-1],fps:averageMs>0?1000/averageMs:0};
+  return{sampleCount:valid.length,averageMs,medianMs,p95Ms:percentile(.95),peakMs:valid[valid.length-1],fps:averageMs>0?1000/averageMs:0};
 }
 
 export interface SphereGeometryData {

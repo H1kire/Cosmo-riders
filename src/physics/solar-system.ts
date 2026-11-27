@@ -71,13 +71,13 @@ const satellite = (
 
 const satellites = [
   satellite('moon','Moon','earth',4902.800,1737.4,384400,.0554,5.16,318.15,135.27,125.08,true,269.9949,66.5392),
-  satellite('phobos','Phobos','mars',.0007087,11.08,9375,.015,1.1,216.3,189.7,169.2),
-  satellite('deimos','Deimos','mars',.0000962,6.2,23457,.0002,1.8,0,205,54.3),
+  satellite('phobos','Phobos','mars',.0007087,11.08,9375,.015,1.1,216.3,189.7,169.2,true,null,null,'laplace',317.7,52.9),
+  satellite('deimos','Deimos','mars',.0000962,6.2,23457,0,1.8,0,205,54.3,true,null,null,'laplace',316.6,53.5),
 
   satellite('io','Io','jupiter',5959.91547,1821.49,421800,.004,0,49.1,330.9,0),
   satellite('europa','Europa','jupiter',3202.71210,1560.80,671100,.009,.5,45,345.4,184),
-  satellite('ganymede','Ganymede','jupiter',9887.83275,2631.20,1070400,.001,.2,198.3,324.8,58.5),
-  satellite('callisto','Callisto','jupiter',7179.28340,2410.30,1882700,.007,.3,43.8,87.4,309.1),
+  satellite('ganymede','Ganymede','jupiter',9887.83275,2631.20,1070400,.001,.2,198.3,324.8,58.5,true,null,null,'laplace',268.2,64.6),
+  satellite('callisto','Callisto','jupiter',7179.28340,2410.30,1882700,.007,.3,43.8,87.4,309.1,true,null,null,'laplace',268.7,64.8),
   satellite('amalthea','Amalthea','jupiter',.16456,83.5,181400,.003,.4,180.1,310.6,282.9),
   satellite('thebe','Thebe','jupiter',.03015,49.3,221900,.018,1.1,26.6,182.1,340.4),
   satellite('adrastea','Adrastea','jupiter',.00014,8.2,129000,0,0,0,214.5,0),

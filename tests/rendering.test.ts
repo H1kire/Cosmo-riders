@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateEclipse } from '../src/rendering/lighting/eclipse-system.ts';
+import { solarIrradianceForDisplay } from '../src/rendering/lighting/lighting-system.ts';
 import { rayleighPhase, miePhase, exponentialDensity, transmittance } from '../src/rendering/atmosphere/scattering.ts';
 import { createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
 import { AdaptiveQuality } from '../src/rendering/quality/adaptive-quality.ts';
@@ -209,4 +210,21 @@ test('cloud density fields are sampled in body-local coordinates while lighting 
  assert.ok(CLOUD_VERTEX.includes('vLocalNormal=aNormal'));
  assert.ok(CLOUD_FRAGMENT.includes('localDirection=safeNormalize(vLocalNormal)'));
  assert.ok(CLOUD_FRAGMENT.includes('vec3 n=safeNormalize(vNormal)'));
+});
+
+
+test('solar irradiance follows the normalized inverse-square law at planetary distances',()=>{
+ assert.equal(solarIrradianceForDisplay(1),1);
+ assert.equal(solarIrradianceForDisplay(2),.25);
+ assert.ok(Math.abs(solarIrradianceForDisplay(5.2)-1/(5.2*5.2))<1e-12);
+ assert.ok(Math.abs(solarIrradianceForDisplay(30)-1/900)<1e-12);
+});
+
+test('active cloud shader keeps solar angular radius separate from cloud banding',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const backend=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
+ assert.ok(backend.includes('let banding = clamp(body.lightAndEmission.w, 0.0, 1.0)'));
+ assert.ok(backend.includes('shell.set([body.gasGiant?.type ?? 0, body.gasGiant?.bandStrength ?? 0, body.gasGiant?.stormStrength ?? 0, cloudBanding], 36)'));
+ assert.ok(backend.includes('[solarIrradiance, 1, frame.sunRadius ?? 0,'));
+ assert.ok(backend.includes('cloud.erosion, cloud.banding)'));
 });

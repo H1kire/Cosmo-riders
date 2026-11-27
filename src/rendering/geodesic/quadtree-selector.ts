@@ -48,26 +48,32 @@ export function horizonCapUpperBound(center:Vec3,cameraDirection:Vec3,angularRad
  return Math.cos(theta-alpha);
 }
 
+/** Консервативна кутова оболонка прямокутного frustum включає його діагональні кути. */
+export function isAngularCapPotentiallyVisibleInFrustum(
+ directionToCenter:Vec3,angularRadius:number,cameraForward:Vec3,
+ verticalFovRadians:number,viewportWidthPx:number,viewportHeightPx:number
+):boolean{
+ if(!Number.isFinite(angularRadius)||angularRadius<0)throw new RangeError('Angular radius must be finite and non-negative.');
+ if(!Number.isFinite(verticalFovRadians)||verticalFovRadians<=0||verticalFovRadians>=Math.PI)throw new RangeError('Vertical field of view must be between zero and pi.');
+ if(!Number.isFinite(viewportWidthPx)||viewportWidthPx<=0||!Number.isFinite(viewportHeightPx)||viewportHeightPx<=0)throw new RangeError('Viewport dimensions must be positive.');
+ const halfVertical=verticalFovRadians*.5,aspect=viewportWidthPx/viewportHeightPx;
+ const halfHorizontal=Math.atan(Math.tan(halfVertical)*aspect);
+ const cornerAngle=Math.acos(Math.max(-1,Math.min(1,Math.cos(halfVertical)*Math.cos(halfHorizontal))));
+ const halfAngle=Math.min(Math.PI,cornerAngle+angularRadius);
+ return dot(normalize(directionToCenter),normalize(cameraForward))>=Math.cos(halfAngle);
+}
+
 /** Conservative frustum test for a sphere centered at the local origin. */
 export function isSpherePotentiallyVisibleInFrustum(
  cameraPositionM:Vec3,cameraForward:Vec3,radiusM:number,
  verticalFovRadians:number,viewportWidthPx:number,viewportHeightPx:number
 ):boolean{
  if(!Number.isFinite(radiusM)||radiusM<=0)throw new RangeError('Sphere radius must be positive metres.');
- if(!Number.isFinite(verticalFovRadians)||verticalFovRadians<=0||verticalFovRadians>=Math.PI)throw new RangeError('Vertical field of view must be between zero and pi.');
- if(!Number.isFinite(viewportWidthPx)||viewportWidthPx<=0||!Number.isFinite(viewportHeightPx)||viewportHeightPx<=0)throw new RangeError('Viewport dimensions must be positive.');
  const distance=Math.hypot(...cameraPositionM);
  if(!Number.isFinite(distance)||distance<=radiusM)return true;
  const directionToCenter:Vec3=normalize([-cameraPositionM[0],-cameraPositionM[1],-cameraPositionM[2]]);
- const forward=normalize(cameraForward);
- const halfVertical=verticalFovRadians*.5;
- const aspect=viewportWidthPx/viewportHeightPx;
- const halfHorizontal=Math.atan(Math.tan(halfVertical)*aspect);
- // Кут до кута прямокутного frustum більший за кожен окремий півкут; конус охоплює й діагональні краї.
- const frustumCornerAngle=Math.acos(Math.max(-1,Math.min(1,Math.cos(halfVertical)*Math.cos(halfHorizontal))));
  const angularRadius=Math.asin(Math.max(0,Math.min(1,radiusM/distance)));
- const halfAngle=Math.min(Math.PI,frustumCornerAngle+angularRadius);
- return dot(directionToCenter,forward)>=Math.cos(halfAngle);
+ return isAngularCapPotentiallyVisibleInFrustum(directionToCenter,angularRadius,cameraForward,verticalFovRadians,viewportWidthPx,viewportHeightPx);
 }
 
 /** A cap is culled only when even its most camera-facing point is below the geometric horizon. */
@@ -84,11 +90,9 @@ function isVisible(tile:GeoTile,camera:GeodesicLodCamera,radius:number,center:Ve
  if(!isTilePotentiallyVisibleFromHorizon(center,angularRadius,camera.positionM,radius))return'horizon';
  const surfacePoint:[number,number,number]=[center[0]*radius,center[1]*radius,center[2]*radius];
  const toTile=normalize([surfacePoint[0]-camera.positionM[0],surfacePoint[1]-camera.positionM[1],surfacePoint[2]-camera.positionM[2]]);
- const vertical=Math.max(.01,Math.min(Math.PI-.01,camera.verticalFovRadians));
- const aspect=Math.max(.1,camera.viewportWidthPx/Math.max(1,camera.viewportHeightPx));
- const horizontal=2*Math.atan(Math.tan(vertical/2)*aspect);
- const halfAngle=Math.min(Math.PI,Math.max(vertical,horizontal)/2+angularRadius);
- if(dot(toTile,normalize(camera.forward))<Math.cos(halfAngle))return'frustum';
+ if(!isAngularCapPotentiallyVisibleInFrustum(
+  toTile,angularRadius,camera.forward,camera.verticalFovRadians,camera.viewportWidthPx,camera.viewportHeightPx
+ ))return'frustum';
  return'visible';
 }
 

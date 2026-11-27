@@ -276,6 +276,6 @@ mod laplace_reference_frame_tests {
   let laplace_pole=Vec3::new(0.0,obliquity.cos(),-obliquity.sin());
   assert!(transformed.position.dot(laplace_pole).abs()<1e-12);
   assert!(transformed.velocity.dot(laplace_pole).abs()<1e-12);
-  assert!(transformed.velocity.z.abs()>0.1);
+  assert!(transformed.position.z.abs()>0.1);
  }
 }

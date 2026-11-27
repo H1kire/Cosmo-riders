@@ -78,6 +78,7 @@ export interface WebGPUFrame {
   sunUv?: readonly [number, number];
   sunVisible?: boolean;
   geodesicSettings?: WebGPUGeodesicSurfaceSettings;
+  geodesicTargetErrorPx?: number;
   postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; bloomIterations?: number; exposure?: number; hdr?: boolean; toneMapping?: 'reinhard' | 'aces'; glare?: boolean; glareStrength?: number; lensFlare?: boolean; lensFlareStrength?: number; };
 }
 
@@ -1085,7 +1086,8 @@ export class WebGPUBackend {
           frame.sunPosition, frame.cameraForward ?? [0, 0, -1],
           frame.verticalFovRadians ?? Math.PI / 3,
           width, height,
-          body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, frame.sunRadius ?? 0, body.shadowsEnabled !== false
+          body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, frame.sunRadius ?? 0, body.shadowsEnabled !== false,
+          frame.geodesicTargetErrorPx
         );
         // Тверда планета не переходить на спрощену сферу, поки геодезичні сторінки завантажуються.
         continue;

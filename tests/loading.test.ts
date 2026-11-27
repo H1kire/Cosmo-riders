@@ -35,7 +35,7 @@ test('loading progress is driven by completed named stages, not a timer counter'
   assert.ok(!loader.includes('new Set(STAGES.map'));
  assert.ok(loader.includes('STAGES.reduce'));
  assert.ok(loader.includes("id==='application'||id==='surface'||id==='gpu'"));
- for(const stage of ['webgl','solar-system','renderer','surface','gpu'])assert.ok(loader.includes("id:'"+stage+"'"));
+ for(const stage of ['webgpu','solar-system','renderer','surface','gpu'])assert.ok(loader.includes("id:'"+stage+"'"));
  assert.ok(!loader.includes('setInterval'));
  assert.ok(docs.includes('first Solar System frame is therefore independent'));
   assert.ok(docs.includes('moved off the main thread'));
@@ -59,4 +59,12 @@ test('required WebGPU startup failures release the loading gate',async()=>{
  assert.match(view,/const webgpuReady=await this\.initializeWebGPUBackend\(\);[\s\S]*?if\(!webgpuReady\)throw new Error\('Cosmo-riders требует WebGPU:/,"WebGPU must be ready before the scene can start");
  assert.ok(main.includes("'cosmo-loading-failed'"));
  assert.ok(lab.includes("'cosmo-loading-failed'"));
+});
+
+
+test('loading stage labels identify the native WebGPU renderer without legacy WebGL wording', async () => {
+ const loader = await readFile(file('..','lab','loading-screen.ts'),'utf8');
+ assert.ok(loader.includes("id:'webgpu'"));
+ assert.ok(loader.includes('WebGPU-устройство'));
+ assert.ok(!loader.includes('WebGL'));
 });

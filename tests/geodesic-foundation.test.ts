@@ -624,7 +624,9 @@ test('WebGPU LOD transitions retain the previous complete cover until every targ
  assert.ok(source.includes('const retainedTiles = [...unionByKey.values()]'));
  assert.ok(source.includes('runtime.setVisibleTiles(retainedTiles)'));
  assert.ok(source.includes('const targetReady = targetItems.length > 0 && targetItems.every'));
- assert.ok(source.includes('if (topology.transition && targetReady)'));
+ assert.ok(source.includes('if (topology.transition)'));
+ assert.ok(source.includes('if (!targetReady) return true'));
+ assert.ok(source.includes('if (blend >= 1)'));
  assert.ok(source.includes('const sourceReady = sourceItems.length > 0 && sourceItems.every'));
  assert.ok(source.includes('this.drawTileStates(pass, sourceItems'));
  assert.ok(source.includes('runtime.setVisibleTiles(targetTiles)'));

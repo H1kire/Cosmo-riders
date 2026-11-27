@@ -82,3 +82,23 @@ test('geodesic renderer initialization errors are retained and do not trigger a 
   assert.ok(source.includes('this.rendererInitializationError = error instanceof Error ? error.message : String(error);'));
   assert.ok(source.includes('rendererInitializationError: this.rendererInitializationError'));
 });
+
+
+test('geodesic uniform updates reuse per-mesh storage and avoid allocations per draw', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('uniformData: Float32Array'));
+  assert.ok(source.includes('uniformData: new Float32Array(84)'));
+  assert.ok(source.includes('const data = mesh.uniformData'));
+  assert.ok(!source.includes('Array.from(draw.model).slice'));
+  assert.ok(source.includes('occluderCount==0u||u.sunPosition.w<=0.0'));
+  assert.ok(source.includes('i<occluderCount'));
+});
+
+test('geodesic LOD caches immutable tile angular geometry between frames', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/geodesic/quadtree-selector.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('const tileGeometryCache = new Map<string, CachedTileGeometry>()'));
+  assert.ok(source.includes('function tileGeometry(tile:GeoTile)'));
+  assert.ok(source.includes('const sagitta=radius*geometry.sagittaFactor'));
+});

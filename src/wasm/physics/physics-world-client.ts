@@ -14,6 +14,7 @@ export class PhysicsWorldClient{
  readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
  simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly rotationAngles=new Map<string,number|null>();readonly renderRotationAngles=new Map<string,number|null>();readonly renderVessels=new Map<string,VesselSnapshot>();
  private readonly orbitPathRequests=new Map<string,Promise<Float64Array>>();
+ private readonly orbitPathTimes=new Map<string,{simulationTimeSeconds:number;requestedAtMs:number}>();
  private disposed=false;
  constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
@@ -43,17 +44,27 @@ export class PhysicsWorldClient{
   await this.refresh(await this.bridge.snapshot());return this.vessels.get(d.id)!;
  }
  ensureOrbitPath(id:string,segments=512):Promise<Float64Array>{
-  const cached=this.orbitPaths.get(id);if(cached)return Promise.resolve(cached);
+  const count=Math.max(16,Math.min(1024,Math.floor(segments)));
+  const now=typeof performance!=='undefined'?performance.now():Date.now();
+  const cached=this.orbitPaths.get(id),cacheTime=this.orbitPathTimes.get(id);
+  const needsRefresh=!cached||cached.length!==(count+1)*3||!cacheTime||
+   (cacheTime.simulationTimeSeconds!==this.simulationTimeSeconds&&now-cacheTime.requestedAtMs>=250);
+  if(cached&&!needsRefresh)return Promise.resolve(cached);
   const existing=this.orbitPathRequests.get(id);if(existing)return existing;
   const body=this.bodies.get(id);if(!body?.parentId||!body.orbitalElements)return Promise.reject(new Error('Body has no orbital path: '+id));
-  const count=Math.max(16,Math.min(1024,Math.floor(segments)));
-  const request=this.bridge.orbitPath(id,count).then(path=>{if(this.disposed)throw new Error('PhysicsWorldClient was disposed while generating an orbit path.');this.orbitPaths.set(id,path);return path;}).finally(()=>this.orbitPathRequests.delete(id));
+  const requestedTime=this.simulationTimeSeconds,requestedAtMs=now;
+  const request=this.bridge.orbitPath(id,count).then(path=>{
+   if(this.disposed)throw new Error('PhysicsWorldClient was disposed while generating an orbit path.');
+   this.orbitPaths.set(id,path);
+   this.orbitPathTimes.set(id,{simulationTimeSeconds:requestedTime,requestedAtMs});
+   return path;
+  }).finally(()=>this.orbitPathRequests.delete(id));
   this.orbitPathRequests.set(id,request);return request;
  }
  getBodyState(id:string):PhysicsState{const s=this.bodyStates.get(id);if(!s)throw new Error('Unknown body state: '+id);return s;}
  getVesselState(id:string):VesselSnapshot{const s=this.vessels.get(id);if(!s)throw new Error('Unknown vessel: '+id);return s;}
  getSphereOfInfluence(id:string):number|null{return this.sphereOfInfluence.get(id)??null;}
- async enableNBody():Promise<void>{await this.bridge.enableNBody();await this.refresh(await this.bridge.snapshot());this.renderBodyStates.clear();for(const [id,state] of this.bodyStates)this.renderBodyStates.set(id,state);}
+ async enableNBody():Promise<void>{await this.bridge.enableNBody();await this.refresh(await this.bridge.snapshot());this.orbitPaths.clear();this.orbitPathTimes.clear();this.renderBodyStates.clear();for(const [id,state] of this.bodyStates)this.renderBodyStates.set(id,state);}
  async nBodyEnabled():Promise<boolean>{return this.bridge.nBodyEnabled();}
  async setTimeScale(v:number):Promise<void>{await this.bridge.setTimeScale(v);this.timeScale=v;}
  async setPaused(v:boolean):Promise<void>{await this.bridge.setPaused(v);this.paused=v;}

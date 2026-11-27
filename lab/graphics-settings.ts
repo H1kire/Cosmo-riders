@@ -67,6 +67,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'Задачи отменены/dispose: '+value.cancelledTasks+'/'+value.disposedTasks,
   'Генерация mesh/surface: '+value.meshGenerationMs+' / '+value.surfaceGenerationMs+' ms',
   'Ошибки renderer/upload: '+value.rendererErrors+'/'+value.uploadErrors+' · отказов renderer '+value.rendererFailureCount,
+  'Ошибка геодезического shader/pipeline: '+(value.rendererInitializationError??'нет'),
   'Первичная ошибка: '+(value.firstFailure??'нет'),
   'Тип/ключ ошибки: '+(value.failureTaskKind??'—')+' / '+(value.failureTaskKey??'—'),
   'Время ошибки: '+(typeof value.failureTimestamp==='number'?new Date(value.failureTimestamp).toLocaleString():'—'),

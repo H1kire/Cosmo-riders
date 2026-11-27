@@ -20,7 +20,8 @@ const checks: Array<[string, () => Promise<void>]> = [
       if (id !== 'window-system' && !html.includes(`id="${id}"`) && !html.includes(`id='${id}'`)) throw new Error('Missing DOM element id: ' + id);
     }
     if (css.includes('\\n.body-label-layer')) throw new Error('A literal escaped newline breaks the map overlay stylesheet.');
-    if (!app.includes('drawFallbackSolar()') || !app.includes('activateSolarFallback(error)')) throw new Error('A non-WebGL map fallback is missing.');
+    if (app.includes('drawFallbackSolar()') || app.includes('activateSolarFallback(error)') || app.includes('fallbackCanvas')) throw new Error('The solar view must not switch to a Canvas fallback.');
+    if (!app.includes('reportSolarRenderFailure(error)') || !app.includes('WebGPU недоступен')) throw new Error('WebGPU startup failures must be reported without changing renderers.');
   }],
   ['Every local TypeScript import resolves to a tracked source file', async () => {
     async function collectTypeScript(directory: string): Promise<string[]> {

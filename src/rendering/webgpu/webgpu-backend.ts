@@ -321,7 +321,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     albedo = mix(albedo, vec3<f32>(0.78, 0.86, 0.94), polar);
   } else if (kind > 6.5 && kind < 7.5) {
     let ridges = fbm3(direction * 22.0);
-    albedo = mix(vec3<f32>(0.24, 0.065, 0.035), vec3<f32>(0.66, 0.25, 0.11), field * 0.7 + ridges * 0.3);
+    albedo = mix(vec3<f32>(0.24, 0.065, 0.035), vec3<f32>(0.66, 0.25, 0.11), baseField * 0.7 + ridges * 0.3);
     let frost = smoothstep(0.84, 0.98, abs(direction.y));
     albedo = mix(albedo, vec3<f32>(0.72, 0.61, 0.49), frost * 0.55);
   } else if (kind > 7.5 && kind < 8.5) {

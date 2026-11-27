@@ -93,7 +93,10 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   beginFrame(): void {
-    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
+    this.active.clear();this.desiredMeshes.clear();
+    // Знімаємо попередньокадрові pin-и до пріоритетного repin видимих тіл у порядку projected size.
+    for (const runtime of this.runtimes.values()) runtime.setVisibleTiles([]);
+    this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
   }
 
   drawBody(

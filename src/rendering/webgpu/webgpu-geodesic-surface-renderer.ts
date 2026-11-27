@@ -2,7 +2,7 @@ import type { GeodesicTileMesh } from '../geodesic/tile-mesh.ts';
 import type { WebGPUSurfacePageCache } from './webgpu-surface-page-cache.ts';
 
 const USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
-interface GpuMesh { positions: any; normals: any; uv: any; indices: any; indexCount: number; }
+interface GpuMesh { positions: any; normals: any; uv: any; indices: any; uniform: any; indexCount: number; }
 export interface WebGPUGeodesicDraw {
   readonly viewProjection: ArrayLike<number>;
   readonly model: ArrayLike<number>;
@@ -35,9 +35,9 @@ export class WebGPUGeodesicSurfaceRenderer {
       { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 144 } },
       { binding: 1, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 2, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
-      { binding: 3, visibility: 2, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
+      { binding: 3, visibility: 1, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
       { binding: 4, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
-      { binding: 5, visibility: 2, texture: { sampleType: 'uint', viewDimension: '2d-array' } },
+      { binding: 5, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 6, visibility: 2, sampler: { type: 'filtering' } }
     ] });
     const pipeline = await device.createRenderPipelineAsync({
@@ -69,6 +69,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       normals: make(mesh.normals, USAGE.VERTEX),
       uv: make(mesh.textureCoordinates, USAGE.VERTEX),
       indices: make(mesh.indices, USAGE.INDEX),
+      uniform: this.device.createBuffer({ label: 'Geodesic tile uniforms ' + mesh.tileKey, size: 144, usage: USAGE.UNIFORM | USAGE.COPY_DST }),
       indexCount: mesh.indices.length
     });
   }
@@ -77,8 +78,9 @@ export class WebGPUGeodesicSurfaceRenderer {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
     const mesh = this.meshes.get(tileKey);
     if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return false;
+    const uniform = this.uniformFor(mesh.uniform, draw);
     const bindGroup = this.device.createBindGroup({ layout: this.layout, entries: [
-      { binding: 0, resource: { buffer: this.uniformFor(draw) } },
+      { binding: 0, resource: { buffer: uniform } },
       { binding: 1, resource: this.pages.albedoView },
       { binding: 2, resource: this.pages.normalView },
       { binding: 3, resource: this.pages.heightView },
@@ -96,12 +98,11 @@ export class WebGPUGeodesicSurfaceRenderer {
     return true;
   }
 
-  private uniformFor(draw: WebGPUGeodesicDraw): any {
+  private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {
     const data = new Float32Array(36);
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, 0], 32);
-    const buffer = this.device.createBuffer({ size: data.byteLength, usage: USAGE.UNIFORM | USAGE.COPY_DST });
     this.device.queue.writeBuffer(buffer, 0, data);
     return buffer;
   }
@@ -110,7 +111,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     if (this.disposed) return;
     this.disposed = true;
     for (const mesh of this.meshes.values()) {
-      mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.(); mesh.indices.destroy?.();
+      mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.(); mesh.indices.destroy?.(); mesh.uniform.destroy?.();
     }
     this.meshes.clear();
   }
@@ -130,7 +131,9 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
 @vertex fn vs(input: VIn) -> VOut {
   var out: VOut;
   let layer = i32(u.params.y);
-  let h = textureSampleLevel(heightTex, surfaceSampler, input.uv, layer, 0.0).r;
+  let heightSize = vec2<i32>(textureDimensions(heightTex));
+  let heightCoord = clamp(vec2<i32>(input.uv * vec2<f32>(heightSize)), vec2<i32>(0), heightSize - vec2<i32>(1));
+  let h = textureLoad(heightTex, heightCoord, layer, 0).r;
   let radius = u.params.x + h * u.params.z;
   let local = input.direction * radius;
   let world = u.model * vec4<f32>(local, 1.0);
@@ -146,11 +149,11 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   let encodedNormal = textureSample(normalTex, surfaceSampler, input.uv, layer).xyz * 2.0 - vec3<f32>(1.0);
   let mapNormal = normalize(input.worldNormal + encodedNormal * 0.35);
   let roughness = textureSample(roughTex, surfaceSampler, input.uv, layer).r;
-  let material = textureLoad(materialTex, vec2<i32>(input.uv * vec2<f32>(textureDimensions(materialTex).xy)), layer, 0).r;
+  let material = textureSample(materialTex, surfaceSampler, input.uv, layer).r;
   let light = normalize(vec3<f32>(0.42, 0.76, 0.38));
   let ndl = max(dot(mapNormal, light), 0.0);
   let diffuse = base * (0.075 + ndl * (0.88 - roughness * 0.18));
-  let materialTint = select(1.0, 0.92, material == 4u);
+  let materialTint = select(1.0, 0.92, material > 0.015 && material < 0.02);
   return vec4<f32>(diffuse * materialTint, 1.0);
 }
 `;

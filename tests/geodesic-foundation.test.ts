@@ -655,7 +655,10 @@ test('WebGPU LOD transition keeps source mesh variants and releases them only af
  ]);
  assert.ok(system.includes('runtime.retainMeshes(retainedMeshKeys)'));
  assert.ok(system.includes('this.desiredMeshes.set(body.id, desired)'));
- assert.ok(system.includes('for (const key of this.renderer.meshKeysForBody(id)) if (!desired.has(key))'));
+ assert.ok(system.includes('const allKeys = this.renderer.meshKeys()'));
+ assert.ok(system.includes('.filter(key => !desired.has(key))'));
+ assert.ok(system.includes('const staleBefore = now - 1500'));
+ assert.ok(system.includes('const overBudget = Math.max(0, allKeys.length - 192)'));
  assert.ok(runtime.includes('this.pages.pin(pageKey)'));
  assert.ok(runtime.includes('getPageLayer(tileKey: string)'));
  assert.ok(cache.includes('All WebGPU surface page layers are pinned by visible tiles.'));

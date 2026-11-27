@@ -176,8 +176,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  // Це усуває чотири повторні повні геологічні обчислення на кожен texel.
  const limits=heightLimitM(profile);
  const heightFraction=(value:number)=>clamp(value*(value<0?limits.negative:limits.positive)/profile.meanRadiusM,-limits.negative/profile.meanRadiusM,limits.positive/profile.meanRadiusM);
- const directions=new Float32Array(count*3);
- const displacedPositions=new Float32Array(count*3);
+ const directions=new Float64Array(count*3);
+ const displacedPositions=new Float64Array(count*3);
  let index=0;
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){

@@ -350,6 +350,8 @@ export class WebGPUGeodesicSurfaceSystem {
       cancelledTasks: this.manager.cancelledTasks,
       disposedTasks: this.manager.disposedTasks,
       workerRestarts: this.manager.workerRestarts,
+      meshGenerationMs: this.manager.lastMeshGenerationMs,
+      surfaceGenerationMs: this.manager.lastSurfaceGenerationMs,
       firstWorkerFailure: this.manager.startupFailure
     };
   }

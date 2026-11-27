@@ -57,6 +57,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private readonly desiredMeshes = new Map<string, Set<string>>();
   private readonly pendingMeshes = new Set<string>();
   private readonly meshMorphStartedAt = new Map<string, number>();
+  private readonly meshLastUsedAt = new Map<string, number>();
   private renderer: WebGPUGeodesicSurfaceRenderer | null = null;
   private rendererPromise: Promise<void> | null = null;
   private rendererInitializationError: string | null = null;
@@ -310,12 +311,26 @@ export class WebGPUGeodesicSurfaceSystem {
   endFrame(): void {
     for (const [id, runtime] of this.runtimes) if (!this.active.has(id)) runtime.setVisibleTiles([]);
     if (!this.renderer) return;
-    for (const id of this.runtimes.keys()) {
-      const desired = this.desiredMeshes.get(id) ?? new Set<string>();
-      for (const key of this.renderer.meshKeysForBody(id)) if (!desired.has(key)) {
-        this.renderer.releaseMesh(key);
-        this.meshMorphStartedAt.delete(key);
-      }
+
+    // Зберігаємо нещодавно використані меші короткий час, щоб панорамування камери
+    // не запускало повторну генерацію тих самих GPU-буферів на сусідніх кадрах.
+    const now = clockNow();
+    const desired = new Set<string>();
+    for (const keys of this.desiredMeshes.values()) for (const key of keys) desired.add(key);
+    const allKeys = this.renderer.meshKeys();
+    const idle = allKeys
+      .filter(key => !desired.has(key))
+      .sort((a, b) => (this.meshLastUsedAt.get(a) ?? 0) - (this.meshLastUsedAt.get(b) ?? 0));
+    const overBudget = Math.max(0, allKeys.length - 192);
+    const staleBefore = now - 1500;
+    let evicted = 0;
+    for (const key of idle) {
+      const lastUsed = this.meshLastUsedAt.get(key) ?? 0;
+      if (lastUsed > staleBefore && evicted >= overBudget) continue;
+      this.renderer.releaseMesh(key);
+      this.meshMorphStartedAt.delete(key);
+      this.meshLastUsedAt.delete(key);
+      evicted++;
     }
   }
 
@@ -381,7 +396,7 @@ export class WebGPUGeodesicSurfaceSystem {
         transitionAlpha: options.transitionAlpha,
         transitionRole: options.transitionRole
       });
-      if(drawn){const indexCount=renderer.getMeshIndexCount(item.key);this.frameDrawCalls++;this.frameSubmittedVertices+=indexCount;this.frameTriangles+=Math.floor(indexCount/3);this.frameVisibleTiles.add(item.key);}
+      if(drawn){const indexCount=renderer.getMeshIndexCount(item.key);this.meshLastUsedAt.set(item.key,clockNow());this.frameDrawCalls++;this.frameSubmittedVertices+=indexCount;this.frameTriangles+=Math.floor(indexCount/3);this.frameVisibleTiles.add(item.key);}
     }
   }
 
@@ -436,6 +451,7 @@ export class WebGPUGeodesicSurfaceSystem {
     this.pendingMeshes.clear();
     this.desiredMeshes.clear();
     this.meshMorphStartedAt.clear();
+    this.meshLastUsedAt.clear();
   }
 }
 

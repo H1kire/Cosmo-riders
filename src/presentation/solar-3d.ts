@@ -1,7 +1,7 @@
 import { AU } from '../physics/constants.ts';
 import { LightingSystem, planetaryDisplayGain } from '../rendering/lighting/lighting-system.ts';
 import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
-import { CloudSystem } from '../rendering/atmosphere/cloud-system.ts';
+import { CloudSystem, type CloudLayer } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
 import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
@@ -186,17 +186,45 @@ export class Solar3DView{
    const body=this.systemBodyById?.get(id);
    if(body)this.atmosphereSystem.setProfile({bodyId:id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:height,rayleigh:color, mie,rayleighScaleHeightM:height*.12,mieScaleHeightM:height*.08,mieAnisotropy:.76,intensity});
   }
-  const cloudProfiles:[string,number,number,number,number][]=[
-   ['earth',18000,.48,.82,5.8],
-   ['titan',18000,.72,.62,3.8],
-   ['venus',55000,.59,.78,4.4],
-   ['jupiter',70000,.55,.54,7.2],
-   ['saturn',65000,.58,.48,6.0],
-   ['uranus',35000,.61,.38,5.0],
-   ['neptune',30000,.58,.4,5.4]
-  ];
-  for(const [id,altitudeM,coverage,opacity,scale] of cloudProfiles){
-   this.cloudSystem.setLayers(id,[{id:'main',altitudeM,coverage,opacity,wind:[.0002,.0001],scale}]);
+  const cloudProfiles:Record<string,CloudLayer[]> = {
+   earth:[
+    {id:'high-cirrus',altitudeM:10500,thicknessM:2600,coverage:.28,opacity:.34,wind:[.00013,.00007],scale:8.8,detail:5,erosion:.72},
+    {id:'mid-altostratus',altitudeM:6500,thicknessM:3200,coverage:.43,opacity:.56,wind:[.00009,-.00005],scale:6.4,detail:4,erosion:.48},
+    {id:'low-cumulus',altitudeM:1800,thicknessM:1800,coverage:.38,opacity:.78,wind:[.0002,.0001],scale:5.8,detail:5,erosion:.82}
+   ],
+   titan:[
+    {id:'upper-haze-clouds',altitudeM:38000,thicknessM:12000,coverage:.7,opacity:.44,wind:[.000055,.00003],scale:4.6,detail:4,erosion:.3},
+    {id:'methane-cloud-decks',altitudeM:18000,thicknessM:7500,coverage:.58,opacity:.68,wind:[.00008,-.000025],scale:3.8,detail:4,erosion:.52}
+   ],
+   venus:[
+    {id:'upper-sulfuric-haze',altitudeM:68000,thicknessM:18000,coverage:.72,opacity:.42,wind:[.00009,.00004],scale:5.2,detail:4,erosion:.22},
+    {id:'middle-cloud-deck',altitudeM:56000,thicknessM:14000,coverage:.66,opacity:.72,wind:[.000075,-.000035],scale:4.4,detail:4,erosion:.34},
+    {id:'lower-cloud-deck',altitudeM:48000,thicknessM:9000,coverage:.54,opacity:.52,wind:[.00006,.000025],scale:3.5,detail:3,erosion:.4}
+   ],
+   mars:[
+    {id:'high-ice-clouds',altitudeM:28000,thicknessM:6500,coverage:.2,opacity:.28,wind:[.00011,.00006],scale:7.0,detail:4,erosion:.78}
+   ],
+   jupiter:[
+    {id:'upper-ammonia-clouds',altitudeM:120000,thicknessM:42000,coverage:.72,opacity:.68,wind:[.000035,.00002],scale:8.2,detail:5,erosion:.4,banding:.9},
+    {id:'middle-ammonium-hydrosulfide',altitudeM:70000,thicknessM:28000,coverage:.58,opacity:.62,wind:[.000025,-.000018],scale:7.2,detail:5,erosion:.5,banding:1},
+    {id:'deep-water-clouds',altitudeM:35000,thicknessM:16000,coverage:.44,opacity:.38,wind:[.00002,.000014],scale:5.8,detail:4,erosion:.58,banding:.82}
+   ],
+   saturn:[
+    {id:'upper-ammonia-clouds',altitudeM:110000,thicknessM:38000,coverage:.68,opacity:.58,wind:[.00003,.000018],scale:7.0,detail:5,erosion:.42,banding:.92},
+    {id:'middle-cloud-deck',altitudeM:65000,thicknessM:26000,coverage:.56,opacity:.52,wind:[.000024,-.000015],scale:6.0,detail:4,erosion:.5,banding:1},
+    {id:'deep-water-clouds',altitudeM:32000,thicknessM:14000,coverage:.4,opacity:.32,wind:[.000018,.000012],scale:4.8,detail:4,erosion:.62,banding:.8}
+   ],
+   uranus:[
+    {id:'upper-methane-clouds',altitudeM:62000,thicknessM:20000,coverage:.46,opacity:.38,wind:[.000022,.000014],scale:5.8,detail:4,erosion:.55,banding:.68},
+    {id:'lower-cloud-deck',altitudeM:30000,thicknessM:12000,coverage:.4,opacity:.28,wind:[.000016,-.00001],scale:4.6,detail:3,erosion:.62,banding:.52}
+   ],
+   neptune:[
+    {id:'upper-methane-clouds',altitudeM:52000,thicknessM:17000,coverage:.5,opacity:.46,wind:[.000025,.000016],scale:6.2,detail:5,erosion:.66,banding:.72},
+    {id:'lower-cloud-deck',altitudeM:26000,thicknessM:11000,coverage:.42,opacity:.34,wind:[.000018,-.000012],scale:5.0,detail:4,erosion:.58,banding:.6}
+   ]
+  };
+  for(const [id,layers] of Object.entries(cloudProfiles)){
+   if(this.systemBodyById?.has(id))this.cloudSystem.setLayers(id,layers);
   }
  }
  collectOccluders(body,bodyState,sunState,bodies,states,renderOrigin){
@@ -416,7 +444,7 @@ export class Solar3DView{
     webgpuDraw.atmosphere={color:profile.rayleigh,intensity:(profile.intensity??1)*this.graphics.atmosphereIntensity,thicknessRatio:profile.atmosphereHeightM/body.meanRadiusM,mie:profile.mie,anisotropy:profile.mieAnisotropy,rayleighScaleHeightRatio:atmosphereScaleHeightRatio(profile.rayleighScaleHeightM,body.meanRadiusM),mieScaleHeightRatio:atmosphereScaleHeightRatio(profile.mieScaleHeightM,body.meanRadiusM)};
    }
    if(this.graphics.clouds&&cloudLayers.length){
-    webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind}));
+    webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,thicknessRatio:(layer.thicknessM??Math.max(1000,layer.altitudeM*.22))/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind,erosion:layer.erosion??.45,banding:layer.banding??0}));
    }
    const screen=projectedScreen;
    if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
@@ -444,7 +472,7 @@ export class Solar3DView{
    }
    sunVisible=visibility>.02;
   }
-  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
+  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,cloudDetail:this.graphics.cloudDetail,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

@@ -36,7 +36,7 @@ export interface WebGPUBodyDraw {
   shadowsEnabled?: boolean;
   surfaceProfile?: SurfaceProfile;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; rayleighScaleHeightRatio: number; mieScaleHeightRatio: number; };
-  clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
+  clouds?: readonly { altitudeRatio: number; thicknessRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; erosion: number; banding: number; }[];
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
@@ -51,6 +51,7 @@ export interface WebGPUFrame {
   viewportHeightPx?: number;
   timeSeconds: number;
   atmosphereSamples?: number;
+  cloudDetail?: number;
   bodies: readonly WebGPUBodyDraw[];
   orbits: readonly WebGPUOrbitDraw[];
   rings: readonly WebGPURingDraw[];
@@ -277,6 +278,90 @@ fn surfaceShadowVisibility(worldPosition: vec3<f32>) -> f32 {
   return visibility;
 }
 ${WEBGPU_ATMOSPHERE_WGSL}
+
+fn cloudField(direction: vec3<f32>, drift: vec3<f32>, scale: f32, coverage: f32, erosion: f32, banding: f32) -> f32 {
+  let p = direction * scale + drift;
+  let warp = vec3<f32>(
+    fbm3(p * 0.41 + vec3<f32>(17.0, 3.0, 11.0)),
+    fbm3(p * 0.41 + vec3<f32>(5.0, 23.0, 7.0)),
+    fbm3(p * 0.41 + vec3<f32>(13.0, 9.0, 29.0))
+  ) - vec3<f32>(0.5);
+  let warped = p + warp * 1.65;
+  let macroShape = fbm3(warped);
+  let mesoShape = fbm3(warped * 2.8 + vec3<f32>(4.7, 12.1, 8.3));
+  let fineShape = fbm3(warped * 6.4 + vec3<f32>(19.2, 2.4, 15.6));
+  let billow = macroShape * 0.57 + mesoShape * 0.30 + fineShape * 0.13;
+  let eroded = billow - (1.0 - fineShape) * erosion * 0.19;
+  let latitudeBands = 0.5 + 0.5 * cos(direction.y * 42.0 + macroShape * 5.0);
+  let bandModulation = mix(1.0, 0.48 + latitudeBands * 0.92, banding);
+  let threshold = 0.42 + (0.5 - clamp(coverage, 0.02, 0.98)) * 0.34;
+  return smoothstep(threshold, threshold + 0.17, eroded) * bandModulation;
+}
+
+fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
+  let center = body.model[3].xyz;
+  let shellRadius = max(length(body.model[0].xyz), 0.0000001);
+  let altitudeRatio = clamp(body.surfaceParams.z, 0.000001, 0.08);
+  let groundRadius = shellRadius / (1.0 + altitudeRatio);
+  let outerRadius = groundRadius * (1.0 + altitudeRatio);
+  let thickness = groundRadius * clamp(body.surfaceParams.w, 0.000001, 0.04);
+  let innerRadius = max(groundRadius, outerRadius - thickness);
+  let cameraOffset = body.cameraPosition.xyz - center;
+  let viewRay = normalize(worldPosition - body.cameraPosition.xyz);
+  let outerInterval = raySphereInterval(cameraOffset, viewRay, outerRadius);
+  if (outerInterval.y <= 0.0) { return vec4<f32>(0.0); }
+  let startDistance = max(0.0, outerInterval.x);
+  let innerInterval = raySphereInterval(cameraOffset, viewRay, innerRadius);
+  let groundInterval = raySphereInterval(cameraOffset, viewRay, groundRadius);
+  var endDistance = outerInterval.y;
+  if (innerInterval.x > startDistance) { endDistance = min(endDistance, innerInterval.x); }
+  if (groundInterval.x > startDistance) { endDistance = min(endDistance, groundInterval.x); }
+  let pathLength = max(0.0, endDistance - startDistance);
+  if (pathLength <= 0.0000001) { return vec4<f32>(0.0); }
+  let fragmentDistance = dot(worldPosition - body.cameraPosition.xyz, viewRay);
+  if (fragmentDistance > startDistance + max(thickness * 0.025, outerRadius * 0.00002)) {
+    return vec4<f32>(0.0);
+  }
+
+  let detailLevel = clamp(body.lighting.w, 1.0, 6.0);
+  let sampleCount = u32(clamp(3.0 + detailLevel * 1.5, 4.0, 12.0));
+  let stepLength = pathLength / f32(sampleCount);
+  let drift = vec3<f32>(body.cameraPosition.w * body.surfaceParams.x, 0.0, body.cameraPosition.w * body.surfaceParams.y);
+  let scale = max(1.0, body.material.w);
+  let coverage = clamp(body.material.y, 0.02, 0.98);
+  let opacity = clamp(body.material.z, 0.0, 1.0);
+  let erosion = clamp(body.color.a, 0.0, 1.0);
+  let banding = clamp(body.lighting.z, 0.0, 1.0);
+  let lightDirection = normalize(body.sunPosition.xyz - center);
+  let cosine = clamp(dot(-viewRay, lightDirection), -1.0, 1.0);
+  let forwardPhase = miePhase(cosine, 0.58);
+  var opticalDepth = 0.0;
+  var cloudRadiance = vec3<f32>(0.0);
+  for (var index = 0u; index < 12u; index = index + 1u) {
+    if (index >= sampleCount) { break; }
+    let distanceAlong = startDistance + (f32(index) + 0.5) * stepLength;
+    let samplePosition = body.cameraPosition.xyz + viewRay * distanceAlong;
+    let radialDirection = normalize(samplePosition - center);
+    let density = cloudField(radialDirection, drift, scale, coverage, erosion, banding);
+    if (density <= 0.001) { continue; }
+    let sunDirection = normalize(body.sunPosition.xyz - samplePosition);
+    let sunDensityPosition = normalize(samplePosition + sunDirection * thickness * 1.4 - center);
+    let sunDensity = cloudField(sunDensityPosition, drift, scale, coverage, erosion, banding);
+    let selfShadow = exp(-sunDensity * 1.65);
+    let planetShadow = surfaceShadowVisibility(samplePosition);
+    let directLight = max(dot(radialDirection, sunDirection), 0.0);
+    let eclipse = clamp(body.lighting.x, 0.0, 1.0);
+    let illumination = 0.24 + 0.76 * directLight * selfShadow * planetShadow * eclipse;
+    let stepOptical = density * opacity * stepLength / max(thickness, 0.000001) * 1.85;
+    let transmittance = exp(-opticalDepth);
+    let silverLining = 0.24 + forwardPhase * 1.9;
+    cloudRadiance += vec3<f32>(0.88, 0.93, 1.0) * density * transmittance * illumination * silverLining * stepLength / max(thickness, 0.000001);
+    opticalDepth += stepOptical;
+  }
+  let alpha = clamp(1.0 - exp(-opticalDepth), 0.0, 0.94);
+  let color = cloudRadiance / max(alpha, 0.0001);
+  return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(3.0)), alpha);
+}
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let direction = normalize(input.localDirection);
@@ -291,11 +376,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
       let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
       return vec4<f32>(body.color.rgb * (0.35 + scattering * 1.8), clamp(scattering, 0.0, 0.82));
     }
-    let cloudDrift = vec3<f32>(body.cameraPosition.w * body.surfaceParams.x, 0.0, body.cameraPosition.w * body.surfaceParams.y);
-    let cloudNoise = fbm3(direction * body.material.w + cloudDrift);
-    let cloudMask = smoothstep(1.0 - body.material.y, 1.0 - body.material.y + 0.16, cloudNoise);
-    let cloudAlpha = cloudMask * body.material.z * (0.22 + 0.78 * daylight);
-    return vec4<f32>(body.color.rgb * (0.55 + 0.65 * daylight), clamp(cloudAlpha, 0.0, 0.95));
+    return cloudVolume(input.worldPosition);
   }
   if (body.lightAndEmission.w > 0.5) {
     return vec4<f32>(body.color.rgb * 1.7, 1.0);
@@ -708,13 +789,15 @@ export class WebGPUBackend {
       base.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
-      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0]) => {
+      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], lighting?: readonly [number, number, number, number], cloudErosion = 0) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);
         for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
-        shell.set([color[0], color[1], color[2], 1], 32);
+        shell.set([color[0], color[1], color[2], cloudErosion], 32);
         shell.set(params, 40);
         shell.set(surfaceParams, 44);
+        if (lighting) shell.set(lighting, 52);
+        shell[39] = 1;
         this.device.queue.writeBuffer(resources.uniform, 0, shell);
         pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
         pass.setBindGroup(0, resources.bindGroup);
@@ -729,7 +812,10 @@ export class WebGPUBackend {
       for (let cloudIndex = 0; cloudIndex < (body.clouds?.length ?? 0); cloudIndex++) {
         const cloud = body.clouds![cloudIndex];
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
-          [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)], [cloud.wind[0], cloud.wind[1], 0, 0]);
+          [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)],
+          [cloud.wind[0], cloud.wind[1], cloud.altitudeRatio, cloud.thicknessRatio],
+          [body.eclipseVisibility ?? 1, 1, cloud.banding, Math.max(1, Math.min(6, frame.cloudDetail ?? 3))],
+          cloud.erosion);
       }
     }
     const ringConfigs: Record<string, { inner: number; outer: number; color: readonly [number, number, number]; opacity: number }> = {

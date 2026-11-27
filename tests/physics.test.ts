@@ -262,12 +262,16 @@ test('corrected JPL satellite angles and reference planes are preserved in the 4
   assert.ok(Math.abs(elements.inclination*180/Math.PI-inclination)<1e-8,id+' inclination');
   assert.ok(Math.abs(elements.longitudeAscendingNode*180/Math.PI-node)<1e-8,id+' ascending node');
  }
- const himalia=world.bodies.get('himalia')!,nereid=world.bodies.get('nereid')!,iapetus=world.bodies.get('iapetus')!,phoebe=world.bodies.get('phoebe')!;
+ const himalia=world.bodies.get('himalia')!,nereid=world.bodies.get('nereid')!,iapetus=world.bodies.get('iapetus')!,phoebe=world.bodies.get('phoebe')!,titan=world.bodies.get('titan')!,hyperion=world.bodies.get('hyperion')!;
  assert.equal(himalia.orbitalReferenceFrame,'ecliptic');
  assert.equal(nereid.orbitalReferenceFrame,'ecliptic');
  assert.ok(Math.abs(nereid.orbitalElements!.meanAnomaly*180/Math.PI-216.6984)<1e-3);
  assert.equal(iapetus.orbitalReferenceFrame,'laplace');
  assert.equal(phoebe.orbitalReferenceFrame,'laplace');
+ assert.equal(titan.orbitalReferenceFrame,'laplace');
+ assert.equal(hyperion.orbitalReferenceFrame,'laplace');
+ assert.ok(Math.abs(titan.orbitalPlanePoleRightAscensionRad!*180/Math.PI-36.4)<1e-8);
+ assert.ok(Math.abs(hyperion.orbitalPlanePoleDeclinationRad!*180/Math.PI-83.6)<1e-8);
  assert.ok(Math.abs(iapetus.orbitalPlanePoleRightAscensionRad!*180/Math.PI-288.7)<1e-8);
  assert.ok(Math.abs(phoebe.orbitalPlanePoleDeclinationRad!*180/Math.PI-67.5)<1e-8);
 });

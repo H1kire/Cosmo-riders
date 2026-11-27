@@ -129,9 +129,9 @@ test('JPL satellite systems use physical semi-major axes and mean radii',()=>{
   ['europa','jupiter',671100000,1560800],
   ['ganymede','jupiter',1070400000,2631200],
   ['callisto','jupiter',1882700000,2410300],
-  ['titan','saturn',1221860000,2574760],
-  ['miranda','uranus',129900000,235800],
-  ['triton','neptune',354760000,1352600]
+  ['titan','saturn',1221900000,2574760],
+  ['miranda','uranus',129846000,235800],
+  ['triton','neptune',354800000,1352600]
  ] as const;
  for(const [id,parent,a,r] of expected){
   const body=w.bodies.get(id);

@@ -104,13 +104,28 @@ export class WebGPUSurfaceRuntime {
     }
   }
 
-  /** Генерує відсутні сторінки через існуючий WorkerPool та завантажує п'ять каналів у WebGPU. */
+  /** Починає обмежену кількість завантажень і повертає кількість реально запущених запитів. */
+  startVisibleTileUploads(priority: (tile: GeoTile) => number = () => 0, maxNewRequests = this.manager.workerPool.maxPendingTasks): number {
+    const prepared = this.prepareVisibleTileUploads(priority, maxNewRequests);
+    void Promise.all(prepared.tasks).catch(() => undefined);
+    return prepared.started;
+  }
+
+  /** Сумісний асинхронний API для ініціалізаційних та тестових сценаріїв. */
   async uploadVisibleTiles(priority: (tile: GeoTile) => number = () => 0, maxNewRequests = this.manager.workerPool.maxPendingTasks): Promise<void> {
+    const prepared = this.prepareVisibleTileUploads(priority, maxNewRequests);
+    await Promise.all(prepared.tasks);
+  }
+
+  private prepareVisibleTileUploads(
+    priority: (tile: GeoTile) => number,
+    maxNewRequests: number
+  ): { readonly started: number; readonly tasks: Promise<number | undefined>[] } {
     if (this.disposed) throw new Error('WebGPU surface runtime is disposed.');
     if (!this.pages.ready) throw new Error('WebGPU surface page arrays are not initialized.');
     const tasks: Promise<number | undefined>[] = [];
     const availableRequests = Math.max(0, this.manager.workerPool.maxPendingTasks - this.manager.pendingCount);
-    const requestBudget = Math.min(maxNewRequests, availableRequests);
+    const requestBudget = Math.min(Math.max(0, Math.floor(maxNewRequests)), availableRequests);
     let started = 0;
     const ordered = [...this.visible.entries()].sort((a, b) => priority(b[1]) - priority(a[1]));
     for (const [tileKey, tile] of ordered) {
@@ -137,9 +152,8 @@ export class WebGPUSurfaceRuntime {
       }
       tasks.push(pending);
     }
-    await Promise.all(tasks);
+    return { started, tasks };
   }
-
   /** Отримує індексований трикутний меш з того самого обмеженого Worker Pool. */
   async requestTileMesh(tile: GeoTile, radiusM: number, resolution = 32, coarseEdgeMask = 0, priority = 0): Promise<GeodesicTileMesh> {
     if (this.disposed) throw new Error('WebGPU surface runtime is disposed.');

@@ -841,7 +841,7 @@ export class WebGPUBackend {
   }
 
   private encodePost(encoder:any,frame:WebGPUFrame):number {
-    if(!this.postPipelines.composite||this.postGroups.length!==5)return;
+    if(!this.postPipelines.composite||this.postGroups.length!==5)return 0;
     const settings=frame.postProcessing??{},enabled=settings.bloom!==false,uv=frame.sunUv??[0.5,0.5];
     const visible=frame.sunVisible?1:0;
     const strength=enabled?Math.max(0,settings.bloomStrength??0.28):0,exposure=Math.max(0,settings.exposure??1);

@@ -28,17 +28,18 @@ sync();publish();
 window.addEventListener('graphics-diagnostics',(event:Event)=>{
  const value=(event as CustomEvent<Record<string,unknown>>).detail;
  if(!diagnostics||!value)return;
+ const perf=(value.performance??{}) as Record<string,any>;
  const bytes=(amount:unknown)=>typeof amount==='number'?(amount/1048576).toFixed(2)+' MiB':'—';
  const lines=[
-  'ПРОИЗВОДИТЕЛЬНОСТЬ — окно '+(value.performance?.sampleCount??0)+' кадров',
-  'FPS: '+(value.performance?.fps??0).toFixed(1)+' · CPU frame: '+(value.performance?.cpuFrameMs??0).toFixed(2)+' ms',
-  'Frame time: avg '+(value.performance?.averageMs??0).toFixed(2)+' · p50 '+(value.performance?.medianMs??0).toFixed(2)+' · p95 '+(value.performance?.p95Ms??0).toFixed(2)+' · peak '+(value.performance?.peakMs??0).toFixed(2)+' ms',
-  'GPU frame: '+(value.performance?.gpuTimingSupported?(typeof value.performance?.gpuFrameMs==='number'?value.performance.gpuFrameMs.toFixed(2)+' ms':'ожидание измерения'):'timestamp-query не поддерживается')+' · GPU utilization: API не предоставляет',
-  'Draw calls: '+(value.performance?.drawCalls??0)+' · render passes: '+(value.performance?.renderPasses??0)+' · post FX: '+(value.performance?.postProcessingPasses??0),
-  'Bodies: '+(value.performance?.bodyCount??0)+' · surface: '+(value.performance?.surfaceBodyCount??0)+' · atmosphere: '+(value.performance?.atmosphereBodyCount??0)+' · clouds: '+(value.performance?.cloudBodyCount??0)+' ('+(value.performance?.cloudLayerCount??0)+' layers)',
-  'Geodesic: '+(value.performance?.visibleGeodesicTiles??0)+' visible tiles · '+(value.performance?.geodesicDrawCalls??0)+' draw calls',
-  'Geometry: '+(value.performance?.submittedVertices??0)+' submitted indices/vertices · '+(value.performance?.triangles??0)+' triangles · orbits '+(value.performance?.orbitCount??0)+' · rings '+(value.performance?.ringCount??0),
-  'Surface uploads/frame: '+(value.performance?.surfaceUploadsPerFrame??0)+' · backend encode: '+(value.performance?.backendEncodeMs??0).toFixed(2)+' ms',
+  'ПРОИЗВОДИТЕЛЬНОСТЬ — окно '+(perf.sampleCount??0)+' кадров',
+  'FPS: '+(perf.fps??0).toFixed(1)+' · CPU frame: '+(perf.cpuFrameMs??0).toFixed(2)+' ms',
+  'Frame time: avg '+(perf.averageMs??0).toFixed(2)+' · p50 '+(perf.medianMs??0).toFixed(2)+' · p95 '+(perf.p95Ms??0).toFixed(2)+' · peak '+(perf.peakMs??0).toFixed(2)+' ms',
+  'GPU frame: '+(perf.gpuTimingSupported?(typeof perf.gpuFrameMs==='number'?value.performance.gpuFrameMs.toFixed(2)+' ms':'ожидание измерения'):'timestamp-query не поддерживается')+' · GPU utilization: API не предоставляет',
+  'Draw calls: '+(perf.drawCalls??0)+' · render passes: '+(perf.renderPasses??0)+' · post FX: '+(perf.postProcessingPasses??0),
+  'Bodies: '+(perf.bodyCount??0)+' · surface: '+(perf.surfaceBodyCount??0)+' · atmosphere: '+(perf.atmosphereBodyCount??0)+' · clouds: '+(perf.cloudBodyCount??0)+' ('+(perf.cloudLayerCount??0)+' layers)',
+  'Geodesic: '+(perf.visibleGeodesicTiles??0)+' visible tiles · '+(perf.geodesicDrawCalls??0)+' draw calls',
+  'Geometry: '+(perf.submittedVertices??0)+' submitted indices/vertices · '+(perf.triangles??0)+' triangles · orbits '+(perf.orbitCount??0)+' · rings '+(perf.ringCount??0),
+  'Surface uploads/frame: '+(perf.surfaceUploadsPerFrame??0)+' · backend encode: '+(perf.backendEncodeMs??0).toFixed(2)+' ms',
   'Рендерер: '+value.activeBackend,
   'Архитектура: один canvas, нативный WebGPU',
   'Активный backend: '+value.activeBackend,
@@ -47,7 +48,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'WebGPU format: '+(value.webgpuFormat??'—'),
   'WebGPU adapter: '+(value.webgpuAdapterInfo??'не предоставлен'),
   'WebGPU init: '+(typeof value.webgpuInitializationMs==='number'?value.webgpuInitializationMs.toFixed(1)+' ms':'—'),
-  'GPU timing: '+(value.performance?.gpuTimingSupported?'timestamp-query активен':'недоступен')+(value.performance?.gpuTimingError?' · '+value.performance.gpuTimingError:''),
+  'GPU timing: '+(perf.gpuTimingSupported?'timestamp-query активен':'недоступен')+(perf.gpuTimingError?' · '+value.performance.gpuTimingError:''),
   'WebGPU fallback/error: '+(value.webgpuError??'нет'),
   'WebGPU texture limit: '+(value.maxTextureSize??'—'),
   'Render scale: '+(typeof value.activeRenderScale==='number'?Math.round(value.activeRenderScale*100)+'%':'—')+' · target '+(Array.isArray(value.activeSceneSize)?value.activeSceneSize.join('×'):'—'),

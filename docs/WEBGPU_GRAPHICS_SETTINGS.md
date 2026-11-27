@@ -31,3 +31,10 @@ The graphics diagnostics panel reads counters from the one shared WebGPU surface
 - Cache hit/miss, successful uploads, failed GPU uploads, LRU evictions and high-water resident count are cumulative for the lifetime of the active cache.
 - CPU cache bytes/pages and worker state counts come from the shared VirtualSurfaceManager; GPU memory is not multiplied by the number of planets.
 - The panel distinguishes an unallocated cache from an initialized but empty cache. Five texture arrays are allocated incrementally.
+
+
+## Performance diagnostics (2026-11)
+
+The graphics diagnostics panel includes a rolling 180-frame CPU timing window (FPS, average, median, p95 and peak), CPU command-encoding time, actual draw/pass counters, scene body/effect counts, geodesic tile draws, orbit/ring work and completed surface uploads per frame.
+
+GPU frame timing is collected only when the adapter and device support the optional WebGPU `timestamp-query` feature. Render-pass timestamp results are copied to readback buffers and mapped asynchronously; the render loop never waits for readback. If the feature is unavailable, the UI reports that directly. WebGPU does not expose a portable GPU-utilization percentage, so no utilization estimate is fabricated.

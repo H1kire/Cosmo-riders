@@ -9,14 +9,13 @@ const reportLoading=(id:string,complete=false)=>window.dispatchEvent(new CustomE
 reportLoading('application');
 // Yield once so the browser can paint the loading overlay before scene construction.
 await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
-reportLoading('webgl');
+reportLoading('webgpu');
 
 const $ = (id: string): (HTMLElement & { value: string }) | null => document.getElementById(id) as (HTMLElement & { value: string }) | null;
 const canvases = { solar: $('solar-view'), lunar: $('lunar-view'), vessel: $('vessel-view') };
 let solar3D: Solar3DView | null = null;
-let fallbackCanvas: HTMLCanvasElement | null = null;
-function activateSolarFallback(error: unknown) {
-  console.error('Не удалось запустить 3D-карту:', error);
+function reportSolarRenderFailure(error: unknown) {
+  console.error('Не удалось запустить WebGPU-рендерер:', error);
   const parent = canvases.solar.parentElement;
   if (!parent) return;
   let notice = parent.querySelector<HTMLElement>('.render-error');
@@ -26,32 +25,20 @@ function activateSolarFallback(error: unknown) {
     parent.append(notice);
   }
   const message = error instanceof Error ? error.message : String(error ?? 'неизвестная ошибка');
-  notice.textContent = '3D-режим недоступен — включена резервная карта: ' + message;
-  const webgl2Available=!/WebGL2.*недоступен/i.test(message);
+  notice.textContent = 'WebGPU недоступен — 3D-сцена остановлена: ' + message;
   window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:{
-    webgl2:webgl2Available,maxArrayTextureLayers:'—',maxTextureSize:'—',
-    maxVertexTextureImageUnits:'—',maxFragmentTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
-    maxVertexUniformVectors:'—',maxFragmentUniformVectors:'—',maxVertexAttributes:'—',
-    extensions:[],mode:'auto',active:'Canvas 2D fallback',pageSize:'—',pageBytes:'—',
-    gpuCacheBytes:'—',gpuLayers:'—',gpuResidentPages:'—',gpuPinnedPages:'—',
-    cpuCacheBytes:'—',cpuCachePages:'—',generatedPages:'—',uploadedPages:'—',
-    workerCount:'—',workerActive:'—',workerQueued:'—',rendererErrors:'—',uploadErrors:'—',
-    fallbackReason:message
+    backendPreference:'webgpu',activeBackend:'WebGPU unavailable',webgpuAvailable:Boolean((navigator as any).gpu),
+    webgpuState:'failed',webgpuError:message,webgpuFormat:null,webgpuAdapterInfo:null,
+    mode:'webgpu',active:'WebGPU unavailable',rendererState:'failed',fallbackReason:message
   }}));
-  if (!fallbackCanvas) {
-    fallbackCanvas = document.createElement('canvas');
-    fallbackCanvas.className = 'solar-fallback';
-    fallbackCanvas.setAttribute('aria-label', 'Резервная карта Солнечной системы');
-    parent.append(fallbackCanvas);
-  }
 }
 try {
   solar3D = new Solar3DView(canvases.solar);
   await solar3D.ready;
-  reportLoading('webgl',true);reportLoading('solar-system');reportLoading('renderer',true);
+  reportLoading('webgpu',true);reportLoading('solar-system');reportLoading('renderer',true);
 } catch (error) {
   solar3D?.dispose();solar3D=null;
-  activateSolarFallback(error);
+  reportSolarRenderFailure(error);
 }
 const DAY = 86400;
 const ENGINE = Object.freeze({ vacuumThrustN: 200000, seaLevelThrustN: 180000, ispSeconds: 340 });
@@ -303,22 +290,6 @@ function drawLocalSolar(ctx,width,height){
   if(shipX>=-20&&shipX<=width+20&&shipY>=-20&&shipY<=height+20)point(ctx,shipX,shipY,3,'#fff',true);
   label(ctx,'ЛОКАЛЬНАЯ СИСТЕМА · '+focus.name.toUpperCase(),14,24,'#a9caff','10px Segoe UI,Arial');
 }
-function drawFallbackSolar() {
-  if (!fallbackCanvas) return;
-  const rect = fallbackCanvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const width = Math.max(1, Math.round(rect.width * dpr));
-  const height = Math.max(1, Math.round(rect.height * dpr));
-  if (fallbackCanvas.width !== width || fallbackCanvas.height !== height) {
-    fallbackCanvas.width = width;
-    fallbackCanvas.height = height;
-  }
-  const ctx = fallbackCanvas.getContext('2d');
-  if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
-  drawGlobalSolar(ctx, rect.width, rect.height);
-}
 function drawSolar(){
   if (solar3D) {
     try {
@@ -326,10 +297,9 @@ function drawSolar(){
       return;
     } catch (error) {
       solar3D = null;
-      activateSolarFallback(error);
+      reportSolarRenderFailure(error);
     }
   }
-  drawFallbackSolar();
 }
 function drawLunar() {
   const {ctx,width:w,height:h}=resizeCanvas(canvases.lunar);ctx.clearRect(0,0,w,h);

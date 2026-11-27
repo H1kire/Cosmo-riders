@@ -48,7 +48,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'WebGPU format: '+(value.webgpuFormat??'—'),
   'WebGPU adapter: '+(value.webgpuAdapterInfo??'не предоставлен'),
   'WebGPU init: '+(typeof value.webgpuInitializationMs==='number'?value.webgpuInitializationMs.toFixed(1)+' ms':'—'),
-  'GPU timing: '+(perf.gpuTimingSupported?'timestamp-query активен':'недоступен')+(perf.gpuTimingError?' · '+value.performance.gpuTimingError:''),
+  'GPU timing: '+(perf.gpuTimingSupported?'timestamp-query активен':'недоступен')+(perf.gpuTimingError?' · '+perf.gpuTimingError:''),
   'WebGPU fallback/error: '+(value.webgpuError??'нет'),
   'WebGPU texture limit: '+(value.maxTextureSize??'—'),
   'Render scale: '+(typeof value.activeRenderScale==='number'?Math.round(value.activeRenderScale*100)+'%':'—')+' · target '+(Array.isArray(value.activeSceneSize)?value.activeSceneSize.join('×'):'—'),

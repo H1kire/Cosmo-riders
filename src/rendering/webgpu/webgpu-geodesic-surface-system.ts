@@ -57,6 +57,8 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameShadowsEnabled = true;
   private currentSunPosition: readonly [number, number, number] = [0, 0, 0];
   private frameDrawCalls=0;
+  private frameTriangles=0;
+  private frameSubmittedVertices=0;
   private readonly frameVisibleTiles=new Set<string>();
 
   constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings, private readonly sampleCount: 1 | 4 = 1) {
@@ -75,7 +77,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   beginFrame(): void {
-    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameVisibleTiles.clear();
+    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.frameVisibleTiles.clear();
   }
 
   drawBody(
@@ -276,7 +278,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   getFrameDiagnostics() {
-    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls };
+    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls, geodesicTriangles: this.frameTriangles, geodesicSubmittedVertices: this.frameSubmittedVertices };
   }
 
   getCacheDiagnostics() {
@@ -329,7 +331,7 @@ export class WebGPUGeodesicSurfaceSystem {
         transitionAlpha: options.transitionAlpha,
         transitionRole: options.transitionRole
       });
-      if(drawn){this.frameDrawCalls++;this.frameVisibleTiles.add(item.state.tile.id.key);}
+      if(drawn){this.frameDrawCalls++;this.frameSubmittedVertices+=drawn;this.frameTriangles+=Math.floor(drawn/3);this.frameVisibleTiles.add(item.state.tile.id.key);}
     }
   }
 

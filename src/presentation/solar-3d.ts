@@ -561,8 +561,9 @@ export class Solar3DView{
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   if(this.requestedGraphics.adaptiveQuality){
-   const intervalMs=this.frameIntervalSamples.at(-1)??this.lastFrameDurationMs;
-   const nextLevel=this.adaptiveQuality.addFrameTime(intervalMs);
+   const gpuFrameMs=this.webgpuBackend?.performanceDiagnostics?.gpuFrameMs;
+   const workloadMs=Math.max(this.lastFrameDurationMs,typeof gpuFrameMs==='number'?gpuFrameMs:0);
+   const nextLevel=this.adaptiveQuality.addFrameTime(workloadMs);
    const qualityRank:Record<GraphicsSettings['preset'],number>={low:0,medium:1,high:2,ultra:3};
    const boundedLevel=qualityRank[nextLevel]>qualityRank[this.requestedGraphics.preset]?this.requestedGraphics.preset:nextLevel;
    if(boundedLevel!==nextLevel)this.adaptiveQuality.setLevel(boundedLevel);

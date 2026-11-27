@@ -77,8 +77,13 @@
    <label><input id="gfx-lens-flare" type="checkbox" checked> Lens flare</label>
    <label><input id="gfx-hdr" type="checkbox" checked> HDR и Tone Mapping</label>
   </div>
-  <pre id="graphics-diagnostics" class="graphics-diagnostics">Ожидание диагностики WebGPU / WebGL2…</pre>
-  <p id="graphics-status" class="footnote">Настройки сохраняются локально. Эффекты будут подключаться поэтапно в рамках Visual Engine 0.2.</p>
+  <label class="select-wrap"><span>МАСШТАБ РЕНДЕРИНГА</span><select id="gfx-render-scale"><option value="0.5">50% · Максимальная производительность</option><option value="0.72">72%</option><option value="0.88">88%</option><option value="1">100% · Нативный</option><option value="1.25">125% · Сверхразрешение</option></select></label>
+  <label class="select-wrap"><span>СГЛАЖИВАНИЕ MSAA</span><select id="gfx-msaa-samples"><option value="1">1x · Выключено</option><option value="4">4x · Высокое качество краёв</option></select></label>
+  <label class="select-wrap"><span>СЭМПЛЫ АТМОСФЕРЫ</span><select id="gfx-atmosphere-samples"><option value="2">2</option><option value="4">4</option><option value="6">6</option><option value="8">8</option><option value="10">10</option><option value="12">12</option><option value="16">16</option></select></label>
+  <label class="select-wrap"><span>ДЕТАЛИЗАЦИЯ ОБЛАКОВ</span><select id="gfx-cloud-detail"><option value="1">1 · Низкая</option><option value="2">2 · Средняя</option><option value="3">3 · Высокая</option><option value="4">4 · Очень высокая</option><option value="5">5</option><option value="6">6 · Максимальная</option></select></label>
+  <label class="select-wrap"><span>ЗАГРУЗКА СТРАНИЦ ЗА КАДР</span><select id="gfx-uploads-per-frame"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option><option value="8">8</option></select></label>
+  <pre id="graphics-diagnostics" class="graphics-diagnostics">Ожидание диагностики WebGPU…</pre>
+  <p id="graphics-status" class="footnote">Настройки сохраняются локально и применяются к активному WebGPU renderer без переключения backend.</p>
   </div>
  </div>
 </section>

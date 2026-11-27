@@ -68,7 +68,7 @@ function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAng
 }
 function scaleModelMatrix(model,factor){return [model[0]*factor,model[1]*factor,model[2]*factor,0,model[4]*factor,model[5]*factor,model[6]*factor,0,model[8]*factor,model[9]*factor,model[10]*factor,0,model[12],model[13],model[14],1];}
 function loadGraphicsSettings():GraphicsSettings{
- try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,preset,geodesic:base.geodesic}:base;}
+ try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,preset,geodesic:{...base.geodesic,...(saved.geodesic??{})}}:base;}
  catch{return createGraphicsSettings('high');}
 }
 export class Solar3DView{
@@ -164,7 +164,7 @@ export class Solar3DView{
    maxVertexTextureImageUnits:'—',maxFragmentTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
    maxVertexUniformVectors:'—',maxFragmentUniformVectors:'—',maxVertexAttributes:'—',extensions:[],
    mode:'webgpu',active:backend?.state==='ready'?'WebGPU':'WebGPU unavailable',rendererState:backend?.state??'unavailable',
-   pendingRendererState:null,pendingRendererError:null,requestedPageSize:this.graphics?.geodesic?.pageResolution??0,
+   pendingRendererState:null,pendingRendererError:null,activeRenderScale:backend?.activeRenderScale??1,activeSceneSize:backend?.activeSceneSize??[0,0],activeMsaaSamples:backend?.activeMsaaSamples??1,requestedUploadsPerFrame:this.graphics?.geodesic?.uploadsPerFrame??1,requestedPageSize:this.graphics?.geodesic?.pageResolution??0,
    requestedMeshResolution:this.graphics?.geodesic?.meshResolution??0,pageSize:0,pageBytes:0,gpuCacheBytes:0,gpuLayers:0,
    failedGpuCacheBytes:0,failedGpuLayers:0,failedGpuResidentPages:0,allocatedTextureArrays:0,gpuResidentPages:0,
    gpuPinnedPages:0,cpuCacheBytes:0,cpuCachePages:0,generatedPages:0,uploadedPages:0,workerCount:0,workerActive:0,
@@ -467,7 +467,7 @@ export class Solar3DView{
    }
    sunVisible=visibility>.02;
   }
-  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,cloudDetail:this.graphics.cloudDetail,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
+  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,cloudDetail:this.graphics.cloudDetail,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,renderScale:this.graphics.renderScale,msaaSamples:this.graphics.msaaSamples,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

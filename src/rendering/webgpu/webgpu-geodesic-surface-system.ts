@@ -13,6 +13,7 @@ export interface WebGPUGeodesicSurfaceSettings {
   readonly gpuBudgetBytes: number;
   readonly cpuBudgetBytes: number;
   readonly workerCount: number;
+  readonly uploadsPerFrame: number;
 }
 interface BodyLike {
   readonly id: string;
@@ -56,7 +57,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameShadowsEnabled = true;
   private currentSunPosition: readonly [number, number, number] = [0, 0, 0];
 
-  constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings) {
+  constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings, private readonly sampleCount: 1 | 4 = 1) {
     this.manager = new VirtualSurfaceManager({ cpuBudgetBytes: settings.cpuBudgetBytes, workerCount: settings.workerCount });
     this.pages = new WebGPUSurfacePageCache(device, settings.pageResolution, 2, settings.gpuBudgetBytes, MAX_PAGE_LAYERS);
   }
@@ -65,7 +66,7 @@ export class WebGPUGeodesicSurfaceSystem {
     if (this.disposed) return;
     if (!this.pages.ready) this.pages.initializeStep();
     if (this.pages.ready && !this.renderer && !this.rendererPromise) {
-      this.rendererPromise = WebGPUGeodesicSurfaceRenderer.create(this.device, this.pages)
+      this.rendererPromise = WebGPUGeodesicSurfaceRenderer.create(this.device, this.pages, this.sampleCount)
         .then(renderer => { if (this.disposed) renderer.dispose(); else this.renderer = renderer; })
         .catch(() => { this.rendererPromise = null; });
     }
@@ -180,7 +181,8 @@ export class WebGPUGeodesicSurfaceSystem {
       void runtime.uploadVisibleTiles(tile =>
         (sourceKeys.has(tile.id.key) ? 1_000_000 : 0) -
         tile.id.level * 100 +
-        dot(tileCenter(tile), localCamera) / Math.max(1, Math.hypot(...localCamera))
+        dot(tileCenter(tile), localCamera) / Math.max(1, Math.hypot(...localCamera)),
+        this.settings.uploadsPerFrame
       ).catch(() => undefined);
     }
 

@@ -45,7 +45,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     this.sampler = sampler;
   }
 
-  static async create(device: any, pages: WebGPUSurfacePageCache): Promise<WebGPUGeodesicSurfaceRenderer> {
+  static async create(device: any, pages: WebGPUSurfacePageCache, sampleCount: 1 | 4 = 1): Promise<WebGPUGeodesicSurfaceRenderer> {
     const shader = device.createShaderModule({ code: WGSL });
     const info = await shader.getCompilationInfo();
     const errors = info.messages.filter((item: any) => item.type === 'error');
@@ -70,6 +70,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       vertex,
       fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: sampleCount },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less-equal' }
     });
     // Батьківський шар задає колір, але не блокує дочірній рельєф за глибиною.
@@ -78,6 +79,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       vertex,
       fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: sampleCount },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     // Дочірній шар змішується з батьківським, перевіряючи глибину лише відносно інших об'єктів сцени.
@@ -92,6 +94,7 @@ export class WebGPUGeodesicSurfaceRenderer {
         }
       }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: sampleCount },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     // Після змішування окремо записуємо глибину цільової поверхні без повторного малювання кольору.
@@ -100,6 +103,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       vertex,
       fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float', writeMask: 0 }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: sampleCount },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less-equal' }
     });
     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'nearest', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });

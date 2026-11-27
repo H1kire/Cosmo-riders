@@ -1,5 +1,6 @@
 import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
 import { resolveBloomIterations } from './post-processing.ts';
+import { resolveMsaaSamples, resolveRenderScale } from '../quality/quality-settings.ts';
 import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
 import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
 
@@ -52,6 +53,8 @@ export interface WebGPUFrame {
   verticalFovRadians?: number;
   viewportWidthPx?: number;
   viewportHeightPx?: number;
+  renderScale?: number;
+  msaaSamples?: number;
   timeSeconds: number;
   atmosphereSamples?: number;
   cloudDetail?: number;
@@ -582,6 +585,12 @@ export class WebGPUBackend {
   private disposed = false;
   private recoveryAttempted = false;
   private geodesicSystem: WebGPUGeodesicSurfaceSystem | null = null;
+  private renderScale = 1;
+  private sceneWidth = 1;
+  private sceneHeight = 1;
+  private geodesicSettingsKey = '';
+  private msaaSamples: 1 | 4 = 1;
+  private msaaColorTexture: any = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -629,22 +638,27 @@ export class WebGPUBackend {
     }
   }
 
-  private configure(): void {
+  private configure(requestedScale = this.renderScale): void {
     if (!this.device || !this.context) throw new Error('WebGPU device/context не готовы.');
+    this.renderScale = resolveRenderScale(requestedScale);
     const rect = this.canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const width = Math.max(1, Math.min(1920, Math.round(rect.width * dpr)));
     const height = Math.max(1, Math.min(1080, Math.round(rect.height * dpr)));
     this.canvas.width = width;
     this.canvas.height = height;
+    this.sceneWidth = Math.max(1, Math.round(width * this.renderScale));
+    this.sceneHeight = Math.max(1, Math.round(height * this.renderScale));
     this.context.configure({
       device: this.device,
       format: this.format,
       alphaMode: 'opaque'
     });
     this.depthTexture?.destroy();
-    this.depthTexture = this.device.createTexture({ size: [width, height, 1], format: 'depth24plus', usage: TEXTURE_USAGE.RENDER_ATTACHMENT });
-    this.createPostTargets(width, height);
+    this.depthTexture = this.device.createTexture({ size: [this.sceneWidth, this.sceneHeight, 1], sampleCount: this.msaaSamples, format: 'depth24plus', usage: TEXTURE_USAGE.RENDER_ATTACHMENT });
+    this.msaaColorTexture?.destroy?.();
+    this.msaaColorTexture = this.msaaSamples > 1 ? this.device.createTexture({ size: [this.sceneWidth, this.sceneHeight, 1], sampleCount: this.msaaSamples, format: 'rgba16float', usage: TEXTURE_USAGE.RENDER_ATTACHMENT }) : null;
+    this.createPostTargets(this.sceneWidth, this.sceneHeight);
   }
 
   private async createPipeline(): Promise<void> {
@@ -672,6 +686,7 @@ export class WebGPUBackend {
         targets: [{ format: 'rgba16float' }]
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: this.msaaSamples },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
     });
     this.effectPipeline = await this.device.createRenderPipelineAsync({
@@ -693,6 +708,7 @@ export class WebGPUBackend {
         } }]
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      multisample: { count: this.msaaSamples },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     this.bindGroupLayout = bindGroupLayout;
@@ -706,6 +722,7 @@ export class WebGPUBackend {
       vertex: { module: orbitModule, entryPoint: 'vertexMain', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
       fragment: { module: orbitModule, entryPoint: 'fragmentMain', targets: [{ format: 'rgba16float', blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }] },
       primitive: { topology: 'line-strip' },
+      multisample: { count: this.msaaSamples },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     const ringModule = this.device.createShaderModule({ code: RING_SHADER });
@@ -718,6 +735,7 @@ export class WebGPUBackend {
       vertex: { module: ringModule, entryPoint: 'vertexMain', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
       fragment: { module: ringModule, entryPoint: 'fragmentMain', targets: [{ format: 'rgba16float', blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }] },
       primitive: { topology: 'triangle-strip' },
+      multisample: { count: this.msaaSamples },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
     const ringSegments = 768, ringVertices = new Float32Array((ringSegments + 1) * 2 * 3);
@@ -834,27 +852,72 @@ export class WebGPUBackend {
     return resources;
   }
 
+  get activeRenderScale(): number { return this.renderScale; }
+  get activeSceneSize(): readonly [number, number] { return [this.sceneWidth, this.sceneHeight]; }
+  get activeMsaaSamples(): number { return this.msaaSamples; }
+
+  private async reconfigureMsaa(requested: 1 | 4): Promise<void> {
+    if (this.disposed || this.state !== 'ready') return;
+    this.state = 'initializing';
+    this.disposeGpuResources();
+    this.msaaSamples = requested;
+    try {
+      this.configure(this.renderScale);
+      await this.createPipeline();
+      this.createGeometryBuffers();
+      this.error = null;
+      this.state = 'ready';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (requested === 4 && !this.disposed) {
+        this.disposeGpuResources();
+        this.msaaSamples = 1;
+        try {
+          this.configure(this.renderScale);
+          await this.createPipeline();
+          this.createGeometryBuffers();
+          this.error = '4x MSAA is unsupported; using 1x: ' + message;
+          this.state = 'ready';
+          return;
+        } catch (fallbackError) {
+          this.error = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        }
+      } else this.error = message;
+      this.state = 'failed';
+    }
+  }
+
   render(frame: WebGPUFrame): void {
     if (this.state !== 'ready' || !this.device || !this.context) return;
     const rect = this.canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const width = Math.max(1, Math.min(1920, Math.round(rect.width * dpr)));
     const height = Math.max(1, Math.min(1080, Math.round(rect.height * dpr)));
-    if (width !== this.canvas.width || height !== this.canvas.height) this.configure();
+    const requestedScale = resolveRenderScale(frame.renderScale);
+    if (width !== this.canvas.width || height !== this.canvas.height || requestedScale !== this.renderScale) this.configure(requestedScale);
+    const requestedMsaa = resolveMsaaSamples(frame.msaaSamples);
+    if (requestedMsaa !== this.msaaSamples) { void this.reconfigureMsaa(requestedMsaa); return; }
 
     if (frame.geodesicSettings && frame.bodies.some(body => body.surfaceProfile && body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant')) {
-      if (!this.geodesicSystem) this.geodesicSystem = new WebGPUGeodesicSurfaceSystem(this.device, frame.geodesicSettings);
+      const settingsKey = JSON.stringify(frame.geodesicSettings);
+      if (!this.geodesicSystem || settingsKey !== this.geodesicSettingsKey) {
+        this.geodesicSystem?.dispose();
+        this.geodesicSystem = new WebGPUGeodesicSurfaceSystem(this.device, frame.geodesicSettings, this.msaaSamples);
+        this.geodesicSettingsKey = settingsKey;
+      }
       this.geodesicSystem.initializeStep();
       this.geodesicSystem.beginFrame();
     }
     const encoder = this.device.createCommandEncoder();
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: this.sceneTexture.createView(),
+    const colorAttachment: any = {
+      view: this.msaaSamples > 1 ? this.msaaColorTexture.createView() : this.sceneTexture.createView(),
         clearValue: { r: 0.008, g: 0.016, b: 0.033, a: 1 },
         loadOp: 'clear',
-        storeOp: 'store'
-      }],
+      storeOp: 'store'
+    };
+    if (this.msaaSamples > 1) colorAttachment.resolveTarget = this.sceneTexture.createView();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [colorAttachment],
       depthStencilAttachment: {
         view: this.depthTexture.createView(),
         depthClearValue: 1,
@@ -1018,7 +1081,7 @@ export class WebGPUBackend {
   }
 
   private disposeGpuResources(): void {
-    this.geodesicSystem?.dispose(); this.geodesicSystem = null;
+    this.geodesicSystem?.dispose(); this.geodesicSystem = null; this.geodesicSettingsKey = '';
     for (const resources of this.bodyResources.values()) resources.uniform.destroy();
     this.bodyResources.clear();
     for (const resources of this.orbitResources.values()) { resources.vertex.destroy(); resources.uniform.destroy(); }
@@ -1029,6 +1092,7 @@ export class WebGPUBackend {
     for (const mesh of this.meshResources.values()) { mesh.positions.destroy(); mesh.normals.destroy(); mesh.indices.destroy(); }
     this.meshResources.clear();
     this.depthTexture?.destroy?.(); this.depthTexture = null;
+    this.msaaColorTexture?.destroy?.(); this.msaaColorTexture = null;
     for(const texture of [this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture])texture?.destroy?.();
     this.sceneTexture=this.brightTexture=this.pingTexture=this.pongTexture=null;
     for(const buffer of this.postUniforms)buffer.destroy?.();

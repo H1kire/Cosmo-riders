@@ -29,7 +29,7 @@ The eight planets use the JPL Solar System Dynamics *Approximate Positions of th
 Satellite parameters are sourced from the JPL Planetary Satellite Mean Elements tables, not from generic zero-angle defaults. The Rust/WASM physics layer transforms each element set from its declared reference plane into the common ecliptic inertial frame.
 
 - Regular Jovian satellites use the JPL local Laplace plane, effectively aligned with Jupiter's equator for the catalogued bodies. Himalia uses the JPL ecliptic solution.
-- Main Saturnian satellites use the JPL local Laplace plane. Iapetus and Phoebe use their separately published Laplace-pole RA/Dec rather than Saturn's spin pole.
+- Main Saturnian satellites use the JPL local Laplace plane. Titan, Hyperion, Iapetus and Phoebe use their separately published Laplace-pole RA/Dec rather than Saturn's spin pole.
 - Uranian satellites use JPL mean equatorial elements and are transformed from Uranus' equator.
 - Neptune's inner satellites and Triton use JPL mean equatorial elements. Nereid uses the JPL NEP105 ecliptic solution at 2020-01-01.0 TDB; its mean anomaly is back-propagated to J2000 using the published 360.133039-day period.
 - Phobos and Deimos use JPL Mars-satellite mean elements; the Laplace-plane pole is effectively aligned with Mars' equator for these entries. The Moon uses the JPL DE405/LE405 ecliptic solution.

@@ -133,3 +133,16 @@ test('active WebGPU backend culls bodies, atmosphere/cloud shells and ring geome
  assert.ok(source.includes('function modelRadius(model: ArrayLike<number>)'));
  assert.ok(source.includes('isSpherePotentiallyVisibleInFrustum('));
 });
+
+
+test('surface upload diagnostics count completed GPU page uploads rather than queued worker requests',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [backend,system]=await Promise.all([
+  readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(backend.includes('getCacheDiagnostics().uploadCount'));
+ assert.ok(backend.includes('metrics.surfaceUploadsPerFrame=Math.max(0,uploads-this.previousUploadCount)'));
+ assert.ok(!backend.includes('geoStats.surfaceUploadsPerFrame'));
+ assert.ok(!system.includes('frameSurfaceUploads'));
+});

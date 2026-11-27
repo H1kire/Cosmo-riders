@@ -5,6 +5,7 @@ import { generateSurfaceTile,surfaceTileKey } from '../src/rendering/geodesic/su
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
+import { isSpherePotentiallyVisibleInFrustum } from '../src/rendering/geodesic/quadtree-selector.ts';
 
 const earth={id:'earth',massKg:5.9722e24,meanRadiusM:6371008.4,surfaceSeed:101,surface:{temperatureK:288,pressurePa:101325,waterFraction:.71,iceFraction:.025,ironFraction:.32,tectonicActivity:.8,volcanicActivity:.32,erosion:.78,impactAge:.18},rotationPeriodSeconds:86164};
 const profile=createGeologicalProfile(earth as never);

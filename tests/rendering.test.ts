@@ -266,3 +266,12 @@ test('tidal body orientation preserves its IAU spin pole and prime-meridian phas
  assert.ok(Math.hypot(...phasedAxis.map((value,index)=>value-expected[index]))<1e-12);
  assert.ok(Math.abs(forward.reduce((sum,value,index)=>sum+value*phasedForward[index],0))<1e-12);
 });
+
+
+test('orbit path resampling interpolates source vertices instead of duplicating nearest samples',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('sourcePosition=i*sourceSegments/segments'));
+ assert.ok(source.includes('source[a]+(source[b]-source[a])*blend'));
+ assert.ok(!source.includes('Math.round(i*sourceSegments/segments)'));
+});

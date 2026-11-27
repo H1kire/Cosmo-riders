@@ -7,7 +7,7 @@ export function relativeGravitationalParameter(body:CelestialBody,parent:Celesti
 }
 
 /** Перетворює parent-equator або Laplace-plane елементи до спільної екліптичної інерціальної системи. */
-export function rotateStateToParentEquator(state:OrbitalState,body:CelestialBody,parent:CelestialBody):OrbitalState {
+export function rotateStateToOrbitalReferenceFrame(state:OrbitalState,body:CelestialBody,parent:CelestialBody):OrbitalState {
  if(body.orbitalReferenceFrame==='ecliptic')return state;
  const ra=body.orbitalReferenceFrame==='laplace'?body.orbitalPlanePoleRightAscensionRad:parent.poleRightAscensionRad;
  const dec=body.orbitalReferenceFrame==='laplace'?body.orbitalPlanePoleDeclinationRad:parent.poleDeclinationRad;

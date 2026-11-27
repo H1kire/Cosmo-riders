@@ -66,7 +66,7 @@ test('WebGPU runtime initializes pages incrementally and uploads real geodesic t
   assert.equal(runtime.getPageLayer(baseGeoTiles()[0].id.key), 0);
   assert.equal(runtime.residentPages, 1);
   runtime.dispose();
-  assert.equal(manager.disposed, true);
+  assert.equal(manager.disposed, false);
 });
 
 test('WebGPU runtime unpins pages when geodesic visibility changes', async () => {

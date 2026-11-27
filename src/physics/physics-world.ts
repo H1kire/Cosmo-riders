@@ -5,7 +5,7 @@ import { orbitalElementsToState } from './orbital-state.ts';
 import { sphereOfInfluence } from './orbital-elements.ts';
 import type { CelestialBody } from './celestial-body.ts';
 import type { OrbitalState, PhysicsWorldOptions, VesselState } from '../types/physics.ts';
-import { relativeGravitationalParameter, rotateStateToParentEquator } from './orbital-frame.ts';
+import { relativeGravitationalParameter, rotateStateToOrbitalReferenceFrame } from './orbital-frame.ts';
 
 
 
@@ -49,7 +49,7 @@ export class PhysicsWorld {
    if(!body.parentId){this.bodyStates.set(body.id,{position:body.position,velocity:body.velocity});continue;}
    const parent=this.bodies.get(body.parentId);
    if(body.orbitalElements){
-    let state;try{state=rotateStateToParentEquator(orbitalElementsToState(body.orbitalElements,relativeGravitationalParameter(body,parent)),body,parent);}catch(error){throw new Error('Failed to initialize orbital elements for '+body.id+': '+error.message);}
+    let state;try{state=rotateStateToOrbitalReferenceFrame(orbitalElementsToState(body.orbitalElements,relativeGravitationalParameter(body,parent)),body,parent);}catch(error){throw new Error('Failed to initialize orbital elements for '+body.id+': '+error.message);}
     this.bodyInitialRelativeStates.set(body.id,state);
     this.bodyStates.set(body.id,{position:add(this.bodyStates.get(parent.id).position,state.position),velocity:add(this.bodyStates.get(parent.id).velocity,state.velocity)});
    }else{

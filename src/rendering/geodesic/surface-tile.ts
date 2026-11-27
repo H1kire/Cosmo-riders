@@ -66,7 +66,11 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
  for(const plate of plateSet){const q=1-(d[0]*plate.direction[0]+d[1]*plate.direction[1]+d[2]*plate.direction[2]);if(q<nearest){second=nearest;nearest=q;first=plate;}else if(q<second)second=q;}
  const boundary=1-smooth(.006,.055,second-nearest),plate=first!;
  const tectonic=boundary*p.tectonicActivity,volcanic=fbm([d[0]*19,d[1]*19,d[2]*19],seed+71,4)*p.volcanicActivity;
- const latitude=Math.abs(d[1]),frost=smooth(.68,.96,latitude)*p.iceFraction;
+ const latitude=Math.abs(d[1]);
+ const coldRetention=1-smooth(235,360,p.temperatureK);
+ const volatileRetention=1-smooth(150,320,p.temperatureK)*(1-clamp(p.volatileFraction));
+ const frost=clamp(smooth(.68,.96,latitude)*(p.iceFraction*(.28+.72*coldRetention)+p.waterFraction*.06*coldRetention+p.volatileFraction*.04*volatileRetention));
+ const atmosphericWeathering=clamp(Math.log10(1+Math.max(0,p.pressurePa))/7);
  const detail=fbm([d[0]*47,d[1]*47,d[2]*47],seed+97,3);
  // Додаткові мікродеталі відкриваються поступово разом із геодезичним LOD.
  const micro=fbm([d[0]*24,d[1]*24,d[2]*24],seed+401,Math.max(1,Math.min(6,lodLevel+1)));
@@ -96,19 +100,19 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
   color=color.map((value,index)=>value+((index===0?.72:index===1?.82:.94)-value)*clamp(cryovolcanic*.16)) as [number,number,number];
   rough=clamp(.24+(1-ice)*.58+p.age*.08);material=4;
  }else if(p.kind==='volcanic'){
-  const lava=smooth(.62,.86,fbm([d[0]*13,d[1]*13,d[2]*13],seed+181,5)+volcanic*.4);
+  const lava=smooth(.62,.86,fbm([d[0]*13,d[1]*13,d[2]*13],seed+181,5)+volcanic*.4),sulfur=clamp(p.sulfurFraction*1.4);
   height=(macro-.5)*.08+volcanic*.16+boundary*.035;
-  color=[.13+lava*.55,.09+lava*.19,.055+lava*.04];rough=.58;material=5;
+  color=[.13+lava*.55+sulfur*.12,.09+lava*.19+sulfur*.11,.055+lava*.04+sulfur*.02];rough=.58;material=5;
  }else{
   const mountains=Math.pow(1-Math.abs(fbm([d[0]*8,d[1]*8,d[2]*8],seed+211,5)-.5)*2,2);
   const crater=1-smooth(.18,.42,fbm([d[0]*9,d[1]*9,d[2]*9],seed+223,4));
-  height=(macro-.5)*.13+mountains*p.tectonicActivity*.16-crater*p.age*.075+volcanic*.035;
-  const oxide=clamp(p.ironFraction*.75+detail*.2);
-  color=[.22+oxide*.35+regional*.08,.19+oxide*.12+detail*.05,.16+detail*.04];rough=.82;material=1;
+  height=(macro-.5)*.13+mountains*p.tectonicActivity*.16-crater*p.age*(.075-.018*atmosphericWeathering)+volcanic*.035;
+  const oxide=clamp(p.ironFraction*.75+detail*.2),hydration=clamp(p.waterFraction*.16+p.volatileFraction*.12);
+  color=[.22+oxide*.35+regional*.08+hydration*.035,.19+oxide*.12+detail*.05+hydration*.045,.16+detail*.04+hydration*.055];rough=clamp(.82-atmosphericWeathering*.18);material=1;
  }
  if(p.kind==='desert'){const dune=fbm([d[0]*55,d[1]*13,d[2]*55],seed+241,3);height+=(dune-.5)*.055;color=[.48+dune*.2,.27+dune*.13,.12+dune*.07];rough=.94;material=6;}
- if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.08){color=color.map((v,i)=>v+(i===0?.84:i===1?.9:.96-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
- height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
+ if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.02){color=color.map((v,i)=>v+(i===0?.84:i===1?.9:.96-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
+ height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(1-atmosphericWeathering*.12,.75,1)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
  // Мікрорельєф має фізичний масштаб і не перевищує частку допустимого перепаду висот.
  height+=(micro-.5)*.003;
  const microTone=(micro-.5)*.055;

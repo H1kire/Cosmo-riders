@@ -113,3 +113,12 @@ test('geodesic LOD selection is reused for a stable camera and refreshed on move
   assert.ok(source.includes('topology.lastSelectionWidth !== viewportWidthPx'));
   assert.ok(source.includes('topology.lastSelectionBudget !== transitionBudget'));
 });
+
+
+test('active geodesic LOD crossfade is not repeatedly retargeted by camera movement', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('if (signature !== topology.visibleSignature && !topology.transition)'));
+  assert.ok(!source.includes('topology.transition.targetSignature !== signature'));
+  assert.ok(source.includes('не замінюємо його цільовий набір новим'));
+});

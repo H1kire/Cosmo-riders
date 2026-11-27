@@ -104,6 +104,10 @@ export class WebGPUGeodesicSurfaceSystem {
     const runtime = this.runtimeFor(body.id, profile);
     const topology = this.topologyFor(body.id);
     this.active.add(body.id);
+    // Резервуємо місце для повного попереднього покриття, навіть якщо бюджет GPU дорівнює лише 20 сторінкам.
+    const sourceCount = topology.transition?.source.length ??
+      topology.runtime.getTileStates().filter(state => state.visible).length;
+    const transitionBudget = Math.max(20, this.pages.capacity - sourceCount);
     let selection = selectGeodesicLod({
       positionM: localCamera,
       forward: localForward,
@@ -114,24 +118,9 @@ export class WebGPUGeodesicSurfaceSystem {
       planetRadiusM: profile.meanRadiusM,
       targetErrorPx: this.settings.meshResolution >= 64 ? 1.5 : 2.5,
       maxDepth: 12,
-      maxTiles: Math.max(20, this.pages.capacity - (topology.transition?.source.length ?? 0)),
+      maxTiles: transitionBudget,
       previousSplitKeys: topology.splitKeys
     });
-
-    if (!topology.transition) {
-      const sourceCount = topology.runtime.getTileStates().filter(state => state.visible).length;
-      const transitionBudget = this.pages.capacity - sourceCount;
-      if (transitionBudget >= 20 && selection.tiles.length > transitionBudget) {
-        selection = selectGeodesicLod({
-          positionM: localCamera, forward: localForward, verticalFovRadians,
-          viewportWidthPx, viewportHeightPx
-        }, {
-          planetRadiusM: profile.meanRadiusM,
-          targetErrorPx: this.settings.meshResolution >= 64 ? 1.5 : 2.5,
-          maxDepth: 12, maxTiles: transitionBudget, previousSplitKeys: topology.splitKeys
-        });
-      }
-    }
 
     const signature = selection.tiles.map(tile => tile.id.key).sort().join(',');
     if (signature !== topology.visibleSignature) {
@@ -170,9 +159,12 @@ export class WebGPUGeodesicSurfaceSystem {
     ));
     runtime.retainMeshes(retainedMeshKeys);
     runtime.setVisibleTiles(retainedTiles);
+    const sourceKeys = new Set(sourceStates.map(state => state.tile.id.key));
     if (this.pages.ready) {
       void runtime.uploadVisibleTiles(tile =>
-        tile.id.level * 100 + dot(tileCenter(tile), localCamera) / Math.max(1, Math.hypot(...localCamera))
+        (sourceKeys.has(tile.id.key) ? 1_000_000 : 0) -
+        tile.id.level * 100 +
+        dot(tileCenter(tile), localCamera) / Math.max(1, Math.hypot(...localCamera))
       ).catch(() => undefined);
     }
 
@@ -193,7 +185,10 @@ export class WebGPUGeodesicSurfaceSystem {
       if (!renderer.hasMesh(meshKey) && !this.pendingMeshes.has(meshKey) &&
           this.manager.pendingCount < this.manager.workerPool.maxPendingTasks) {
         this.pendingMeshes.add(meshKey);
-        void runtime.requestTileMesh(tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask, 10 + tile.id.level)
+        void runtime.requestTileMesh(
+          tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask,
+          sourceKeys.has(tile.id.key) ? 10_000 : 10 + tile.id.level
+        )
           .then(mesh => {
             if (!this.disposed && this.desiredMeshes.get(body.id)?.has(meshKey)) {
             renderer.uploadMesh(mesh, meshKey);
@@ -280,10 +275,12 @@ export class WebGPUGeodesicSurfaceSystem {
   private topologyFor(id: string): PlanetTopology {
     let topology = this.topologies.get(id);
     if (!topology) {
+      const roots = baseGeoTiles();
       topology = {
         runtime: new GeodesicSurfaceRuntime(id, { maxDepth: 12, maxTiles: this.pages.capacity, stitchResolution: this.settings.meshResolution }),
         splitKeys: new Set<string>(),
-        visibleSignature: null,
+        // Початковий стан відповідає повному набору двадцяти базових граней.
+        visibleSignature: roots.map(tile => tile.id.key).sort().join(','),
         lastStats: null,
         transition: null
       };

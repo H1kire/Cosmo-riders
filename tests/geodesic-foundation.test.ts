@@ -566,6 +566,17 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and WebGPU-m
 });
 
 
+test('WebGPU geodesic startup reserves the twenty-face root cover before selecting refinement tiles',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('const transitionBudget = Math.max(20, this.pages.capacity - sourceCount)'));
+ assert.ok(source.includes('maxTiles: transitionBudget'));
+ assert.ok(source.includes('visibleSignature: roots.map(tile => tile.id.key).sort().join(\',\')'));
+ assert.ok(source.includes('(sourceKeys.has(tile.id.key) ? 1_000_000 : 0)'));
+ assert.ok(source.includes('sourceKeys.has(tile.id.key) ? 10_000 : 10 + tile.id.level'));
+ assert.ok(source.includes('const sourceStates = topology.transition?.source ?? []'));
+});
+
 test('active WebGPU geodesic system uses screen-error LOD, balanced topology and per-edge stitching',async()=>{
  const {readFile}=await import('node:fs/promises');
  const [system,renderer,meshBuilder,backend,solar]=await Promise.all([

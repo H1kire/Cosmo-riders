@@ -34,7 +34,7 @@ test('WebGPU page cache incrementally allocates five correctly formatted texture
   const device = fakeDevice();
   const cache = new WebGPUSurfacePageCache(device, 2, 0, 1024 * 1024, 4);
   assert.equal(cache.capacity, 4);
-  for (let index = 0; index < 4; index++) assert.equal(cache.initializeStep(), index === 3);
+  for (let index = 0; index < 5; index++) assert.equal(cache.initializeStep(), index === 4);
   assert.deepEqual(device.textures.map(item => item.descriptor.format), ['rgba8unorm', 'rgba8unorm', 'r32float', 'r8unorm', 'r8unorm']);
   assert.equal(cache.ready, true);
   assert.equal(cache.allocatedBytes, 2 * 2 * 4 * 14);
@@ -51,7 +51,7 @@ test('WebGPU page upload preserves five channels and pads rows for copy alignmen
   assert.ok(device.writes.every(args => args[2].bytesPerRow === 256));
   assert.equal(device.writes[0][1][0], 20);
   assert.equal(device.writes[1][1][3], 255);
-  assert.equal(new Float32Array(device.writes[2][1].buffer, 0, 4)[3], 4);
+  assert.equal(new Float32Array(device.writes[2][1].buffer, 0, 66)[65], 4);
   assert.equal(cache.getLayer('earth:root'), 0);
   assert.equal(cache.residentPages, 1);
 });
@@ -62,11 +62,13 @@ test('WebGPU page LRU never evicts pinned visible pages', () => {
   for (let index = 0; index < 5; index++) cache.initializeStep();
   cache.upload(tile('a')); cache.upload(tile('b'));
   assert.equal(cache.pin('a'), true);
-  assert.throws(() => cache.upload(tile('c')), /pinned/);
+  assert.equal(cache.upload(tile('c')), 1);
+  assert.equal(cache.getLayer('a'), 0);
+  assert.equal(cache.getLayer('b'), undefined);
   cache.unpin('a');
-  assert.equal(cache.upload(tile('c')), 0);
+  assert.equal(cache.upload(tile('d')), 0);
   assert.equal(cache.getLayer('a'), undefined);
-  assert.equal(cache.getLayer('c'), 0);
+  assert.equal(cache.getLayer('d'), 0);
 });
 
 test('WebGPU page cache rejects mismatched channel dimensions', () => {

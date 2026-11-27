@@ -104,16 +104,6 @@ export class WebGPUSurfacePageCache {
       if (layer < 0) throw new Error('All WebGPU surface page layers are pinned by visible tiles.');
     }
 
-    const rowBytes = this.pageSize * 4;
-    const alignedBytesPerRow = align(rowBytes, COPY_ROW_ALIGNMENT);
-    const pack = (source: Uint8Array, bytesPerPixel: number): Uint8Array => {
-      const sourceRowBytes = this.pageSize * bytesPerPixel;
-      const target = new Uint8Array(alignedBytesPerRow * this.pageSize);
-      for (let row = 0; row < this.pageSize; row++) {
-        target.set(source.subarray(row * sourceRowBytes, (row + 1) * sourceRowBytes), row * alignedBytesPerRow);
-      }
-      return target;
-    };
     const normalRgba = new Uint8Array(texels * 4);
     for (let index = 0; index < texels; index++) {
       normalRgba[index * 4] = tile.normal[index * 3];

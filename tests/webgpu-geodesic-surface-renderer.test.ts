@@ -11,8 +11,8 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
     createPipelineLayout: (value: any) => value,
     createRenderPipelineAsync: async (value: any) => value,
     createSampler: (value: any) => value,
-    createBuffer: (value: any) => { const buffer = { ...value, destroy() {} }; buffers.push(buffer); return buffer; },
-    queue: { writeBuffer() {} },
+    createBuffer: (value: any) => { const buffer = { ...value, destroyed: false, destroy() { this.destroyed = true; } }; buffers.push(buffer); return buffer; },
+    queue: { writeBuffer() {}, onSubmittedWorkDone: async () => undefined },
     createBindGroup: (value: any) => value
   };
   const views = Array.from({ length: 5 }, () => ({}));
@@ -38,6 +38,11 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
   assert.equal(drawn, true);
   assert.deepEqual(calls.slice(-2), ['index', 'draw:3']);
   assert.equal(buffers.length, 5);
+  renderer.releaseMesh('0:root');
+  assert.equal(buffers.every(buffer => !buffer.destroyed), true, 'released mesh buffers stay alive until submitted work completes');
+  renderer.afterSubmit();
+  await Promise.resolve();
+  assert.equal(buffers.every(buffer => buffer.destroyed), true, 'released mesh buffers are destroyed after queue completion');
   renderer.dispose();
 });
 

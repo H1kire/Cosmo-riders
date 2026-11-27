@@ -28,13 +28,13 @@ The eight planets use the JPL Solar System Dynamics *Approximate Positions of th
 
 Satellite parameters are sourced from the JPL Planetary Satellite Mean Elements tables, not from generic zero-angle defaults. The Rust/WASM physics layer transforms each element set from its declared reference plane into the common ecliptic inertial frame.
 
-- Regular Jovian satellites use the JPL local Laplace plane, effectively aligned with Jupiter's equator for the catalogued bodies. Himalia uses the JPL ecliptic solution.
+- Regular Jovian satellites use the JPL local Laplace plane; Ganymede and Callisto carry their separately published pole orientations. Himalia uses the JPL ecliptic solution.
 - Main Saturnian satellites use the JPL local Laplace plane. Titan, Hyperion, Iapetus and Phoebe use their separately published Laplace-pole RA/Dec rather than Saturn's spin pole.
 - Uranian satellites use JPL mean equatorial elements and are transformed from Uranus' equator.
 - Neptune's inner satellites and Triton use JPL mean equatorial elements. Nereid uses the JPL NEP105 ecliptic solution at 2020-01-01.0 TDB; its mean anomaly is back-propagated to J2000 using the published 360.133039-day period.
-- Phobos and Deimos use JPL Mars-satellite mean elements; the Laplace-plane pole is effectively aligned with Mars' equator for these entries. The Moon uses the JPL DE405/LE405 ecliptic solution.
+- Phobos and Deimos use the revised JPL MAR099 mean elements and their individual Laplace-plane poles. The Moon uses the JPL DE405/LE405 ecliptic solution.
 
-The catalogue was corrected for Rhea, Titan, Hyperion, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton, Naiad, Thalassa, Despina, Galatea, Larissa, Proteus and Nereid. Himalia was moved to the ecliptic reference frame. Iapetus and Phoebe now carry explicit Laplace-plane pole metadata.
+The catalogue was corrected for Phobos, Deimos, Ganymede, Callisto, Rhea, Titan, Hyperion, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton, Naiad, Thalassa, Despina, Galatea, Larissa, Proteus and Nereid. Himalia and Nereid use the ecliptic reference frame. Phobos, Deimos, Ganymede, Callisto, Titan, Hyperion, Iapetus and Phoebe carry explicit Laplace-plane pole metadata.
 
 These mean elements describe average orbit shape/orientation; they do not reproduce short-period perturbations, resonance libration, apsidal/node precession or exact date-specific positions. Accurate time-tagged positions require JPL Horizons/SPICE ephemerides.
 

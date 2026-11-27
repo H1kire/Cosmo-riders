@@ -60,18 +60,7 @@ function plates(seed:number,profile:SurfaceProfile):Plate[]{
  }
  return out;
 }
-/** Швидкий height-only шлях для океанічного профілю Землі без побудови кольорових каналів. */
-function oceanicHeightSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):number{
- const seed=p.seed,macro=fbm([d[0]*3.1,d[1]*3.1,d[2]*3.1],seed,5),regional=fbm([d[0]*11,d[1]*11,d[2]*11],seed+31,4);
- let nearest=2,second=2;
- for(const plate of plateSet){const q=1-(d[0]*plate.direction[0]+d[1]*plate.direction[1]+d[2]*plate.direction[2]);if(q<nearest){second=nearest;nearest=q;}else if(q<second)second=q;}
- const boundary=1-smooth(.006,.055,second-nearest),volcanic=fbm([d[0]*19,d[1]*19,d[2]*19],seed+71,4)*p.volcanicActivity,detail=fbm([d[0]*47,d[1]*47,d[2]*47],seed+97,3);
- let height=(macro-.5)*.18+(regional-.5)*.065+Math.pow(boundary,.7)*p.tectonicActivity*.16-boundary*boundary*p.tectonicActivity*.11+volcanic*.035;
- const frost=smooth(.68,.96,Math.abs(d[1]))*p.iceFraction;if(frost>.08)height*=1-frost*.3;
- height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
- return height+(detail-.5)*.006;
-}
-function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):{color:[number,number,number];height:number;rough:number;material:number}{
+function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:number):{color:[number,number,number];height:number;rough:number;material:number}{
  const seed=p.seed,macro=fbm([d[0]*3.1,d[1]*3.1,d[2]*3.1],seed,5),regional=fbm([d[0]*11,d[1]*11,d[2]*11],seed+31,4);
  let nearest=2,second=2,first:Plate|undefined;
  for(const plate of plateSet){const q=1-(d[0]*plate.direction[0]+d[1]*plate.direction[1]+d[2]*plate.direction[2]);if(q<nearest){second=nearest;nearest=q;first=plate;}else if(q<second)second=q;}
@@ -79,6 +68,8 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):{color:[numb
  const tectonic=boundary*p.tectonicActivity,volcanic=fbm([d[0]*19,d[1]*19,d[2]*19],seed+71,4)*p.volcanicActivity;
  const latitude=Math.abs(d[1]),frost=smooth(.68,.96,latitude)*p.iceFraction;
  const detail=fbm([d[0]*47,d[1]*47,d[2]*47],seed+97,3);
+ // Додаткові мікродеталі відкриваються поступово разом із геодезичним LOD.
+ const micro=fbm([d[0]*24,d[1]*24,d[2]*24],seed+401,Math.max(1,Math.min(6,lodLevel+1)));
  let height=0,color:[number,number,number]=[.35,.34,.31],rough=.88,material=1;
  if(p.kind==='oceanic'||p.waterFraction>.45){
   const continental=smooth(-.08,.13,macro-.48+plate.elevation+tectonic*.09);
@@ -106,6 +97,11 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[]):{color:[numb
  if(p.kind==='desert'){const dune=fbm([d[0]*55,d[1]*13,d[2]*55],seed+241,3);height+=(dune-.5)*.055;color=[.48+dune*.2,.27+dune*.13,.12+dune*.07];rough=.94;material=6;}
  if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.08){color=color.map((v,i)=>v+(i===0?.84:i===1?.9:.96-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
  height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
+ // Мікрорельєф має фізичний масштаб і не перевищує частку допустимого перепаду висот.
+ height+=(micro-.5)*2*(heightLimitM(p).positive*.0015/p.meanRadiusM);
+ const microTone=(micro-.5)*.055;
+ color=color.map(value=>clamp(value*(1+microTone))) as [number,number,number];
+ rough=clamp(rough+(micro-.5)*.045);
  height+=(detail-.5)*.006;
  return{color,height,rough,material};
 }
@@ -120,6 +116,18 @@ function atmosphereSample(d:Vec3,p:SurfaceProfile):{color:[number,number,number]
  if(p.bodyId==='uranus')return{color:[.12+bands*.08+cloud*.08,.36+bands*.2+cloud*.08,.48+bands*.24+cloud*.1],height:0,rough:.7,material:10};
  return{color:[.045+bands*.1+storm*.12,.12+bands*.18+storm*.14,.32+bands*.3+storm*.2],height:0,rough:.68,material:10};
 }
+function heightLimitM(p:SurfaceProfile):{negative:number;positive:number}{
+ const known:Record<string,readonly [number,number]>={
+  earth:[11000,9000],mars:[22000,22000],moon:[11000,11000],mercury:[10000,10000],venus:[12000,12000],
+  io:[17000,17000],europa:[3000,3000],ganymede:[10000,10000],callisto:[10000,10000],titan:[5000,5000],
+  triton:[2000,2000],phobos:[5000,5000],deimos:[3000,3000]
+ };
+ const limits=known[p.bodyId.toLowerCase()];
+ if(limits)return{negative:limits[0],positive:limits[1]};
+ const generic=Math.max(10,Math.min(50000,p.meanRadiusM*.003));
+ return{negative:generic,positive:generic};
+}
+
 export function surfaceTileKey(request:SurfaceTileRequest):string{
  const p=request.profile,t=request.tile;
  // Канонічний порядок полів робить ключ стабільним і враховує всі параметри генерації.
@@ -147,12 +155,14 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const width=resolution+2*gutter,count=width*width;
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
- const sampleDirection=(direction:Vec3)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet);
- const sampleHeight=(direction:Vec3)=>profile.kind==='oceanic'||profile.waterFraction>.45?oceanicHeightSample(direction,profile,plateSet):sampleDirection(direction).height;
+ const sampleDirection=(direction:Vec3,lodLevel:number)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet,lodLevel);
+ // Нормалі та канал Height обчислюються з одного й того самого поля висот.
+ const sampleHeight=(direction:Vec3)=>sampleDirection(direction,tile.level).height;
  const angularStep=1/(resolution*Math.pow(2,tile.level));
- // Земна поверхня обмежена фізичним діапазоном від -11 км до +9 км відносно середнього радіуса.
- // Значення лишається часткою радіуса до побудови нормалей і переводиться в метри лише під час запису каналу Height.
- const heightFraction=(value:number)=>profile.bodyId==='earth'?clamp(value,-11000/profile.meanRadiusM,9000/profile.meanRadiusM):value;
+ // Усі профілі мають фізичні межі рельєфу; Земля зберігає асиметричний океанічний діапазон.
+ // Значення лишається часткою радіуса до побудови нормалей і запису каналу Height.
+ const limits=heightLimitM(profile);
+ const heightFraction=(value:number)=>clamp(value,-limits.negative/profile.meanRadiusM,limits.positive/profile.meanRadiusM);
  let index=0;
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){
@@ -160,7 +170,7 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
    const pageX=(col+.5)/resolution,pageY=(row+.5)/resolution;
    const [u,v]=squareToTriangleBarycentric(pageX,pageY);
    const direction=barycentricDirection(resolved.triangle,u,v);
-   const sample=sampleDirection(direction);
+   const sample=sampleDirection(direction,tile.level);
    const reference:Vec3=Math.abs(direction[1])<.85?[0,1,0]:[1,0,0];
    const tangentU=normalize3(cross3(reference,direction));
    const tangentV=normalize3(cross3(direction,tangentU));

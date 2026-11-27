@@ -20,7 +20,7 @@ const profile: SurfaceProfile = {
   gravityMS2: 9.8, temperatureK: 280, pressurePa: 100000, waterFraction: 0.2, iceFraction: 0.05,
   ironFraction: 0.3, silicateFraction: 0.6, volatileFraction: 0.03, sulfurFraction: 0.01,
   tectonicActivity: 0.4, volcanicActivity: 0.2, erosion: 0.3, age: 0.5,
-  rotationPeriodSeconds: 86400, algorithmVersion: 1
+  rotationPeriodSeconds: 86400, algorithmVersion: 2
 };
 function makeTile(request: SurfaceTileRequest): SurfaceTileData {
   const width = request.resolution + request.gutter! * 2, count = width * width;

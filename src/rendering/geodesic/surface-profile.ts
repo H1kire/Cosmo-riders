@@ -52,7 +52,7 @@ export function createGeologicalProfile(body:BodyLike):SurfaceProfile{
   tectonicActivity:clamp(source.tectonicActivity??known.tectonicActivity??.2),
   volcanicActivity:clamp(source.volcanicActivity??known.volcanicActivity??.1),
   erosion:clamp(source.erosion??known.erosion??.25),age:clamp(source.impactAge??known.age??.5),
-  rotationPeriodSeconds:body.rotationPeriodSeconds??null,algorithmVersion:1
+  rotationPeriodSeconds:body.rotationPeriodSeconds??null,algorithmVersion:2
  };
  return Object.freeze(profile);
 }

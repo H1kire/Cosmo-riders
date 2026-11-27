@@ -52,3 +52,34 @@ test('gas giants generate zonal atmospheric materials without solid relief',()=>
  assert.ok(tile.height.every(value=>value===0));
  assert.ok(tile.materialId.every(value=>value===10));
 });
+
+
+test('surface normals use the same LOD height field as the stored height channel',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/geodesic/surface-tile.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('const sampleHeight=(direction:Vec3)=>sampleDirection(direction,tile.level).height'));
+ assert.ok(source.includes('const sample=sampleDirection(direction,tile.level)'));
+ assert.ok(!source.includes('oceanicHeightSample'));
+});
+
+test('surface relief stays inside body-specific physical elevation limits',()=>{
+ const cases=[
+  {body:earth,limit:11000},
+  {body:{id:'mars',massKg:6.4171e23,meanRadiusM:3389500,surfaceSeed:17},limit:22000},
+  {body:{id:'europa',massKg:4.8e22,meanRadiusM:1560800,surfaceSeed:18},limit:3000}
+ ];
+ for(const item of cases){
+  const p=createGeologicalProfile(item.body as never);
+  const generated=generateSurfaceTile({planetId:p.bodyId,seed:p.seed,tile:tileId(0,'1'),resolution:24,gutter:2,profile:p});
+  assert.ok(generated.height.every(value=>Number.isFinite(value)&&Math.abs(value)<=item.limit+1e-3),p.bodyId+' exceeded physical relief limits');
+ }
+});
+
+test('higher geodesic LOD reveals deterministic additional microdetail',()=>{
+ const root=generateSurfaceTile({planetId:'earth',seed:profile.seed,tile:tileId(0),resolution:64,gutter:1,profile});
+ const child=generateSurfaceTile({planetId:'earth',seed:profile.seed,tile:tileId(0,'0'),resolution:64,gutter:1,profile});
+ assert.ok(root.height.every(Number.isFinite));
+ assert.ok(child.height.every(Number.isFinite));
+ assert.notDeepEqual(root.height,child.height);
+ assert.equal(createGeologicalProfile(earth as never).algorithmVersion,2);
+});

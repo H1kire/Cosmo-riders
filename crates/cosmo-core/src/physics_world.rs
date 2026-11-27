@@ -295,7 +295,7 @@ mod osculating_orbit_path_tests {
  fn orbit_path_starts_at_the_current_relative_state_after_n_body_advance() {
   let mut world=PhysicsWorld::new(Options::default()).unwrap();
   let sun:BodyDefinition=serde_json::from_str(r#"{"id":"sun","name":"Sun","massKg":1.98847e30,"meanRadiusM":696340000.0,"position":[0.0,0.0,0.0],"velocity":[0.0,0.0,0.0]}"#).unwrap();
-  let earth:BodyDefinition=serde_json::from_str(r#"{"id":"earth","name":"Earth","massKg":5.9722e24,"meanRadiusM":6371000.0,"parentId":"sun","position":[0.0,0.0,0.0],"velocity":[0.0,0.0,0.0],"orbitalElements":{"semiMajorAxisM":149597870700.0,"eccentricity":0.01671022,"inclination":0.0000008726646259971648,"longitudeAscendingNode":-0.196535243881543,"argumentOfPeriapsis":1.7801227481269,"meanAnomaly":6.2398917899086}}"#).unwrap();
+  let earth:BodyDefinition=serde_json::from_str(r#"{"id":"earth","name":"Earth","massKg":5.9722e24,"meanRadiusM":6371000.0,"parentId":"sun","position":[0.0,0.0,0.0],"velocity":[0.0,0.0,0.0],"orbitalElements":{"semiMajorAxisM":149597870700.0,"eccentricity":0.01671022,"inclination":0.0000008726646259971648,"longitudeAscendingNode":-0.196535243881543,"argumentOfPeriapsis":1.9933026650579555,"meanAnomaly":6.23985544307619}}"#).unwrap();
   world.add_body(sun).unwrap();
   world.add_body(earth).unwrap();
   world.initialize_ephemerides().unwrap();

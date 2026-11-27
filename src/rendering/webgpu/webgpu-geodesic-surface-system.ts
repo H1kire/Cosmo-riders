@@ -274,6 +274,31 @@ export class WebGPUGeodesicSurfaceSystem {
     return this.topologies.get(bodyId)?.lastStats ?? null;
   }
 
+  getCacheDiagnostics() {
+    const page = this.pages.diagnostics;
+    const cpuStateCounts = this.manager.stateCounts;
+    return {
+      ...page,
+      cpuCacheBytes: this.manager.memoryBytes,
+      cpuCacheBudgetBytes: this.manager.cpuBudgetBytes,
+      cpuCachePages: this.manager.cacheSize,
+      generatedPages: cpuStateCounts['CPU Ready'] + cpuStateCounts['Upload Pending'] + cpuStateCounts['GPU Ready'] + cpuStateCounts.Visible,
+      visiblePages: cpuStateCounts.Visible,
+      queuedPages: cpuStateCounts.Queued,
+      generatingPages: cpuStateCounts.Generating,
+      failedPages: cpuStateCounts.Failed,
+      workerCount: this.manager.workerCount,
+      workerActive: this.manager.activeWorkers,
+      workerQueued: this.manager.queuedCount,
+      workerStartupErrors: this.manager.workerStartupErrors,
+      workerRuntimeErrors: this.manager.workerRuntimeErrors,
+      workerTaskErrors: this.manager.workerTaskErrors,
+      cancelledTasks: this.manager.cancelledTasks,
+      disposedTasks: this.manager.disposedTasks,
+      firstWorkerFailure: this.manager.startupFailure
+    };
+  }
+
   private drawTileStates(
     pass: any,
     items: readonly { readonly state: GeodesicTileState; readonly layer: number | undefined; readonly key: string }[],

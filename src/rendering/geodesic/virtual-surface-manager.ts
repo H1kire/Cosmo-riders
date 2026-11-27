@@ -83,6 +83,11 @@ export class VirtualSurfaceManager {
  get activeWorkers():number{return this.pool.activeCount;}
  get workerCount():number{return this.pool.workerCount;}
  get diagnostics():readonly SurfaceTileStatus[]{return[...this.statuses.values()].map(item=>({...item}));}
+ get stateCounts():Readonly<Record<SurfaceTileState,number>>{
+  const counts:Record<SurfaceTileState,number>={Unrequested:0,Queued:0,Generating:0,'CPU Ready':0,'Upload Pending':0,'GPU Ready':0,Visible:0,Evicted:0,Failed:0};
+  for(const item of this.statuses.values())counts[item.state]++;
+  return counts;
+ }
 }
 
 /** GPU texture-array сторінки з LRU-витісненням; кожен шар є одним трикутним VT-тайлом. */

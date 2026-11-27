@@ -165,13 +165,32 @@ export class Solar3DView{
    maxVertexUniformVectors:'—',maxFragmentUniformVectors:'—',maxVertexAttributes:'—',extensions:[],
    mode:'webgpu',active:backend?.state==='ready'?'WebGPU':'WebGPU unavailable',rendererState:backend?.state??'unavailable',
    pendingRendererState:null,pendingRendererError:null,activeRenderScale:backend?.activeRenderScale??1,activeSceneSize:backend?.activeSceneSize??[0,0],activeMsaaSamples:backend?.activeMsaaSamples??1,requestedUploadsPerFrame:this.graphics?.geodesic?.uploadsPerFrame??1,requestedPageSize:this.graphics?.geodesic?.pageResolution??0,
-   requestedMeshResolution:this.graphics?.geodesic?.meshResolution??0,pageSize:0,pageBytes:0,gpuCacheBytes:0,gpuLayers:0,
-   failedGpuCacheBytes:0,failedGpuLayers:0,failedGpuResidentPages:0,allocatedTextureArrays:0,gpuResidentPages:0,
-   gpuPinnedPages:0,cpuCacheBytes:0,cpuCachePages:0,generatedPages:0,uploadedPages:0,workerCount:0,workerActive:0,
-   workerQueued:0,workerStartupErrors:0,workerRuntimeErrors:0,workerTaskErrors:0,cancelledTasks:0,disposedTasks:0,
+   requestedMeshResolution:this.graphics?.geodesic?.meshResolution??0,
+   ...(backend?.surfaceCacheDiagnostics??{
+    pageSize:0,pageBytes:0,capacity:0,budgetBytes:this.graphics?.geodesic?.gpuBudgetBytes??0,capacityBytes:0,
+    allocatedBytes:0,residentBytes:0,residentPages:0,pinnedPages:0,unpinnedResidentPages:0,freePages:0,
+    allocatedTextureArrays:0,ready:false,uploadCount:0,uploadFailureCount:0,evictionCount:0,
+    cacheHitCount:0,cacheMissCount:0,highWaterResidentPages:0,cpuCacheBytes:0,cpuCacheBudgetBytes:this.graphics?.geodesic?.cpuBudgetBytes??0,
+    cpuCachePages:0,generatedPages:0,visiblePages:0,queuedPages:0,generatingPages:0,failedPages:0,
+    workerCount:0,workerActive:0,workerQueued:0,workerStartupErrors:0,workerRuntimeErrors:0,workerTaskErrors:0,
+    cancelledTasks:0,disposedTasks:0,firstWorkerFailure:null
+   }),
+   gpuCacheBytes:backend?.surfaceCacheDiagnostics?.allocatedBytes??0,
+   gpuLayers:backend?.surfaceCacheDiagnostics?.capacity??0,
+   gpuResidentPages:backend?.surfaceCacheDiagnostics?.residentPages??0,
+   gpuPinnedPages:backend?.surfaceCacheDiagnostics?.pinnedPages??0,
+   failedGpuCacheBytes:0,failedGpuLayers:0,failedGpuResidentPages:0,
+   uploadedPages:backend?.surfaceCacheDiagnostics?.residentPages??0,
+   workerCount:backend?.surfaceCacheDiagnostics?.workerCount??0,workerActive:backend?.surfaceCacheDiagnostics?.workerActive??0,
+   workerQueued:backend?.surfaceCacheDiagnostics?.workerQueued??0,
+   workerStartupErrors:backend?.surfaceCacheDiagnostics?.workerStartupErrors??0,
+   workerRuntimeErrors:backend?.surfaceCacheDiagnostics?.workerRuntimeErrors??0,
+   workerTaskErrors:backend?.surfaceCacheDiagnostics?.workerTaskErrors??0,
+   cancelledTasks:backend?.surfaceCacheDiagnostics?.cancelledTasks??0,
+   disposedTasks:backend?.surfaceCacheDiagnostics?.disposedTasks??0,
    meshGenerationMs:0,surfaceGenerationMs:0,firstFailure:backend?.error??null,failureTaskKind:null,failureTaskKey:null,
    failureTimestamp:null,rendererFailureCount:backend?.state==='failed'?1:0,rendererErrors:backend?.state==='failed'?1:0,
-   uploadErrors:0,fallbackReason:backend?.state==='ready'?'WebGPU is the only renderer.':this.backendFallbackReason??'WebGPU is unavailable.'
+   uploadErrors:backend?.surfaceCacheDiagnostics?.uploadFailureCount??0,fallbackReason:backend?.state==='ready'?'WebGPU is the only renderer.':this.backendFallbackReason??'WebGPU is unavailable.'
   };
  }
  configurePlanetEffects(){

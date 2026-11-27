@@ -96,8 +96,38 @@ test('WebGPU page cache invalidates an evicted page after a partial GPU upload f
   assert.equal(cache.getLayer('old-page'), undefined);
   assert.equal(cache.getLayer('failed-page'), undefined);
   assert.equal(cache.residentPages, 0);
+  assert.equal(cache.uploadFailureCount, 1);
+  assert.equal(cache.evictionCount, 1);
 
   device.queue.writeTexture = writeTexture;
   assert.equal(cache.upload(tile('replacement-page')), 0);
   assert.equal(cache.getLayer('replacement-page'), 0);
 });
+
+test('WebGPU cache diagnostics report allocation, residency, pinning, hits, misses and LRU eviction', () => {
+  const device = fakeDevice();
+  const cache = new WebGPUSurfacePageCache(device, 2, 0, 1024 * 1024, 2);
+  for (let index = 0; index < 5; index++) cache.initializeStep();
+  cache.upload(tile('a'));
+  cache.upload(tile('b'));
+  assert.equal(cache.pin('a'), true);
+  assert.equal(cache.getLayer('a'), 0);
+  assert.equal(cache.getLayer('missing'), undefined);
+  cache.upload(tile('c'));
+  const stats = cache.diagnostics;
+  assert.equal(stats.pageBytes, 2 * 2 * 14);
+  assert.equal(stats.capacityBytes, 2 * 2 * 14 * 2);
+  assert.equal(stats.allocatedBytes, stats.capacityBytes);
+  assert.equal(stats.residentBytes, stats.pageBytes * 2);
+  assert.equal(stats.residentPages, 2);
+  assert.equal(stats.pinnedPages, 1);
+  assert.equal(stats.unpinnedResidentPages, 1);
+  assert.equal(stats.freePages, 0);
+  assert.equal(stats.cacheHitCount, 1);
+  assert.equal(stats.cacheMissCount, 1);
+  assert.equal(stats.evictionCount, 1);
+  assert.equal(stats.uploadCount, 3);
+  assert.equal(stats.highWaterResidentPages, 2);
+  assert.equal(stats.ready, true);
+});
+

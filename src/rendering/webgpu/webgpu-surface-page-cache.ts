@@ -15,12 +15,18 @@ export class WebGPUSurfacePageCache {
   private readonly pins = new Map<string, number>();
   private clock = 0;
   private disposed = false;
+  private uploadCountValue = 0;
+  private uploadFailureCountValue = 0;
+  private evictionCountValue = 0;
+  private cacheHitCountValue = 0;
+  private cacheMissCountValue = 0;
+  private highWaterResidentPagesValue = 0;
 
   constructor(
     private readonly device: any,
     resolution: number,
     gutter = 2,
-    budgetBytes = 64 * 1024 * 1024,
+    readonly budgetBytes = 64 * 1024 * 1024,
     maxPages = 20
   ) {
     if (!Number.isInteger(resolution) || resolution < 1) throw new RangeError('Surface page resolution must be positive.');
@@ -43,7 +49,33 @@ export class WebGPUSurfacePageCache {
   get allocatedTextureCount(): number { return this.textures.length; }
   get residentPages(): number { return this.pages.size; }
   get pinnedPages(): number { return this.pins.size; }
+  /** Estimated GPU allocation represented by texture descriptors; WebGPU exposes no VRAM-usage query. */
+  get pageBytes(): number { return this.pageSize * this.pageSize * 14; }
+  get capacityBytes(): number { return this.pageBytes * this.capacity; }
+  /** Bytes allocated in created texture arrays, not a driver-reported physical VRAM counter. */
   get allocatedBytes(): number { return this.pageSize * this.pageSize * this.capacity * [4, 4, 4, 1, 1].slice(0, this.textures.length).reduce((sum, value) => sum + value, 0); }
+  get residentBytes(): number { return this.pages.size * this.pageBytes; }
+  get freePages(): number { return this.capacity - this.pages.size; }
+  get unpinnedResidentPages(): number { return [...this.pages.keys()].filter(key => !this.isPinned(key)).length; }
+  get uploadCount(): number { return this.uploadCountValue; }
+  get uploadFailureCount(): number { return this.uploadFailureCountValue; }
+  get evictionCount(): number { return this.evictionCountValue; }
+  get cacheHitCount(): number { return this.cacheHitCountValue; }
+  get cacheMissCount(): number { return this.cacheMissCountValue; }
+  get highWaterResidentPages(): number { return this.highWaterResidentPagesValue; }
+  get diagnostics() {
+    return {
+      pageSize: this.pageSize, pageBytes: this.pageBytes, capacity: this.capacity,
+      budgetBytes: this.budgetBytes, capacityBytes: this.capacityBytes,
+      allocatedBytes: this.allocatedBytes, residentBytes: this.residentBytes,
+      residentPages: this.residentPages, pinnedPages: this.pinnedPages,
+      unpinnedResidentPages: this.unpinnedResidentPages, freePages: this.freePages,
+      allocatedTextureArrays: this.allocatedTextureCount, ready: this.ready,
+      uploadCount: this.uploadCount, uploadFailureCount: this.uploadFailureCount,
+      evictionCount: this.evictionCount, cacheHitCount: this.cacheHitCount,
+      cacheMissCount: this.cacheMissCount, highWaterResidentPages: this.highWaterResidentPages
+    };
+  }
 
   get albedoView(): any { return this.textures[0]?.createView({ dimension: '2d-array' }); }
   get normalView(): any { return this.textures[1]?.createView({ dimension: '2d-array' }); }
@@ -133,31 +165,34 @@ export class WebGPUSurfacePageCache {
         );
       }
     } catch (error) {
-      if (isNew) {
-        const slot = this.slots[layer];
-        if (slot.key) {
-          this.pages.delete(slot.key);
-          this.pins.delete(slot.key);
-        }
-        slot.key = null;
-        slot.used = 0;
+      this.uploadFailureCountValue++;
+      const slot = this.slots[layer];
+      if (slot.key) {
+        this.pages.delete(slot.key);
+        this.pins.delete(slot.key);
+        this.evictionCountValue++;
       }
+      slot.key = null;
+      slot.used = 0;
       throw error;
     }
 
     if (isNew) {
       const previous = this.slots[layer].key;
-      if (previous) { this.pages.delete(previous); this.pins.delete(previous); }
+      if (previous) { this.pages.delete(previous); this.pins.delete(previous); this.evictionCountValue++; }
       this.slots[layer].key = tile.key;
       this.pages.set(tile.key, layer);
     }
     this.slots[layer].used = ++this.clock;
+    this.uploadCountValue++;
+    this.highWaterResidentPagesValue = Math.max(this.highWaterResidentPagesValue, this.pages.size);
     return layer;
   }
 
   getLayer(key: string): number | undefined {
     const layer = this.pages.get(key);
-    if (layer !== undefined) this.slots[layer].used = ++this.clock;
+    if (layer !== undefined) { this.cacheHitCountValue++; this.slots[layer].used = ++this.clock; }
+    else this.cacheMissCountValue++;
     return layer;
   }
 

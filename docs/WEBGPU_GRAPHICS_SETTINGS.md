@@ -21,3 +21,13 @@ The renderer supports single-sample and 4x MSAA. The scene color target is rende
 ## Verification boundary
 
 Static tests assert profile propagation, bounded controls and render-target sizing. Browser/GPU visual verification remains reserved for the final visual-quality stage.
+
+## GPU Page Cache diagnostics
+
+The graphics diagnostics panel reads counters from the one shared WebGPU surface page cache, not per-planet estimates.
+
+- allocatedBytes is the estimated allocation represented by created WebGPU texture-array descriptors. WebGPU does not expose a portable query for physical VRAM actually committed by the driver; the panel must not label this as measured device VRAM.
+- residentBytes and resident/free/pinned/evictable page counts describe occupied cache layers. capacityBytes is the full page-layer capacity estimate and budgetBytes is the configured upper budget.
+- Cache hit/miss, successful uploads, failed GPU uploads, LRU evictions and high-water resident count are cumulative for the lifetime of the active cache.
+- CPU cache bytes/pages and worker state counts come from the shared VirtualSurfaceManager; GPU memory is not multiplied by the number of planets.
+- The panel distinguishes an unallocated cache from an initialized but empty cache. Five texture arrays are allocated incrementally.

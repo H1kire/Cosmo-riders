@@ -855,6 +855,7 @@ export class WebGPUBackend {
   get activeRenderScale(): number { return this.renderScale; }
   get activeSceneSize(): readonly [number, number] { return [this.sceneWidth, this.sceneHeight]; }
   get activeMsaaSamples(): number { return this.msaaSamples; }
+  get surfaceCacheDiagnostics() { return this.geodesicSystem?.getCacheDiagnostics() ?? null; }
 
   private async reconfigureMsaa(requested: 1 | 4): Promise<void> {
     if (this.disposed || this.state !== 'ready') return;

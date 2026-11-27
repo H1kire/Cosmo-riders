@@ -126,3 +126,23 @@ test('all scene and geodesic pipelines use the active MSAA sample count', async 
   assert.match(backend, /reconfigureMsaa\(requestedMsaa\)/);
   assert.match(solar, /msaaSamples:this\.graphics\.msaaSamples/);
 });
+
+test('GPU cache diagnostics flow from the shared page cache into the graphics panel', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const cache = await readFile(new URL('../src/rendering/webgpu/webgpu-surface-page-cache.ts', import.meta.url), 'utf8');
+  const system = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  const backend = await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts', import.meta.url), 'utf8');
+  const solar = await readFile(new URL('../src/presentation/solar-3d.ts', import.meta.url), 'utf8');
+  const panel = await readFile(new URL('../lab/graphics-settings.ts', import.meta.url), 'utf8');
+  assert.match(cache, /get diagnostics\(\)/);
+  assert.match(cache, /get evictionCount\(/);
+  assert.match(cache, /get cacheHitCount\(/);
+  assert.match(cache, /get residentBytes\(/);
+  assert.match(system, /getCacheDiagnostics\(\)/);
+  assert.match(system, /cpuCacheBytes: this\.manager\.memoryBytes/);
+  assert.match(backend, /get surfaceCacheDiagnostics\(\)/);
+  assert.match(solar, /\.\.\.\(backend\?\.surfaceCacheDiagnostics/);
+  assert.match(panel, /LRU evictions/);
+  assert.match(panel, /cacheHitCount/);
+  assert.match(panel, /unpinnedResidentPages/);
+});

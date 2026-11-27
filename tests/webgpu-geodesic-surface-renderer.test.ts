@@ -122,3 +122,14 @@ test('active geodesic LOD crossfade is not repeatedly retargeted by camera movem
   assert.ok(!source.includes('topology.transition.targetSignature !== signature'));
   assert.ok(source.includes('не замінюємо його цільовий набір новим'));
 });
+
+
+test('active WebGPU backend culls bodies, atmosphere/cloud shells and ring geometry by projected bounds',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('if (!isRenderSphereVisible(body.position, bodyRadius, frame)) continue'));
+ assert.ok(source.includes('bodyRadius * shellScale, frame'));
+ assert.ok(source.includes('isRenderSphereVisible(ringCenter, modelRadius(ringDraw.model), frame)'));
+ assert.ok(source.includes('function modelRadius(model: ArrayLike<number>)'));
+ assert.ok(source.includes('isSpherePotentiallyVisibleInFrustum('));
+});

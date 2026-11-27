@@ -11,7 +11,7 @@ import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
  * body transforms are supplied by Solar3DView so physics remains single-source.
  * It intentionally does not wrap or call WebGL.
  */
-export interface SphereGeometryData {/** Підсумовує обмежене ковзне вікно часу кадру. */
+/** Підсумовує обмежене ковзне вікно часу кадру. */
 export function summarizeFrameTimes(samples: readonly number[]) {
   const valid=samples.filter(value=>Number.isFinite(value)&&value>=0).slice().sort((a,b)=>a-b);
   if(!valid.length)return{sampleCount:0,averageMs:0,medianMs:0,p95Ms:0,peakMs:0,fps:0};

@@ -34,7 +34,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'ПРОИЗВОДИТЕЛЬНОСТЬ — окно '+(perf.sampleCount??0)+' кадров',
   'FPS: '+(perf.fps??0).toFixed(1)+' · CPU frame: '+(perf.cpuFrameMs??0).toFixed(2)+' ms',
   'Frame time: avg '+(perf.averageMs??0).toFixed(2)+' · p50 '+(perf.medianMs??0).toFixed(2)+' · p95 '+(perf.p95Ms??0).toFixed(2)+' · peak '+(perf.peakMs??0).toFixed(2)+' ms',
-  'GPU frame: '+(perf.gpuTimingSupported?(typeof perf.gpuFrameMs==='number'?value.performance.gpuFrameMs.toFixed(2)+' ms':'ожидание измерения'):'timestamp-query не поддерживается')+' · GPU utilization: API не предоставляет',
+  'GPU frame: '+(perf.gpuTimingSupported?(typeof perf.gpuFrameMs==='number'?perf.gpuFrameMs.toFixed(2)+' ms':'ожидание измерения'):'timestamp-query не поддерживается')+' · GPU utilization: API не предоставляет',
   'Draw calls: '+(perf.drawCalls??0)+' · render passes: '+(perf.renderPasses??0)+' · post FX: '+(perf.postProcessingPasses??0),
   'Bodies: '+(perf.bodyCount??0)+' · surface: '+(perf.surfaceBodyCount??0)+' · atmosphere: '+(perf.atmosphereBodyCount??0)+' · clouds: '+(perf.cloudBodyCount??0)+' ('+(perf.cloudLayerCount??0)+' layers)',
   'Geodesic: '+(perf.visibleGeodesicTiles??0)+' visible tiles · '+(perf.geodesicDrawCalls??0)+' draw calls',

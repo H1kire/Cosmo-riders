@@ -272,9 +272,11 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   getPlanetLodStats(bodyId: string): GeodesicLodStats | null {
-  getFrameDiagnostics(){return{surfaceBodyCount:this.active.size,visibleGeodesicTiles:this.frameVisibleTiles.size,geodesicDrawCalls:this.frameDrawCalls};}
-
     return this.topologies.get(bodyId)?.lastStats ?? null;
+  }
+
+  getFrameDiagnostics() {
+    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls };
   }
 
   getCacheDiagnostics() {

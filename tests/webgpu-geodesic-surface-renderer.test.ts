@@ -155,3 +155,12 @@ test('geodesic screen-space LOD uses the actual internal render target dimension
  assert.ok(source.includes('frame.verticalFovRadians ?? Math.PI / 3,\n          width, height,'));
  assert.ok(!source.includes('frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height,'));
 });
+
+
+test('geodesic frame start releases stale pins before prioritized visible-page repinning',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
+ const begin=source.slice(source.indexOf('beginFrame(): void'),source.indexOf('drawBody(',source.indexOf('beginFrame(): void')));
+ assert.ok(begin.includes('for (const runtime of this.runtimes.values()) runtime.setVisibleTiles([])'));
+ assert.ok(begin.indexOf('runtime.setVisibleTiles([])')<begin.indexOf('uploadsRemainingThisFrame=this.settings.uploadsPerFrame'));
+});

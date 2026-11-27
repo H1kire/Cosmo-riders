@@ -11,13 +11,13 @@ export interface VesselSnapshot extends PhysicsState{readonly id:string;readonly
 type BodyMetadata=CelestialBody;
 const vector=(a:ArrayLike<number>,offset=0):V3=>({x:a[offset],y:a[offset+1],z:a[offset+2]});
 export class PhysicsWorldClient{
- readonly bridge=new PhysicsBridge();readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
+ readonly bridge:PhysicsBridge;readonly bodies=new Map<string,BodyMetadata>();readonly vessels=new Map<string,VesselSnapshot>();readonly sphereOfInfluence=new Map<string,number|null>();readonly orbitalPeriods=new Map<string,number|null>();readonly orbitPaths=new Map<string,Float64Array>();
  simulationTimeSeconds=0;accumulator=0;timeScale=1;paused=false;readonly bodyStates=new Map<string,PhysicsState>();readonly renderBodyStates=new Map<string,PhysicsState>();readonly rotationAngles=new Map<string,number|null>();readonly renderRotationAngles=new Map<string,number|null>();readonly renderVessels=new Map<string,VesselSnapshot>();
  private readonly orbitPathRequests=new Map<string,Promise<Float64Array>>();
  private readonly orbitPathTimes=new Map<string,{simulationTimeSeconds:number;requestedAtMs:number}>();
  private orbitPathGeneration=0;
  private disposed=false;
- constructor(private readonly catalog=createSolarSystemBodyCatalog()){}
+ constructor(private readonly catalog=createSolarSystemBodyCatalog(),bridge?:PhysicsBridge){this.bridge=bridge??new PhysicsBridge();}
  async initialize(options:Record<string,number>={fixedStepSeconds:60,maxSubSteps:2000}):Promise<void>{
   await this.bridge.initialize(this.catalog,options);
   for(const entry of this.catalog){

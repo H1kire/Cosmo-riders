@@ -4,7 +4,7 @@
 
 The loading overlay is present in both the root and `/lab/` entrypoints. `lab/main.ts` yields a frame before the dynamic import, and `lab/lab.ts` yields again before constructing the WebGL scene so the browser can paint the overlay first.
 
-Solar3DView exposes an initialization promise. The WebGL2 fallback's base programs and UV sphere meshes are prepared in separate animation-frame slices. WebGPU adapter/device/pipeline initialization starts concurrently and does not hold the first interactive WebGL2 frame hostage; when it becomes ready, the view switches to it. Adapter selection uses one default request without `powerPreference`, which Chromium on Windows may ignore. The initial HDR target is 1×1 and the first resize is capped to 1920×1080 render pixels (before the selected render scale). Hardware MSAA is disabled because the HDR pipeline owns its own multisample target, and the pipeline is capped at 2× samples. The expensive geodesic work also remains outside the constructor and first scene frame. Orbit paths are now generated lazily only when the corresponding orbit becomes visible; the previous eager pass generated up to 1024 segments for every orbit during PhysicsWorldClient initialization:
+Solar3DView exposes an initialization promise. The WebGPU fallback's base programs and UV sphere meshes are prepared in separate animation-frame slices. WebGPU adapter/device/pipeline initialization starts concurrently and does not hold the first interactive WebGPU frame hostage; when it becomes ready, the view switches to it. Adapter selection uses one default request without `powerPreference`, which Chromium on Windows may ignore. The initial HDR target is 1×1 and the first resize is capped to 1920×1080 render pixels (before the selected render scale). Hardware MSAA is disabled because the HDR pipeline owns its own multisample target, and the pipeline is capped at 2× samples. The expensive geodesic work also remains outside the constructor and first scene frame. Orbit paths are now generated lazily only when the corresponding orbit becomes visible; the previous eager pass generated up to 1024 segments for every orbit during PhysicsWorldClient initialization:
 
 - Geodesic renderer creation is deferred until after the first scene frame.
 - GPU texture arrays are allocated one array per frame.
@@ -23,7 +23,7 @@ The first Solar System frame is therefore independent of completion of all twent
 |---|---:|---|
 | Bootstrap | 5% | Loading controller has reached its first frame |
 | Application import | 5% | Dynamic import of `lab.ts` has completed |
-| WebGL context | 15% | WebGL2 context and base renderer construction completed |
+| WebGL context | 15% | WebGPU context and base renderer construction completed |
 | Solar System | 20% | Physical world and initial scenario are prepared |
 | Scene renderer | 15% | Base renderer and animation loop are registered |
 | Geodesic surface | 20% | All twenty root pages and meshes are ready for drawing |

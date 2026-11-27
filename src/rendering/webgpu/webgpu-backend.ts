@@ -1084,7 +1084,7 @@ export class WebGPUBackend {
           pass, body, body.surfaceProfile!, frame.viewProjection, frame.cameraPosition,
           frame.sunPosition, frame.cameraForward ?? [0, 0, -1],
           frame.verticalFovRadians ?? Math.PI / 3,
-          frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height,
+          width, height,
           body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, frame.sunRadius ?? 0, body.shadowsEnabled !== false
         );
         // Тверда планета не переходить на спрощену сферу, поки геодезичні сторінки завантажуються.

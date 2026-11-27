@@ -156,40 +156,47 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  const albedo=new Uint8Array(count*4),normal=new Uint8Array(count*3),height=new Float32Array(count),roughness=new Uint8Array(count),materialId=new Uint8Array(count);
  const resolved=resolveGeoTile(tile),plateSet=profile.kind==='gas-giant'||profile.kind==='ice-giant'?[]:plates(request.seed,profile);
  const sampleDirection=(direction:Vec3,lodLevel:number)=>profile.kind==='gas-giant'||profile.kind==='ice-giant'?atmosphereSample(direction,profile):geologicalSample(direction,profile,plateSet,lodLevel);
- // Нормалі та канал Height обчислюються з одного й того самого поля висот.
- const sampleHeight=(direction:Vec3)=>sampleDirection(direction,tile.level).height;
- const angularStep=1/(resolution*Math.pow(2,tile.level));
- // Усі профілі мають фізичні межі рельєфу; Земля зберігає асиметричний океанічний діапазон.
- // Значення лишається часткою радіуса до побудови нормалей і запису каналу Height.
+ // Кожен texel семплюється лише один раз; нормалі будуються з готового поля displacement.
+ // Це усуває чотири повторні повні геологічні обчислення на кожен texel.
  const limits=heightLimitM(profile);
- // Процедурна висота є безрозмірним рельєфом; масштабуємо її до метричного діапазону конкретного тіла.
  const heightFraction=(value:number)=>clamp(value*(value<0?limits.negative:limits.positive)/profile.meanRadiusM,-limits.negative/profile.meanRadiusM,limits.positive/profile.meanRadiusM);
+ const directions=new Float32Array(count*3);
+ const displacedPositions=new Float32Array(count*3);
  let index=0;
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){
-   // Gutter продовжує параметризацію за межі сторінки; значення береться з того самого глобального поля.
+   // Gutter продовжує глобальне сферичне поле за межі сторінки.
    const pageX=(col+.5)/resolution,pageY=(row+.5)/resolution;
    const [u,v]=squareToTriangleBarycentric(pageX,pageY);
    const direction=barycentricDirection(resolved.triangle,u,v);
    const sample=sampleDirection(direction,tile.level);
-   const reference:Vec3=Math.abs(direction[1])<.85?[0,1,0]:[1,0,0];
-   const tangentU=normalize3(cross3(reference,direction));
-   const tangentV=normalize3(cross3(direction,tangentU));
-   const plusU=normalize3([direction[0]+tangentU[0]*angularStep,direction[1]+tangentU[1]*angularStep,direction[2]+tangentU[2]*angularStep]);
-   const minusU=normalize3([direction[0]-tangentU[0]*angularStep,direction[1]-tangentU[1]*angularStep,direction[2]-tangentU[2]*angularStep]);
-   const plusV=normalize3([direction[0]+tangentV[0]*angularStep,direction[1]+tangentV[1]*angularStep,direction[2]+tangentV[2]*angularStep]);
-   const minusV=normalize3([direction[0]-tangentV[0]*angularStep,direction[1]-tangentV[1]*angularStep,direction[2]-tangentV[2]*angularStep]);
-   const slopeU=(heightFraction(sampleHeight(plusU))-heightFraction(sampleHeight(minusU)))/(2*angularStep);
-   const slopeV=(heightFraction(sampleHeight(plusV))-heightFraction(sampleHeight(minusV)))/(2*angularStep);
-   const surfaceNormal=normalize3([
-    direction[0]-tangentU[0]*slopeU-tangentV[0]*slopeV,
-    direction[1]-tangentU[1]*slopeU-tangentV[1]*slopeV,
-    direction[2]-tangentU[2]*slopeU-tangentV[2]*slopeV
-   ]);
+   const physicalHeight=heightFraction(sample.height)*profile.meanRadiusM;
+   directions.set(direction,index*3);
+   const radiusScale=1+physicalHeight/profile.meanRadiusM;
+   displacedPositions[index*3]=direction[0]*radiusScale;
+   displacedPositions[index*3+1]=direction[1]*radiusScale;
+   displacedPositions[index*3+2]=direction[2]*radiusScale;
    albedo.set([Math.round(clamp(sample.color[0])*255),Math.round(clamp(sample.color[1])*255),Math.round(clamp(sample.color[2])*255),255],index*4);
-   normal.set(surfaceNormal.map(value=>Math.round((value*.5+.5)*255)),index*3);
-   height[index]=heightFraction(sample.height)*profile.meanRadiusM;roughness[index]=Math.round(clamp(sample.rough)*255);materialId[index]=sample.material;
+   height[index]=physicalHeight;
+   roughness[index]=Math.round(clamp(sample.rough)*255);
+   materialId[index]=sample.material;
    index++;
+  }
+ }
+ // Нормаль отримується з похідних уже зміщеної геометрії, а не з повторної генерації шуму.
+ // Такий підхід зберігає узгодженість Height/Normal і зменшує вартість генерації сторінки.
+ for(let row=0;row<width;row++){
+  for(let col=0;col<width;col++){
+   const left=row*width+Math.max(0,col-1),right=row*width+Math.min(width-1,col+1);
+   const up=Math.max(0,row-1)*width+col,down=Math.min(width-1,row+1)*width+col;
+   const dx=[displacedPositions[right*3]-displacedPositions[left*3],displacedPositions[right*3+1]-displacedPositions[left*3+1],displacedPositions[right*3+2]-displacedPositions[left*3+2]];
+   const dy=[displacedPositions[down*3]-displacedPositions[up*3],displacedPositions[down*3+1]-displacedPositions[up*3+1],displacedPositions[down*3+2]-displacedPositions[up*3+2]];
+   let nx=dx[1]*dy[2]-dx[2]*dy[1],ny=dx[2]*dy[0]-dx[0]*dy[2],nz=dx[0]*dy[1]-dx[1]*dy[0];
+   const offset=(row*width+col)*3,rx=directions[offset],ry=directions[offset+1],rz=directions[offset+2];
+   if(nx*rx+ny*ry+nz*rz<0){nx=-nx;ny=-ny;nz=-nz;}
+   const length=Math.hypot(nx,ny,nz);
+   if(length<1e-12){nx=rx;ny=ry;nz=rz;}else{nx/=length;ny/=length;nz/=length;}
+   normal.set([Math.round((nx*.5+.5)*255),Math.round((ny*.5+.5)*255),Math.round((nz*.5+.5)*255)],row*width*3+col*3);
   }
  }
  return{key:surfaceTileKey(request),resolution,gutter,albedo,normal,height,roughness,materialId,generationMs:Math.max(0,performanceNow()-started)};

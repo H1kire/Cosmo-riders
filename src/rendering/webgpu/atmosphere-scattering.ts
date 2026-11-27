@@ -123,8 +123,9 @@ fn atmosphereScattering(worldPosition: vec3<f32>, worldNormal: vec3<f32>) -> vec
   }
 
   let intensity = max(0.0, body.material.y);
-  let color = radiance * intensity * 18.0;
-  let optical = dot(radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let solarIrradiance = max(body.lighting.x, 0.0);
+  let color = radiance * intensity * solarIrradiance * 18.0;
+  let optical = dot(radiance, vec3<f32>(0.2126, 0.7152, 0.0722)) * solarIrradiance;
   let alpha = clamp((1.0 - exp(-optical * intensity * 22.0)) * 0.78, 0.0, 0.78);
   return vec4<f32>(color, alpha);
 }

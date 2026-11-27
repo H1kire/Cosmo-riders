@@ -5,7 +5,7 @@ export interface GeoTileId { readonly face: number; readonly path: string; reado
 export interface GeoTile { readonly id: GeoTileId; readonly triangle: GeoTriangle; }
 
 const PHI=(1+Math.sqrt(5))/2;
-const normalize=(v:Vec3):Vec3=>{const m=Math.hypot(v[0],v[1],v[2]);if(!Number.isFinite(m)||m===0)throw new RangeError('Cannot normalize a zero or non-finite direction.');return[v[0]/m,v[1]/m,v[2]/m];};
+const normalize=(v:Vec3):Vec3=>{const m=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);if(!Number.isFinite(m)||m===0)throw new RangeError('Cannot normalize a zero or non-finite direction.');return[v[0]/m,v[1]/m,v[2]/m];};
 const midpoint=(a:Vec3,b:Vec3):Vec3=>normalize([(a[0]+b[0])*.5,(a[1]+b[1])*.5,(a[2]+b[2])*.5]);
 
 export const ICOSAHEDRON_VERTICES:readonly Vec3[]=Object.freeze([

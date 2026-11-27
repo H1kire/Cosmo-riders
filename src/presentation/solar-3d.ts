@@ -189,7 +189,7 @@ export class Solar3DView{
    workerTaskErrors:backend?.surfaceCacheDiagnostics?.workerTaskErrors??0,
    cancelledTasks:backend?.surfaceCacheDiagnostics?.cancelledTasks??0,
    disposedTasks:backend?.surfaceCacheDiagnostics?.disposedTasks??0,
-   meshGenerationMs:0,surfaceGenerationMs:0,firstFailure:backend?.error??null,failureTaskKind:null,failureTaskKey:null,
+   meshGenerationMs:backend?.surfaceCacheDiagnostics?.meshGenerationMs??0,surfaceGenerationMs:backend?.surfaceCacheDiagnostics?.surfaceGenerationMs??0,firstFailure:backend?.error??null,failureTaskKind:null,failureTaskKey:null,
    failureTimestamp:null,rendererFailureCount:backend?.state==='failed'?1:0,rendererErrors:backend?.state==='failed'?1:0,
    uploadErrors:backend?.surfaceCacheDiagnostics?.uploadFailureCount??0,fallbackReason:backend?.state==='ready'?'WebGPU is the only renderer.':this.backendFallbackReason??'WebGPU is unavailable.'
   };

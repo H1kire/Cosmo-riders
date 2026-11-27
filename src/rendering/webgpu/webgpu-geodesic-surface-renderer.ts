@@ -2,7 +2,7 @@ import type { GeodesicTileMesh } from '../geodesic/tile-mesh.ts';
 import type { WebGPUSurfacePageCache } from './webgpu-surface-page-cache.ts';
 
 const USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
-interface GpuMesh { positions: any; normals: any; uv: any; indices: any; uniform: any; bindGroup: any; indexCount: number; }
+interface GpuMesh { positions: any; normals: any; uv: any; indices: any; uniform: any; uniformData: Float32Array; bindGroup: any; indexCount: number; }
 export interface WebGPUGeodesicDraw {
   readonly viewProjection: ArrayLike<number>;
   readonly model: ArrayLike<number>;
@@ -135,7 +135,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       normals: make(mesh.normals, USAGE.VERTEX),
       uv: make(mesh.textureCoordinates, USAGE.VERTEX),
       indices: make(mesh.indices, USAGE.INDEX),
-      uniform, bindGroup, indexCount: mesh.indices.length
+      uniform, uniformData: new Float32Array(84), bindGroup, indexCount: mesh.indices.length
     });
   }
 
@@ -175,7 +175,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
     const mesh = this.meshes.get(tileKey);
     if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return false;
-    this.uniformFor(mesh.uniform, draw);
+    this.uniformFor(mesh, draw);
     const transitionAlpha = Math.max(0, Math.min(1, draw.transitionAlpha ?? 1));
     const role = draw.transitionRole;
     pass.setPipeline(role === 'source' ? this.sourcePipeline : role === 'depth' ? this.depthPipeline : role === 'blend' || transitionAlpha < 1 ? this.crossfadePipeline : this.pipeline);
@@ -188,19 +188,28 @@ export class WebGPUGeodesicSurfaceRenderer {
     return true;
   }
 
-  private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {
-    const data = new Float32Array(84);
-    data.set(Array.from(draw.model).slice(0, 16), 0);
-    data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
+  private uniformFor(mesh: GpuMesh, draw: WebGPUGeodesicDraw): any {
+    const data = mesh.uniformData;
+    for (let index = 0; index < 16; index++) {
+      data[index] = Number(draw.model[index] ?? 0);
+      data[16 + index] = Number(draw.viewProjection[index] ?? 0);
+    }
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, Math.max(0, Math.min(1, draw.morph ?? 1))], 32);
-    data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), Math.max(0, Math.min(1, draw.transitionAlpha ?? 1))], 36);
-    data.set([...(draw.cameraPosition ?? [0, 0, 0]), 1], 40);
+    const light = draw.lightDirection ?? [0.42, 0.76, 0.38];
+    data.set([light[0], light[1], light[2], Math.max(0, Math.min(1, draw.transitionAlpha ?? 1))], 36);
+    const camera = draw.cameraPosition ?? [0, 0, 0];
+    data.set([camera[0], camera[1], camera[2], 1], 40);
     const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
-    data.set([resolution, resolution + gutter * 2, 0, 0], 44);
-    data.set([...(draw.sunPosition ?? [0, 0, 0]), draw.shadowsEnabled === false ? 0 : (draw.sunRadius ?? 0)], 48);
-    data.set(draw.shadowOccluders ?? new Float32Array(32), 52);
-    this.device.queue.writeBuffer(buffer, 0, data);
-    return buffer;
+    const occluders = draw.shadowOccluders;
+    let occluderCount = 0;
+    if (occluders) for (let index = 3; index < 32; index += 4) if (occluders[index] > 0) occluderCount++;
+    data.set([resolution, resolution + gutter * 2, occluderCount, 0], 44);
+    const sun = draw.sunPosition ?? [0, 0, 0];
+    data.set([sun[0], sun[1], sun[2], draw.shadowsEnabled === false ? 0 : (draw.sunRadius ?? 0)], 48);
+    if (occluders) data.set(occluders.subarray(0, 32), 52);
+    else data.fill(0, 52, 84);
+    this.device.queue.writeBuffer(mesh.uniform, 0, data);
+    return mesh.uniform;
   }
 
   dispose(): void {
@@ -279,10 +288,12 @@ fn angularDiskOverlap(sourceRadius:f32,occluderRadius:f32,separation:f32)->f32 {
  return clamp(area/(PI*r*r),0.0,1.0);
 }
 fn shadowVisibility(worldPosition:vec3<f32>)->f32 {
+ let occluderCount=u32(clamp(u.pageInfo.z,0.0,8.0));
+ if(occluderCount==0u||u.sunPosition.w<=0.0){return 1.0;}
  let toSun=u.sunPosition.xyz-worldPosition;let sunDistance=length(toSun);
- if(sunDistance<=0.000001||u.sunPosition.w<=0.0){return 1.0;}
+ if(sunDistance<=0.000001){return 1.0;}
  let sunDirection=toSun/sunDistance;let sunAngular=asin(clamp(u.sunPosition.w/sunDistance,0.0,0.999));var visibility=1.0;
- for(var i=0u;i<8u;i=i+1u){
+ for(var i=0u;i<occluderCount;i=i+1u){
   let caster=u.shadowOccluders[i];if(caster.w<=0.0){continue;}
   let toCaster=caster.xyz-worldPosition;let distance=length(toCaster);
   if(distance<=0.000001||distance>=sunDistance){continue;}

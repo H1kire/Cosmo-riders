@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { WebGPUGeodesicSurfaceRenderer } from '../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts';
 
 test('geodesic renderer creates indexed GPU buffers and submits page-backed draws', async () => {
-  const buffers: any[] = [], calls: string[] = [];
+  const buffers: any[] = [], calls: string[] = [], uniformWrites: Float32Array[] = [];
   let bindGroupLayout: any = null;
   const device = {
     createShaderModule: () => ({ getCompilationInfo: async () => ({ messages: [] }) }),
@@ -12,7 +12,7 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
     createRenderPipelineAsync: async (value: any) => value,
     createSampler: (value: any) => value,
     createBuffer: (value: any) => { const buffer = { ...value, destroyed: false, destroy() { this.destroyed = true; } }; buffers.push(buffer); return buffer; },
-    queue: { writeBuffer() {}, onSubmittedWorkDone: async () => undefined },
+    queue: { writeBuffer(_buffer: unknown, _offset: number, data: Float32Array) { uniformWrites.push(data.slice()); }, onSubmittedWorkDone: async () => undefined },
     createBindGroup: (value: any) => value
   };
   const views = Array.from({ length: 5 }, () => ({}));
@@ -34,8 +34,9 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
     setVertexBuffer() { calls.push('vertex'); }, setIndexBuffer() { calls.push('index'); },
     drawIndexed(count: number) { calls.push('draw:'+count); }
   };
-  const drawn = renderer.draw(pass, '0:root', { viewProjection: new Float32Array(16), model: new Float32Array(16), radiusM: 10, pageLayer: 0 });
+  const drawn = renderer.draw(pass, '0:root', { viewProjection: new Float32Array(16), model: new Float32Array(16), radiusM: 10, pageLayer: 0, lightIntensity: 0.25 });
   assert.equal(drawn, true);
+  assert.equal(uniformWrites.at(-1)?.[43], 0.25, 'solar irradiance occupies the previously unused camera.w lane');
   assert.deepEqual(calls.slice(-2), ['index', 'draw:3']);
   assert.equal(buffers.length, 5);
   renderer.releaseMesh('0:root');

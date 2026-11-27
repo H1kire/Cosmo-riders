@@ -113,7 +113,7 @@ export class WebGPUGeodesicSurfaceSystem {
         topology.runtime.reconcile(selection.tiles, new Set(selection.tiles.map(tile => tile.id.key)));
         topology.visibleSignature = signature;
         topology.lastStats = selection.stats;
-        topology.splitKeys = collectSplitKeys(selection.tiles);
+        topology.splitKeys = collectSplitKeys(topology.runtime.activeTiles);
       } catch {
         // Зберігаємо останню коректну збалансовану сітку, якщо кадр вичерпав бюджет сторінок.
       }

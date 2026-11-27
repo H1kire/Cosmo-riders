@@ -43,6 +43,8 @@ function makeTile(request: SurfaceTileRequest): SurfaceTileData {
 class FakeManager {
   requests: SurfaceTileRequest[] = [];
   disposed = false;
+  pendingCount = 0;
+  workerPool = { maxPendingTasks: 2 };
   markVisible(_key: string, _visible: boolean) {}
   markUploadPending(_key: string) {}
   markGpuReady(_key: string) {}

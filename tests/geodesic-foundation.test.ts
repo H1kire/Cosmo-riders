@@ -568,9 +568,10 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and WebGPU-m
 
 test('active WebGPU geodesic system uses screen-error LOD, balanced topology and per-edge stitching',async()=>{
  const {readFile}=await import('node:fs/promises');
- const [system,renderer,backend,solar]=await Promise.all([
+ const [system,renderer,meshBuilder,backend,solar]=await Promise.all([
   readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/geodesic/tile-mesh.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8')
  ]);
@@ -580,7 +581,8 @@ test('active WebGPU geodesic system uses screen-error LOD, balanced topology and
  assert.ok(system.includes('state.stitchMask'));
  assert.ok(system.includes('requestTileMesh(tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask'));
  assert.ok(system.includes('maxTiles: this.pages.capacity'));
- assert.ok(renderer.includes('buildStitchIndexTemplate'));
+ assert.ok(meshBuilder.includes('buildStitchIndexTemplate'));
+ assert.ok(meshBuilder.includes('coarseEdgeMask'));
  assert.ok(renderer.includes('releaseMesh(tileKey: string)'));
  assert.ok(backend.includes('frame.cameraForward'));
  assert.ok(solar.includes('cameraForward:norm(sub(this.target,eye))'));

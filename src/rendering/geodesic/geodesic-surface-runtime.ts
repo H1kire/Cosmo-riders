@@ -95,7 +95,7 @@ export class GeodesicSurfaceRuntime {
   return true;
  }
  /** Reconcile a complete desired leaf cover. Parents are replaced atomically by descendants and vice versa. */
- reconcile(desired:readonly GeoTile[],visibleKeys:ReadonlySet<string>=new Set(),maxTiles=this.options.maxTiles):void{
+ reconcile(desired:readonly GeoTile[],visibleKeys?:ReadonlySet<string>,maxTiles=this.options.maxTiles):void{
   const next=new Map<string,GeoTile>();
   for(const tile of desired){
    if(next.has(tile.id.key))throw new Error('Desired leaf set contains duplicate tiles.');
@@ -107,8 +107,11 @@ export class GeodesicSurfaceRuntime {
   const balanced=balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles});
   if(balanced.violations>0)throw new Error('Desired leaf set cannot satisfy the 2:1 balance within configured limits.');
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
-  // Балансувальні листки також потрібні для закриття швів на межі видимої області.
-  this.visible=new Set(this.active.keys());
+  // Балансувальні листки поза видимим піддеревом зберігаються для топології, але не надсилаються на GPU.
+  const requestedVisible=visibleKeys??new Set(next.keys());
+  this.visible=new Set(balanced.tiles
+   .filter(tile=>isVisibleLeafOrDescendant(tile,requestedVisible))
+   .map(tile=>tile.id.key));
   this.visibilityConfigured=true;
   this.rebuildTopology();
  }
@@ -153,4 +156,15 @@ export class GeodesicSurfaceRuntime {
   for(const digit of path)tile=childrenOf(tile)[Number(digit)];
   return tile;
  }
+}
+
+
+/** Балансувальні нащадки видимого листка залишаються видимими; сторонні листки — лише топологічні. */
+function isVisibleLeafOrDescendant(tile:GeoTile,visibleKeys:ReadonlySet<string>):boolean{
+ if(visibleKeys.has(tile.id.key))return true;
+ for(let length=0;length<tile.id.path.length;length++){
+  const ancestor=tile.id.face.toString(36)+':'+(length===0?'root':tile.id.path.slice(0,length));
+  if(visibleKeys.has(ancestor))return true;
+ }
+ return false;
 }

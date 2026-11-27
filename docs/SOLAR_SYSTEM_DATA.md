@@ -24,10 +24,25 @@ The eight planets use the JPL Solar System Dynamics *Approximate Positions of th
 - Earth heliocentric values in the table are retained from the original fixture for test stability.
 - Moon geocentric mean elements at J2000.0: a=384400000 m, e=0.0554, i=5.16 deg, Ω=125.08 deg, ω=318.15 deg, M=135.27 deg. These values match the JPL Planetary Satellite Mean Elements table (DE405/LE405, 2000-01-01.5 TDB). They are mean elements, not a date-specific osculating state; solar perturbations and the 18.6-year nodal / 5.997-year apsidal cycles are not integrated.
 
+## Satellite mean-element audit
+
+Satellite parameters are sourced from the JPL Planetary Satellite Mean Elements tables, not from generic zero-angle defaults. The Rust/WASM physics layer transforms each element set from its declared reference plane into the common ecliptic inertial frame.
+
+- Regular Jovian satellites use the JPL local Laplace plane, effectively aligned with Jupiter's equator for the catalogued bodies. Himalia uses the JPL ecliptic solution.
+- Main Saturnian satellites use the JPL local Laplace plane. Iapetus and Phoebe use their separately published Laplace-pole RA/Dec rather than Saturn's spin pole.
+- Uranian satellites use JPL mean equatorial elements and are transformed from Uranus' equator.
+- Neptune's inner satellites and Triton use JPL mean equatorial elements. Nereid uses the JPL NEP105 ecliptic solution at 2020-01-01.0 TDB; its mean anomaly is back-propagated to J2000 using the published 360.133039-day period.
+- Phobos and Deimos use JPL Mars-satellite mean elements; the Laplace-plane pole is effectively aligned with Mars' equator for these entries. The Moon uses the JPL DE405/LE405 ecliptic solution.
+
+The catalogue was corrected for Rhea, Titan, Hyperion, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton, Naiad, Thalassa, Despina, Galatea, Larissa, Proteus and Nereid. Himalia was moved to the ecliptic reference frame. Iapetus and Phoebe now carry explicit Laplace-plane pole metadata.
+
+These mean elements describe average orbit shape/orientation; they do not reproduce short-period perturbations, resonance libration, apsidal/node precession or exact date-specific positions. Accurate time-tagged positions require JPL Horizons/SPICE ephemerides.
+
 ## Sources
 - NASA/JPL Solar System Dynamics, *Approximate Positions of the Planets*: https://ssd.jpl.nasa.gov/planets/approx_pos.html — planetary secular elements, conventions and validity interval.
 - NASA NSSDC, *Earth Fact Sheet*: https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html — Earth physical and orbital reference values.
-- JPL Solar System Dynamics, *SB Satellites API*: https://ssd-api.jpl.nasa.gov/doc/sb_sat.html — satellite orbital element fields, frames and epochs.
+- JPL Solar System Dynamics, *Planetary Satellite Mean Elements*: https://ssd.jpl.nasa.gov/sats/elem/sep.html — satellite mean elements, reference frames and epochs.
+- JPL Solar System Dynamics, *Planetary Satellite Physical Parameters*: https://ssd.jpl.nasa.gov/sats/phys_par/sep.html — satellite GM, mean radius and density.
 
 ## Accuracy policy
 The two-body hierarchy intentionally approximates the Solar System. The Moon's orbit is perturbed by the Sun; planetary mutual perturbations are not integrated. For high-fidelity validation and mission design, replace this fixture with timestamped JPL Horizons/DE440 states and a suitable numerical integrator.

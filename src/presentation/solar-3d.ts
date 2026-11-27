@@ -7,6 +7,7 @@ import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedO
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { createGeologicalProfile, surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 import { WebGPUBackend, type WebGPUBodyDraw } from '../rendering/webgpu/webgpu-backend.ts';
+import { atmosphereScaleHeightRatio } from '../rendering/webgpu/atmosphere-scattering.ts';
 
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
 const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4,titan:5};
@@ -412,7 +413,7 @@ export class Solar3DView{
    const profile=this.atmosphereSystem.getProfile(body.id);
    const cloudLayers=this.cloudSystem.getLayers(body.id);
    if(this.graphics.atmosphere&&profile){
-    webgpuDraw.atmosphere={color:profile.rayleigh,intensity:(profile.intensity??1)*this.graphics.atmosphereIntensity,thicknessRatio:profile.atmosphereHeightM/body.meanRadiusM,mie:profile.mie,anisotropy:profile.mieAnisotropy};
+    webgpuDraw.atmosphere={color:profile.rayleigh,intensity:(profile.intensity??1)*this.graphics.atmosphereIntensity,thicknessRatio:profile.atmosphereHeightM/body.meanRadiusM,mie:profile.mie,anisotropy:profile.mieAnisotropy,rayleighScaleHeightRatio:atmosphereScaleHeightRatio(profile.rayleighScaleHeightM,body.meanRadiusM),mieScaleHeightRatio:atmosphereScaleHeightRatio(profile.mieScaleHeightM,body.meanRadiusM)};
    }
    if(this.graphics.clouds&&cloudLayers.length){
     webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind}));
@@ -443,7 +444,7 @@ export class Solar3DView{
    }
    sunVisible=visibility>.02;
   }
-  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
+  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

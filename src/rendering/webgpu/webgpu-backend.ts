@@ -1,5 +1,6 @@
 import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
 import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
+import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
 
 /**
  * First native WebGPU sphere renderer.
@@ -34,7 +35,7 @@ export interface WebGPUBodyDraw {
   shadowOccluders?: Float32Array;
   shadowsEnabled?: boolean;
   surfaceProfile?: SurfaceProfile;
-  atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; };
+  atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; rayleighScaleHeightRatio: number; mieScaleHeightRatio: number; };
   clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
 }
 
@@ -49,6 +50,7 @@ export interface WebGPUFrame {
   viewportWidthPx?: number;
   viewportHeightPx?: number;
   timeSeconds: number;
+  atmosphereSamples?: number;
   bodies: readonly WebGPUBodyDraw[];
   orbits: readonly WebGPUOrbitDraw[];
   rings: readonly WebGPURingDraw[];
@@ -274,11 +276,13 @@ fn surfaceShadowVisibility(worldPosition: vec3<f32>) -> f32 {
   }
   return visibility;
 }
+${WEBGPU_ATMOSPHERE_WGSL}
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let direction = normalize(input.localDirection);
   if (body.material.x > 8.5) {
     let normal = normalize(input.worldNormal);
+    if (body.material.x < 9.5) { return atmosphereScattering(input.worldPosition, normal); }
     let viewDirection = normalize(body.cameraPosition.xyz - input.worldPosition);
     let rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0), 2.35);
     let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
@@ -719,7 +723,8 @@ export class WebGPUBackend {
       if (body.atmosphere) {
         const atmosphere = body.atmosphere;
         drawShell(body.id + ':atmosphere', 1 + Math.max(0.0001, atmosphere.thicknessRatio), atmosphere.color,
-          [9, atmosphere.intensity, atmosphere.thicknessRatio, atmosphere.mie]);
+          [9, atmosphere.intensity, atmosphere.thicknessRatio, atmosphere.mie],
+          [atmosphere.anisotropy, atmosphere.rayleighScaleHeightRatio, atmosphere.mieScaleHeightRatio, Math.max(2, Math.min(16, frame.atmosphereSamples ?? 8))]);
       }
       for (let cloudIndex = 0; cloudIndex < (body.clouds?.length ?? 0); cloudIndex++) {
         const cloud = body.clouds![cloudIndex];

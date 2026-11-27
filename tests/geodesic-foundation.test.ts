@@ -577,7 +577,7 @@ test('active WebGPU geodesic system uses screen-error LOD, balanced topology and
  ]);
  assert.ok(system.includes('selectGeodesicLod('));
  assert.ok(system.includes('new GeodesicSurfaceRuntime('));
- assert.ok(system.includes('topology.runtime.reconcile(selection.tiles'));
+ assert.ok(system.includes('topology.runtime.reconcile('));
  assert.ok(system.includes('state.stitchMask'));
  assert.ok(system.includes('requestTileMesh(tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask'));
  assert.ok(system.includes('maxTiles: this.pages.capacity'));

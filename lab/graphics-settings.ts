@@ -5,7 +5,7 @@ const preset=$<HTMLSelectElement>('graphics-preset');
 const backend=$<HTMLSelectElement>('graphics-backend');
 const status=$<HTMLElement>('graphics-status');
 const diagnostics=$<HTMLElement>('graphics-diagnostics');
-const controls:Record<string,HTMLInputElement|null>={shadows:$<HTMLInputElement>('gfx-shadows'),atmosphere:$<HTMLInputElement>('gfx-atmosphere'),clouds:$<HTMLInputElement>('gfx-clouds'),bloom:$<HTMLInputElement>('gfx-bloom'),glare:$<HTMLInputElement>('gfx-glare'),lensFlare:$<HTMLInputElement>('gfx-lens-flare'),hdr:$<HTMLInputElement>('gfx-hdr')};
+const controls:Record<string,HTMLInputElement|null>={adaptiveQuality:$<HTMLInputElement>('gfx-adaptive-quality'),shadows:$<HTMLInputElement>('gfx-shadows'),atmosphere:$<HTMLInputElement>('gfx-atmosphere'),clouds:$<HTMLInputElement>('gfx-clouds'),bloom:$<HTMLInputElement>('gfx-bloom'),glare:$<HTMLInputElement>('gfx-glare'),lensFlare:$<HTMLInputElement>('gfx-lens-flare'),hdr:$<HTMLInputElement>('gfx-hdr')};
 const renderScale=$<HTMLSelectElement>('gfx-render-scale');
 const msaaSamples=$<HTMLSelectElement>('gfx-msaa-samples');
 const atmosphereSamples=$<HTMLSelectElement>('gfx-atmosphere-samples');
@@ -33,6 +33,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
  const lines=[
   'ПРОИЗВОДИТЕЛЬНОСТЬ — окно '+(perf.sampleCount??0)+' кадров',
   'FPS: '+(perf.fps??0).toFixed(1)+' · CPU frame: '+(perf.cpuFrameMs??0).toFixed(2)+' ms',
+  'Качество: '+(value.requestedQuality??settings.preset)+' → '+(value.adaptiveQualityLevel??settings.preset)+' · адаптация '+(value.adaptiveQualityEnabled?'включена':'выключена'),
   'Frame interval: avg '+(perf.averageMs??0).toFixed(2)+' · p50 '+(perf.medianMs??0).toFixed(2)+' · p95 '+(perf.p95Ms??0).toFixed(2)+' · peak '+(perf.peakMs??0).toFixed(2)+' ms',
   'GPU frame: '+(perf.gpuTimingSupported?(typeof perf.gpuFrameMs==='number'?perf.gpuFrameMs.toFixed(2)+' ms':'ожидание измерения'):'timestamp-query не поддерживается')+' · GPU utilization: API не предоставляет',
   'Draw calls: '+(perf.drawCalls??0)+' · render passes: '+(perf.renderPasses??0)+' · post FX: '+(perf.postProcessingPasses??0),

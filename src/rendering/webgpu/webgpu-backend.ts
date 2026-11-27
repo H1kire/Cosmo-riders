@@ -103,9 +103,10 @@ function isRenderSphereVisible(
     Number(frame.cameraPosition[1]) - center[1],
     Number(frame.cameraPosition[2]) - center[2]
   ] as const;
+  const forward=frame.cameraForward?[frame.cameraForward[0],frame.cameraForward[1],frame.cameraForward[2]] as const:[0,0,-1] as const;
   return isSpherePotentiallyVisibleInFrustum(
     camera,
-    frame.cameraForward ?? [0, 0, -1],
+    forward,
     radius,
     frame.verticalFovRadians ?? Math.PI / 3,
     frame.viewportWidthPx ?? 1,

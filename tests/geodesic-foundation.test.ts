@@ -733,3 +733,19 @@ test('tile frustum culling includes diagonal screen corners and rejects separate
  assert.equal(isAngularCapPotentiallyVisibleInFrustum(inside,.01,[0,0,-1],Math.PI/3,1600,900),true);
  assert.equal(isAngularCapPotentiallyVisibleInFrustum(outside,.01,[0,0,-1],Math.PI/3,1600,900),false);
 });
+
+
+test('unchanged geodesic cover skips repeated balance and neighbor-topology rebuilds',()=>{
+ const roots=baseGeoTiles(),runtime=new GeodesicSurfaceRuntime('stable-cover',{maxTiles:128,stitchResolution:8});
+ runtime.reconcile(roots);
+ const version=runtime.version,fullRebuilds=runtime.topologyStats.fullRebuilds;
+ runtime.reconcile([...roots],new Set(roots.map(tile=>tile.id.key)));
+ assert.equal(runtime.version,version);
+ assert.equal(runtime.topologyStats.fullRebuilds,fullRebuilds);
+ runtime.reconcile([...roots],new Set([roots[0].id.key]));
+ assert.equal(runtime.version,version,'visibility-only changes must not rebuild topology');
+ assert.equal(runtime.getTileStates().filter(state=>state.visible).length,1);
+ const refined=[...roots.slice(1),...childrenOf(roots[0])];
+ runtime.reconcile(refined,new Set(refined.map(tile=>tile.id.key)));
+ assert.ok(runtime.version>version,'a changed desired cover must rebuild topology');
+});

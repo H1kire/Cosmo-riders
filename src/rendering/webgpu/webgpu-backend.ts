@@ -2,6 +2,7 @@ import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
 import { resolveBloomIterations } from './post-processing.ts';
 import { resolveMsaaSamples, resolveRenderScale } from '../quality/quality-settings.ts';
 import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
+import { isSpherePotentiallyVisibleInFrustum } from '../geodesic/quadtree-selector.ts';
 import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
 
 /**
@@ -83,6 +84,32 @@ interface BodyGpuResources { uniform: any; bindGroup: any; }
 interface MeshGpuResources { positions: any; normals: any; indices: any; indexCount: number; }
 interface OrbitGpuResources { vertex: any; uniform: any; bindGroup: any; capacity: number; points: Float32Array | null; count: number; }
 interface RingGpuResources { uniform: any; bindGroup: any; }
+
+function modelRadius(model: ArrayLike<number>): number {
+  return Math.hypot(Number(model[0]), Number(model[1]), Number(model[2]));
+}
+
+/** Консервативно відсікає тіла та оболонки поза камерою до створення GPU draw data. */
+function isRenderSphereVisible(
+  center: readonly [number, number, number],
+  radius: number,
+  frame: WebGPUFrame
+): boolean {
+  if (!Number.isFinite(radius) || radius <= 0) return true;
+  const camera = [
+    Number(frame.cameraPosition[0]) - center[0],
+    Number(frame.cameraPosition[1]) - center[1],
+    Number(frame.cameraPosition[2]) - center[2]
+  ] as const;
+  return isSpherePotentiallyVisibleInFrustum(
+    camera,
+    frame.cameraForward ?? [0, 0, -1],
+    radius,
+    frame.verticalFovRadians ?? Math.PI / 3,
+    frame.viewportWidthPx ?? 1,
+    frame.viewportHeightPx ?? 1
+  );
+}
 
 const ZERO_SHADOW_OCCLUDERS = new Float32Array(32);
 const BUFFER_USAGE = { COPY_DST: 0x0008, INDEX: 0x0010, VERTEX: 0x0020, UNIFORM: 0x0040 };
@@ -1026,6 +1053,8 @@ export class WebGPUBackend {
     pass.setPipeline(this.pipeline);
     const matrix = new Float32Array(96);
     for (const body of frame.bodies) {
+      const bodyRadius = modelRadius(body.model);
+      if (!isRenderSphereVisible(body.position, bodyRadius, frame)) continue;
       const usesGeodesicSurface = Boolean(body.surfaceProfile &&
         body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant');
       if (usesGeodesicSurface) {
@@ -1069,6 +1098,12 @@ export class WebGPUBackend {
     pass.setPipeline(this.effectPipeline);
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
+      const bodyRadius = modelRadius(body.model);
+      const shellScale = Math.max(
+        1 + (body.atmosphere?.thicknessRatio ?? 0),
+        ...(body.clouds ?? []).map(layer => 1 + layer.altitudeRatio + layer.thicknessRatio)
+      );
+      if (!isRenderSphereVisible(body.position, bodyRadius * shellScale, frame)) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
       const base = new Float32Array(96);
       base.set(Array.from(body.model).slice(0, 16), 0);
@@ -1124,6 +1159,8 @@ export class WebGPUBackend {
     for (const ringDraw of frame.rings) {
       const config = ringConfigs[ringDraw.id];
       if (!config || !this.ringVertexBuffer) continue;
+      const ringCenter = [Number(ringDraw.model[12]), Number(ringDraw.model[13]), Number(ringDraw.model[14])] as const;
+      if (!isRenderSphereVisible(ringCenter, modelRadius(ringDraw.model), frame)) continue;
       let resources = this.ringResources.get(ringDraw.id);
       if (!resources) {
         const uniform = this.device.createBuffer({ size: 304, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });

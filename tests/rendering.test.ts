@@ -241,3 +241,11 @@ test('active atmosphere profiles use per-body Rayleigh and Mie scale heights',as
  assert.ok(!source.includes('rayleighScaleHeightM:height*.12'));
  assert.ok(!source.includes('mieScaleHeightM:height*.08'));
 });
+
+
+test('sphere mesh LOD uses the active internal render scale',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('radius*(h*this.graphics.renderScale/2)'));
+ assert.ok(!source.includes('radius*(h/2)'));
+});

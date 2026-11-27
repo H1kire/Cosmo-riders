@@ -1113,7 +1113,7 @@ export class WebGPUBackend {
     }
     this.geodesicSystem?.endFrame();
     const geoStats=this.geodesicSystem?.getFrameDiagnostics();
-    if(geoStats){metrics.drawCalls+=geoStats.geodesicDrawCalls;metrics.geodesicDrawCalls=geoStats.geodesicDrawCalls;metrics.visibleGeodesicTiles=geoStats.visibleGeodesicTiles;metrics.surfaceUploadsPerFrame=geoStats.surfaceUploadsPerFrame;metrics.submittedVertices+=geoStats.geodesicSubmittedVertices;metrics.triangles+=geoStats.geodesicTriangles;}
+    if(geoStats){metrics.drawCalls+=geoStats.geodesicDrawCalls;metrics.geodesicDrawCalls=geoStats.geodesicDrawCalls;metrics.visibleGeodesicTiles=geoStats.visibleGeodesicTiles;metrics.submittedVertices+=geoStats.geodesicSubmittedVertices;metrics.triangles+=geoStats.geodesicTriangles;}
     pass.setPipeline(this.effectPipeline);
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;

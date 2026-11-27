@@ -51,7 +51,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const errors = info.messages.filter((item: any) => item.type === 'error');
     if (errors.length) throw new Error('Geodesic WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const layout = device.createBindGroupLayout({ entries: [
-      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 336 } },
+      { binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 336 } },
       { binding: 1, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 2, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: 1, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },

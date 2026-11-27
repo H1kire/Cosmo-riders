@@ -1162,7 +1162,6 @@ export class WebGPUBackend {
         shell.set(params, 40);
         shell.set(surfaceParams, 44);
         if (lighting) shell.set(lighting, 52);
-        shell[39] = 1;
         this.device.queue.writeBuffer(resources.uniform, 0, shell);
         pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
         pass.setBindGroup(0, resources.bindGroup);

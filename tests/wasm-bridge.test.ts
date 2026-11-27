@@ -52,9 +52,12 @@ async function initializeWasm():Promise<void>{
 
 test('Rust/WASM surface pages match the retained TypeScript reference channels',async()=>{
  await initializeWasm();
+ const catalog=createSolarSystemBodyCatalog() as Array<{id:string;[key:string]:unknown}>;
+ const europa=catalog.find(body=>body.id==='europa');
+ assert.ok(europa,'Europa must be present in the simulation catalogue');
  const bodies=[
   {...SOLAR_SYSTEM_DATA.earth,surfaceSeed:101},
-  {...SOLAR_SYSTEM_DATA.europa,surfaceSeed:77},
+  {...europa,surfaceSeed:77},
   {...SOLAR_SYSTEM_DATA.saturn,surfaceSeed:88}
  ];
  for(const body of bodies){

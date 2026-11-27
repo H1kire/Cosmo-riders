@@ -223,7 +223,8 @@ struct VOut {
   let pageSize = max(u.pageInfo.y, 1.0);
   let gutter = floor(max(pageSize - resolution, 0.0) * 0.5);
   let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(gutter);
-  let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSize) - vec2<i32>(1));
+  let pageSizeI = i32(pageSize);
+  let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSizeI) - vec2<i32>(1));
   let heightM = textureLoad(heightTex, heightCoord, layer, 0).r;
   let radiusRatio = 1.0 + (heightM * u.params.z * u.params.w) / max(u.params.x, 1.0);
   let local = input.direction * radiusRatio;

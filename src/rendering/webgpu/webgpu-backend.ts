@@ -1,4 +1,5 @@
 import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
+import { resolveBloomIterations } from './post-processing.ts';
 import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
 import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
 
@@ -85,8 +86,12 @@ struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, };
  var o:V; let q=p[i]; o.pos=vec4<f32>(q,0.0,1.0); o.uv=vec2<f32>((q.x+1.0)*0.5,1.0-(q.y+1.0)*0.5); return o;
 }
 @fragment fn bright(v:V)->@location(0) vec4<f32>{
- let c=textureSample(src,samp,v.uv).rgb; let l=max(max(c.r,c.g),c.b);
- return vec4<f32>(c*(max(l-u.params.x,0.0)/max(l,0.0001)),1.0);
+ let c=max(textureSample(src,samp,v.uv).rgb,vec3<f32>(0.0));
+ let l=dot(c,vec3<f32>(0.2126,0.7152,0.0722));
+ let threshold=max(u.params.x,0.0);let knee=max(threshold*0.5,0.0001);
+ let soft=clamp((l-threshold+knee)/(2.0*knee),0.0,1.0);
+ let contribution=max(l-threshold,0.0)+soft*soft*knee;
+ return vec4<f32>(c*(contribution/max(l,0.0001)),1.0);
 }
 @fragment fn blur(v:V)->@location(0) vec4<f32>{
  let d=u.params.yz; var c=textureSample(src,samp,v.uv).rgb*0.227027;
@@ -751,34 +756,47 @@ export class WebGPUBackend {
     this.postPipelines.blur=await make('blur','rgba16float');
     this.postPipelines.composite=await make('composite',this.format);
     this.postSampler=this.device.createSampler({magFilter:'linear',minFilter:'linear',addressModeU:'clamp-to-edge',addressModeV:'clamp-to-edge'});
-    this.postUniforms=Array.from({length:4},()=>this.device.createBuffer({size:48,usage:BUFFER_USAGE.UNIFORM|BUFFER_USAGE.COPY_DST}));
+    this.postUniforms=Array.from({length:5},()=>this.device.createBuffer({size:48,usage:BUFFER_USAGE.UNIFORM|BUFFER_USAGE.COPY_DST}));
     this.rebuildPostGroups();
   }
 
   private rebuildPostGroups():void {
-    if(!this.postLayout||!this.postSampler||this.postUniforms.length!==4||!this.sceneTexture||!this.pongTexture)return;
+    if(!this.postLayout||!this.postSampler||this.postUniforms.length!==5||!this.sceneTexture||!this.pongTexture)return;
     const make=(source:any,bloom:any,index:number)=>this.device.createBindGroup({layout:this.postLayout,entries:[
       {binding:0,resource:source.createView()},{binding:1,resource:this.postSampler},
       {binding:2,resource:{buffer:this.postUniforms[index],offset:0,size:48}},{binding:3,resource:bloom.createView()}
     ]});
-    this.postGroups=[make(this.sceneTexture,this.sceneTexture,0),make(this.brightTexture,this.brightTexture,1),make(this.pingTexture,this.pingTexture,2),make(this.sceneTexture,this.pongTexture,3)];
+    this.postGroups=[make(this.sceneTexture,this.sceneTexture,0),make(this.brightTexture,this.brightTexture,1),make(this.pingTexture,this.pingTexture,2),make(this.sceneTexture,this.pongTexture,3),make(this.pongTexture,this.pongTexture,4)];
   }
 
   private encodePost(encoder:any,frame:WebGPUFrame):void {
-    if(!this.postPipelines.composite||this.postGroups.length!==4)return;
+    if(!this.postPipelines.composite||this.postGroups.length!==5)return;
     const settings=frame.postProcessing??{},enabled=settings.bloom!==false,uv=frame.sunUv??[0.5,0.5];
     const visible=frame.sunVisible?1:0;
-    const strength=enabled?(settings.bloomStrength??0.28):0,exposure=settings.exposure??1;
+    const strength=enabled?Math.max(0,settings.bloomStrength??0.28):0,exposure=Math.max(0,settings.exposure??1);
     const hdr=settings.hdr!==false,acesEnabled=settings.toneMapping!=='reinhard';
-    const glare=settings.glare===false?0:(settings.glareStrength??0.09);
-    const flare=settings.lensFlare===false?0:(settings.lensFlareStrength??0.055);
+    const glare=settings.glare===false?0:Math.max(0,settings.glareStrength??0.09);
+    const flare=settings.lensFlare===false?0:Math.max(0,settings.lensFlareStrength??0.055);
+    const bloomWidth=Math.max(1,Math.floor(this.canvas.width*0.5));
+    const bloomHeight=Math.max(1,Math.floor(this.canvas.height*0.5));
     const write=(i:number,dx:number,dy:number)=>this.device.queue.writeBuffer(this.postUniforms[i],0,new Float32Array([
-      settings.bloomThreshold??1.55,dx,dy,exposure,strength,uv[0],uv[1],visible,
+      Math.max(0,settings.bloomThreshold??1.55),dx,dy,exposure,strength,uv[0],uv[1],visible,
       hdr?1:0,acesEnabled?1:0,glare,flare
     ]));
-    write(0,0,0);write(1,1/Math.max(1,this.canvas.width),0);write(2,0,1/Math.max(1,this.canvas.height));write(3,0,0);
+    write(0,0,0);
+    write(1,1/bloomWidth,0);write(2,0,1/bloomHeight);
+    write(3,0,0);write(4,1/bloomWidth,0);
     const draw=(target:any,pipeline:any,group:any)=>{const p=encoder.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});p.setPipeline(pipeline);p.setBindGroup(0,group);p.draw(3);p.end();};
-    if(enabled){draw(this.brightTexture,this.postPipelines.bright,this.postGroups[0]);draw(this.pingTexture,this.postPipelines.blur,this.postGroups[1]);draw(this.pongTexture,this.postPipelines.blur,this.postGroups[2]);}
+    if(enabled){
+      draw(this.brightTexture,this.postPipelines.bright,this.postGroups[0]);
+      const iterations=resolveBloomIterations(settings.bloomIterations);
+      draw(this.pingTexture,this.postPipelines.blur,this.postGroups[1]);
+      draw(this.pongTexture,this.postPipelines.blur,this.postGroups[2]);
+      for(let iteration=1;iteration<iterations;iteration++){
+        draw(this.pingTexture,this.postPipelines.blur,this.postGroups[4]);
+        draw(this.pongTexture,this.postPipelines.blur,this.postGroups[2]);
+      }
+    }
     draw(this.context.getCurrentTexture(),this.postPipelines.composite,this.postGroups[3]);
   }
 

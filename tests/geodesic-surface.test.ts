@@ -173,8 +173,8 @@ test('temperature and atmospheric pressure influence polar frost and surface wea
  const cold={...base,kind:'rocky' as const,temperatureK:100,iceFraction:1,waterFraction:0,pressurePa:0};
  const hot={...cold,temperatureK:420};
  const faces=baseGeoTiles();
- const coldPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile,resolution:8,gutter:1,profile:cold}));
- const hotPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile,resolution:8,gutter:1,profile:hot}));
+ const coldPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tile.id,resolution:8,gutter:1,profile:cold}));
+ const hotPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tile.id,resolution:8,gutter:1,profile:hot}));
  assert.ok(coldPages.some((page,index)=>!page.albedo.every((value,i)=>value===hotPages[index].albedo[i])));
  const vacuum={...cold,temperatureK:420,iceFraction:0,pressurePa:0};
  const denseAtmosphere={...vacuum,pressurePa:1e7};

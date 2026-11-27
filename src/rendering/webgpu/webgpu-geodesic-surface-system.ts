@@ -331,7 +331,7 @@ export class WebGPUGeodesicSurfaceSystem {
         transitionAlpha: options.transitionAlpha,
         transitionRole: options.transitionRole
       });
-      if(drawn){this.frameDrawCalls++;this.frameSubmittedVertices+=drawn;this.frameTriangles+=Math.floor(drawn/3);this.frameVisibleTiles.add(item.state.tile.id.key);}
+      if(drawn){const indexCount=renderer.getMeshIndexCount(item.key);this.frameDrawCalls++;this.frameSubmittedVertices+=indexCount;this.frameTriangles+=Math.floor(indexCount/3);this.frameVisibleTiles.add(item.key);}
     }
   }
 

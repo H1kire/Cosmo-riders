@@ -152,10 +152,12 @@ export class WebGPUGeodesicSurfaceRenderer {
     this.meshes.delete(tileKey);
   }
 
-  draw(pass: any, tileKey: string, draw: WebGPUGeodesicDraw): number {
+  getMeshIndexCount(tileKey: string): number { return this.meshes.get(tileKey)?.indexCount ?? 0; }
+
+  draw(pass: any, tileKey: string, draw: WebGPUGeodesicDraw): boolean {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
     const mesh = this.meshes.get(tileKey);
-    if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return 0;
+    if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return false;
     this.uniformFor(mesh.uniform, draw);
     const transitionAlpha = Math.max(0, Math.min(1, draw.transitionAlpha ?? 1));
     const role = draw.transitionRole;
@@ -166,7 +168,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     pass.setVertexBuffer(2, mesh.uv);
     pass.setIndexBuffer(mesh.indices, 'uint32');
     pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
-    return mesh.indexCount;
+    return true;
   }
 
   private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {

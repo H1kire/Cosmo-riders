@@ -29,6 +29,7 @@ export interface WebGPUBodyDraw {
   tectonicActivity?: number;
   volcanicActivity?: number;
   erosion?: number;
+  gasGiant?: { type: number; bandStrength: number; stormStrength: number; jetCount: number; };
   detail?: number;
   lod: number;
   eclipseVisibility?: number;
@@ -292,10 +293,73 @@ fn cloudField(direction: vec3<f32>, drift: vec3<f32>, scale: f32, coverage: f32,
   let fineShape = fbm3(warped * 6.4 + vec3<f32>(19.2, 2.4, 15.6));
   let billow = macroShape * 0.57 + mesoShape * 0.30 + fineShape * 0.13;
   let eroded = billow - (1.0 - fineShape) * erosion * 0.19;
-  let latitudeBands = 0.5 + 0.5 * cos(direction.y * 42.0 + macroShape * 5.0);
-  let bandModulation = mix(1.0, 0.48 + latitudeBands * 0.92, banding);
+  let latitude = direction.y;
+  let zonalWave = sin(latitude * 54.0 + macroShape * 3.4) * 0.58 + sin(latitude * 112.0 + mesoShape * 2.1) * 0.27 + sin(latitude * 21.0 + fineShape * 1.7) * 0.15;
+  let jetEdges = smoothstep(-0.7, 0.7, zonalWave);
+  let latitudeBands = mix(0.52 + 0.48 * cos(latitude * 42.0 + macroShape * 5.0), jetEdges, 0.72);
+  let bandModulation = mix(1.0, 0.34 + latitudeBands * 1.12, banding);
   let threshold = 0.42 + (0.5 - clamp(coverage, 0.02, 0.98)) * 0.34;
   return smoothstep(threshold, threshold + 0.17, eroded) * bandModulation;
+}
+
+
+fn angularStorm(direction: vec3<f32>, center: vec3<f32>, radius: f32) -> f32 {
+  let distance = acos(clamp(dot(normalize(direction), normalize(center)), -1.0, 1.0));
+  return 1.0 - smoothstep(radius * 0.62, radius, distance);
+}
+
+fn gasStormField(direction: vec3<f32>, gasType: f32, strength: f32) -> f32 {
+  let jupiterCenter = vec3<f32>(cos(-0.34) * cos(-0.62), sin(-0.34), cos(-0.34) * sin(-0.62));
+  let neptuneCenter = vec3<f32>(cos(-0.28) * cos(0.92), sin(-0.28), cos(-0.28) * sin(0.92));
+  let saturnCenter = vec3<f32>(cos(0.12) * cos(2.2), sin(0.12), cos(0.12) * sin(2.2));
+  let uranusCenter = vec3<f32>(cos(-0.18) * cos(-1.8), sin(-0.18), cos(-0.18) * sin(-1.8));
+  let jupiterStorm = angularStorm(direction, jupiterCenter, 0.31);
+  let neptuneStorm = angularStorm(direction, neptuneCenter, 0.24);
+  let saturnStorm = angularStorm(direction, saturnCenter, 0.16);
+  let uranusStorm = angularStorm(direction, uranusCenter, 0.19);
+  let storm = jupiterStorm * select(0.0, 1.0, gasType > 0.5 && gasType < 1.5)
+    + saturnStorm * select(0.0, 1.0, gasType > 1.5 && gasType < 2.5)
+    + uranusStorm * select(0.0, 1.0, gasType > 2.5 && gasType < 3.5)
+    + neptuneStorm * select(0.0, 1.0, gasType > 3.5);
+  let longitude = atan2(direction.z, direction.x);
+  let latitude = asin(clamp(direction.y, -1.0, 1.0));
+  let vortex = 0.5 + 0.5 * sin(longitude * 18.0 + latitude * 31.0 + fbm3(direction * 34.0) * 8.0);
+  return clamp(storm * (0.62 + vortex * 0.38) * strength, 0.0, 1.0);
+}
+
+fn gasGiantPalette(direction: vec3<f32>, gasType: f32, seed: f32) -> vec3<f32> {
+  let latitude = direction.y;
+  let longitude = atan2(direction.z, direction.x);
+  let turbulence = fbm3(direction * 17.0 + vec3<f32>(seed * 0.013, 3.7, 8.1));
+  let bands = 0.5 + 0.5 * sin(latitude * 48.0 + fbm3(direction * 7.0) * 5.2 + sin(latitude * 13.0) * 1.4);
+  let fineBands = 0.5 + 0.5 * sin(latitude * 116.0 + turbulence * 8.0);
+  let zonal = clamp(bands * 0.72 + fineBands * 0.28, 0.0, 1.0);
+  var dark = vec3<f32>(0.30, 0.16, 0.095);
+  var light = vec3<f32>(0.82, 0.61, 0.42);
+  if (gasType > 1.5 && gasType < 2.5) {
+    dark = vec3<f32>(0.39, 0.31, 0.22); light = vec3<f32>(0.86, 0.78, 0.62);
+  } else if (gasType > 2.5 && gasType < 3.5) {
+    dark = vec3<f32>(0.12, 0.38, 0.43); light = vec3<f32>(0.39, 0.76, 0.78);
+  } else if (gasType > 3.5) {
+    dark = vec3<f32>(0.045, 0.12, 0.39); light = vec3<f32>(0.16, 0.39, 0.82);
+  }
+  var color = mix(dark, light, smoothstep(0.22, 0.78, zonal));
+  let storm = gasStormField(direction, gasType, 1.0);
+  if (gasType < 1.5) {
+    let redOval = vec3<f32>(0.72, 0.19, 0.085);
+    color = mix(color, redOval * (0.82 + turbulence * 0.35), storm * 0.92);
+  } else if (gasType > 3.5) {
+    color = mix(color, vec3<f32>(0.025, 0.045, 0.16), storm * 0.86);
+  } else {
+    color = mix(color, mix(light, dark, 0.45 + turbulence * 0.2), storm * 0.58);
+  }
+  let polar = smoothstep(0.82, 0.98, abs(latitude));
+  if (gasType > 1.5 && gasType < 2.5) {
+    let hexagon = 0.5 + 0.5 * cos(longitude * 6.0 + turbulence * 0.8);
+    let polarEdge = smoothstep(0.88, 0.94, latitude) * (1.0 - smoothstep(0.96, 0.985, latitude));
+    color = mix(color, vec3<f32>(0.78, 0.73, 0.57), polarEdge * (0.35 + hexagon * 0.35));
+  }
+  return color * mix(1.0, 0.78 + turbulence * 0.42, 0.34) * (1.0 - polar * 0.12);
 }
 
 fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
@@ -342,7 +406,10 @@ fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
     let distanceAlong = startDistance + (f32(index) + 0.5) * stepLength;
     let samplePosition = body.cameraPosition.xyz + viewRay * distanceAlong;
     let radialDirection = normalize(samplePosition - center);
-    let density = cloudField(radialDirection, drift, scale, coverage, erosion, banding);
+    var density = cloudField(radialDirection, drift, scale, coverage, erosion, banding);
+    let gasType = body.lightAndEmission.x;
+    let stormActivity = gasStormField(radialDirection, gasType, body.lightAndEmission.z);
+    density = clamp(density * (1.0 + stormActivity * 0.48), 0.0, 1.0);
     if (density <= 0.001) { continue; }
     let sunDirection = normalize(body.sunPosition.xyz - samplePosition);
     let sunDensityPosition = normalize(samplePosition + sunDirection * thickness * 1.4 - center);
@@ -355,7 +422,9 @@ fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
     let stepOptical = density * opacity * stepLength / max(thickness, 0.000001) * 1.85;
     let transmittance = exp(-opticalDepth);
     let silverLining = 0.24 + forwardPhase * 1.9;
-    cloudRadiance += vec3<f32>(0.88, 0.93, 1.0) * density * transmittance * illumination * silverLining * stepLength / max(thickness, 0.000001);
+    let gasTint = gasGiantPalette(radialDirection, gasType, body.lightAndEmission.y);
+    let cloudTint = mix(vec3<f32>(0.88, 0.93, 1.0), gasTint, select(0.0, 0.72, gasType > 0.5));
+    cloudRadiance += cloudTint * density * transmittance * illumination * silverLining * stepLength / max(thickness, 0.000001);
     opticalDepth += stepOptical;
   }
   let alpha = clamp(1.0 - exp(-opticalDepth), 0.0, 0.94);
@@ -412,12 +481,13 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   } else if (kind > 7.5 && kind < 8.5) {
     let crater = smoothstep(0.43, 0.72, fbm3(direction * 38.0));
     albedo = body.color.rgb * (0.62 + detail * 0.32 - crater * 0.16);
-  } else if (kind > 2.5 && kind < 3.5) {
-    let bands = 0.5 + 0.5 * sin(direction.y * 58.0 + fbm3(direction * 8.0) * 5.0);
-    albedo = mix(body.color.rgb * 0.58, body.color.rgb * 1.32, bands);
-  } else if (kind > 3.5 && kind < 4.5) {
-    let bands = 0.5 + 0.5 * sin(direction.y * 34.0 + fbm3(direction * 6.0) * 3.0);
-    albedo = mix(body.color.rgb * 0.72, body.color.rgb * 1.18, bands);
+  } else if (kind > 2.5 && kind < 4.5) {
+    let gasType = clamp(body.surfaceParams.x, 1.0, 4.0);
+    let gasColor = gasGiantPalette(direction, gasType, body.material.y);
+    let storm = gasStormField(direction, gasType, body.surfaceParams.z);
+    albedo = mix(gasColor, gasColor * (0.58 + fbm3(direction * 42.0) * 0.62), storm * 0.32);
+    let zonalDetail = fbm3(direction * vec3<f32>(92.0, 18.0, 92.0));
+    albedo *= 0.92 + zonalDetail * 0.16;
   } else if (kind > 4.5 && kind < 5.5) {
     let haze = fbm3(direction * 18.0);
     albedo = mix(body.color.rgb * 0.72, body.color.rgb * 1.22, haze);
@@ -762,7 +832,7 @@ export class WebGPUBackend {
       const length = Math.hypot(dx, dy, dz) || 1;
       matrix.set([dx / length, dy / length, dz / length, body.star ? 1 : 0], 36);
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
-      matrix.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
+      matrix.set(body.gasGiant ? [body.gasGiant.type, body.gasGiant.bandStrength, body.gasGiant.stormStrength, body.gasGiant.jetCount] : [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
       matrix.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
@@ -794,6 +864,7 @@ export class WebGPUBackend {
         const shell = new Float32Array(base);
         for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
         shell.set([color[0], color[1], color[2], cloudErosion], 32);
+        shell.set([body.gasGiant?.type ?? 0, body.gasGiant?.bandStrength ?? 0, body.gasGiant?.stormStrength ?? 0, 1], 36);
         shell.set(params, 40);
         shell.set(surfaceParams, 44);
         if (lighting) shell.set(lighting, 52);

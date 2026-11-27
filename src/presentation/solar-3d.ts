@@ -8,6 +8,7 @@ import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { createGeologicalProfile, surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 import { WebGPUBackend, type WebGPUBodyDraw } from '../rendering/webgpu/webgpu-backend.ts';
 import { atmosphereScaleHeightRatio } from '../rendering/webgpu/atmosphere-scattering.ts';
+import { gasGiantProfileForId } from '../rendering/atmosphere/gas-giant-profile.ts';
 
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
 const KINDS={sun:6,mercury:2,venus:5,earth:1,moon:2,mars:2,jupiter:3,saturn:3,uranus:4,neptune:4,titan:5};
@@ -410,7 +411,7 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level,surfaceProfile:createGeologicalProfile(body)};
+   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level,gasGiant:gasGiantProfileForId(body.id)??undefined,surfaceProfile:createGeologicalProfile(body)};
    webgpuBodies.push({id:body.id,model,...webgpuBody});
    const webgpuDraw=webgpuBodies[webgpuBodies.length-1];
    const isStar=!body.parentId;

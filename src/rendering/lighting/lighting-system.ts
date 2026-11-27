@@ -9,3 +9,11 @@ export function planetaryDisplayGain(distanceAU:number):number {
 export function focusedSolarExposureMultiplier(_distanceAU:number):number {
  return 1;
 }
+
+
+/** Solar irradiance for the display pipeline: inverse-square physics with bounded distance compensation. */
+export function solarIrradianceForDisplay(distanceAU:number):number {
+ if(!Number.isFinite(distanceAU)||distanceAU<=0)return 1;
+ const distance=Math.max(distanceAU,0.05);
+ return planetaryDisplayGain(distance)/(distance*distance);
+}

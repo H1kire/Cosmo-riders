@@ -45,7 +45,12 @@ fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate],lod_level:u32)->Sample{
  for plate in plate_set{let q=1.0-d.dot(plate.direction);if q<nearest{second=nearest;nearest=q;first=Some(*plate);}else if q<second{second=q;}}
  let boundary=1.0-smooth(0.006,0.055,second-nearest);let plate=first.unwrap_or(Plate{direction:d,elevation:0.0});
  let tectonic=boundary*p.tectonic_activity;let volcanic=fbm(d.scale(19.0),seed.wrapping_add(71),4)*p.volcanic_activity;
- let latitude=d.y.abs();let frost=smooth(0.68,0.96,latitude)*p.ice_fraction;let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
+ let latitude=d.y.abs();
+ let cold_retention=1.0-smooth(235.0,360.0,p.temperature_k);
+ let volatile_retention=1.0-smooth(150.0,320.0,p.temperature_k)*(1.0-clamp(p.volatile_fraction,0.0,1.0));
+ let frost=clamp(smooth(0.68,0.96,latitude)*(p.ice_fraction*(0.28+0.72*cold_retention)+p.water_fraction*0.06*cold_retention+p.volatile_fraction*0.04*volatile_retention),0.0,1.0);
+ let atmospheric_weathering=clamp((1.0+p.pressure_pa.max(0.0)).log10()/7.0,0.0,1.0);
+ let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
  // Мікродеталі додаються поступово з підвищенням геодезичного рівня деталізації.
  let micro=fbm(d.scale(24.0),seed.wrapping_add(401),lod_level.saturating_add(1).clamp(1,6));
  let mut height:f64;let mut color:[f64;3];let mut rough:f64;let mut material:u8;
@@ -55,19 +60,42 @@ fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate],lod_level:u32)->Sample{
   let land=[0.12+detail*0.12,0.22+detail*0.14,0.075+detail*0.05];let ocean=[0.006+regional*0.012,0.035+regional*0.035,0.12+regional*0.075];
   color=[0,1,2].map(|i|ocean[i]+(land[i]-ocean[i])*continental);rough=0.12+continental*0.76;material=if continental>0.5{2}else{3};
  }else if p.kind=="icy"||p.kind=="ice-giant"{
-  let fracture=1.0-(fbm(d.scale(24.0),seed.wrapping_add(151),4)-0.5).abs()*2.0;height=(macro_n-0.5)*0.09+fracture*0.035+boundary*p.tectonic_activity*0.035;
-  color=[0.38+detail*0.2,0.58+detail*0.22,0.68+detail*0.25];rough=0.28;material=4;
+  let fracture=1.0-(fbm(d.scale(24.0),seed.wrapping_add(151),4)-0.5).abs()*2.0;
+  let crater_field=fbm(d.scale(7.5),seed.wrapping_add(163),5);
+  let crater_basin=1.0-smooth(0.28,0.62,crater_field);let crater_rim=smooth(0.48,0.72,crater_field)*(1.0-smooth(0.76,0.94,crater_field));
+  let ridge=1.0-(fbm(d.scale(38.0),seed.wrapping_add(173),4)*2.0-1.0).abs();
+  let cryovolcanic=fbm(d.scale(16.0),seed.wrapping_add(181),4)*p.volcanic_activity;
+  let ice=clamp(p.ice_fraction,0.0,1.0);let rock=clamp(p.silicate_fraction*0.72+p.iron_fraction*0.55,0.0,1.0);
+  height=(macro_n-0.5)*(0.045+rock*0.05)+fracture*p.tectonic_activity*0.045+ridge*p.tectonic_activity*0.035
+   -crater_basin*p.age*0.055+crater_rim*p.age*0.018+cryovolcanic*0.04;
+  let ice_tone=0.24+ice*0.48+detail*0.1;
+  color=[ice_tone*(0.78+rock*0.22),ice_tone*(0.9-rock*0.18),ice_tone*(1.02-rock*0.3)];
+  color=color.map(|value|value*(1.0-rock*0.38)+0.085*rock);
+  color[0]=color[0]+(0.075-0.085)*rock;
+  color[2]=color[2]+(0.095-0.085)*rock;
+  let fracture_shade=clamp(fracture*p.tectonic_activity*0.42,0.0,1.0);
+  color=color.map(|value|value*(1.0-fracture_shade*0.3)+0.035*fracture_shade);
+  let cryo_blend=clamp(cryovolcanic*0.16,0.0,1.0);
+  color=[color[0]+(0.72-color[0])*cryo_blend,color[1]+(0.82-color[1])*cryo_blend,color[2]+(0.94-color[2])*cryo_blend];
+  rough=clamp(0.24+(1.0-ice)*0.58+p.age*0.08,0.0,1.0);material=4;
  }else if p.kind=="volcanic"{
-  let lava=smooth(0.62,0.86,fbm(d.scale(13.0),seed.wrapping_add(181),5)+volcanic*0.4);height=(macro_n-0.5)*0.08+volcanic*0.16+boundary*0.035;
-  color=[0.13+lava*0.55,0.09+lava*0.19,0.055+lava*0.04];rough=0.58;material=5;
+  let lava=smooth(0.62,0.86,fbm(d.scale(13.0),seed.wrapping_add(181),5)+volcanic*0.4);let sulfur=clamp(p.sulfur_fraction*1.4,0.0,1.0);
+  height=(macro_n-0.5)*0.08+volcanic*0.16+boundary*0.035;
+  color=[0.13+lava*0.55+sulfur*0.12,0.09+lava*0.19+sulfur*0.11,0.055+lava*0.04+sulfur*0.02];rough=0.58;material=5;
  }else{
   let mountains=(1.0-(fbm(d.scale(8.0),seed.wrapping_add(211),5)-0.5).abs()*2.0).powi(2);
-  let crater=1.0-smooth(0.18,0.42,fbm(d.scale(9.0),seed.wrapping_add(223),4));height=(macro_n-0.5)*0.13+mountains*p.tectonic_activity*0.16-crater*p.age*0.075+volcanic*0.035;
-  let oxide=clamp(p.iron_fraction*0.75+detail*0.2,0.0,1.0);color=[0.22+oxide*0.35+regional*0.08,0.19+oxide*0.12+detail*0.05,0.16+detail*0.04];rough=0.82;material=1;
+  let crater=1.0-smooth(0.18,0.42,fbm(d.scale(9.0),seed.wrapping_add(223),4));
+  height=(macro_n-0.5)*0.13+mountains*p.tectonic_activity*0.16-crater*p.age*(0.075-0.018*atmospheric_weathering)+volcanic*0.035;
+  let oxide=clamp(p.iron_fraction*0.75+detail*0.2,0.0,1.0);let hydration=clamp(p.water_fraction*0.16+p.volatile_fraction*0.12,0.0,1.0);
+  color=[0.22+oxide*0.35+regional*0.08+hydration*0.035,0.19+oxide*0.12+detail*0.05+hydration*0.045,0.16+detail*0.04+hydration*0.055];
+  rough=clamp(0.82-atmospheric_weathering*0.18,0.0,1.0);material=1;
  }
- if p.kind=="desert"{let dune=fbm(Vec3::new(d.x*55.0,d.y*13.0,d.z*55.0),seed.wrapping_add(241),3);height+=(dune-0.5)*0.055;color=[0.48+dune*0.2,0.27+dune*0.13,0.12+dune*0.07];rough=0.94;}
- if p.kind!="gas-giant"&&p.kind!="ice-giant"&&frost>0.08{color=[color[0]+(0.84-color[0])*frost,color[1]+(0.9-color[1])*frost,color[2]+(0.96-color[2])*frost];height*=1.0-frost*0.3;rough=rough*(1.0-frost)+0.32*frost;material=4;}
- height*=clamp(1.0-p.erosion*0.55,0.2,1.2)*clamp((9.81/p.gravity_m_s2.max(0.15)).sqrt(),0.45,1.7);
+ if p.kind=="desert"{let dune=fbm(Vec3::new(d.x*55.0,d.y*13.0,d.z*55.0),seed.wrapping_add(241),3);height+=(dune-0.5)*0.055;color=[0.48+dune*0.2,0.27+dune*0.13,0.12+dune*0.07];rough=0.94;material=6;}
+ if p.kind!="gas-giant"&&p.kind!="ice-giant"&&frost>0.02{
+  color=[color[0]+(0.84-color[0])*frost,color[1]+(0.9-color[1])*frost,color[2]+(0.96-color[2])*frost];
+  height*=1.0-frost*0.3;rough=rough*(1.0-frost)+0.32*frost;material=4;
+ }
+ height*=clamp(1.0-p.erosion*0.55,0.2,1.2)*clamp(1.0-atmospheric_weathering*0.12,0.75,1.0)*clamp((9.81/p.gravity_m_s2.max(0.15)).sqrt(),0.45,1.7);
  height+=(micro-0.5)*0.003;
  let micro_tone=(micro-0.5)*0.055;
  color=color.map(|value|clamp(value*(1.0+micro_tone),0.0,1.0));

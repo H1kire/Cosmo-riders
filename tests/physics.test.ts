@@ -236,6 +236,10 @@ test('all 49 satellite and planetary orbits remain inside their J2000 Keplerian 
 test('corrected JPL satellite angles and reference planes are preserved in the 49-body catalogue',()=>{
  const world=createSolarSystemWorld();
  const expected=[
+  ['phobos',9375,.015,216.3,189.7,1.1,169.2],
+  ['deimos',23457,0,0,205,1.8,54.3],
+  ['ganymede',1070400,.001,198.3,324.8,.2,58.5],
+  ['callisto',1882700,.007,43.8,87.4,.3,309.1],
   ['rhea',527200,.001,44.3,31.5,.3,133.7],
   ['titan',1221900,.029,78.3,11.7,.3,78.6],
   ['hyperion',1481500,.105,214,122.9,.6,87.1],
@@ -262,8 +266,16 @@ test('corrected JPL satellite angles and reference planes are preserved in the 4
   assert.ok(Math.abs(elements.inclination*180/Math.PI-inclination)<1e-8,id+' inclination');
   assert.ok(Math.abs(elements.longitudeAscendingNode*180/Math.PI-node)<1e-8,id+' ascending node');
  }
- const himalia=world.bodies.get('himalia')!,nereid=world.bodies.get('nereid')!,iapetus=world.bodies.get('iapetus')!,phoebe=world.bodies.get('phoebe')!,titan=world.bodies.get('titan')!,hyperion=world.bodies.get('hyperion')!;
+ const himalia=world.bodies.get('himalia')!,nereid=world.bodies.get('nereid')!,iapetus=world.bodies.get('iapetus')!,phoebe=world.bodies.get('phoebe')!,titan=world.bodies.get('titan')!,hyperion=world.bodies.get('hyperion')!,phobos=world.bodies.get('phobos')!,deimos=world.bodies.get('deimos')!,ganymede=world.bodies.get('ganymede')!,callisto=world.bodies.get('callisto')!;
  assert.equal(himalia.orbitalReferenceFrame,'ecliptic');
+ assert.equal(phobos.orbitalReferenceFrame,'laplace');
+ assert.equal(deimos.orbitalReferenceFrame,'laplace');
+ assert.equal(ganymede.orbitalReferenceFrame,'laplace');
+ assert.equal(callisto.orbitalReferenceFrame,'laplace');
+ assert.ok(Math.abs(phobos.orbitalPlanePoleRightAscensionRad!*180/Math.PI-317.7)<1e-8);
+ assert.ok(Math.abs(deimos.orbitalPlanePoleDeclinationRad!*180/Math.PI-53.5)<1e-8);
+ assert.ok(Math.abs(ganymede.orbitalPlanePoleDeclinationRad!*180/Math.PI-64.6)<1e-8);
+ assert.ok(Math.abs(callisto.orbitalPlanePoleRightAscensionRad!*180/Math.PI-268.7)<1e-8);
  assert.equal(nereid.orbitalReferenceFrame,'ecliptic');
  assert.ok(Math.abs(nereid.orbitalElements!.meanAnomaly*180/Math.PI-216.6984)<1e-3);
  assert.equal(iapetus.orbitalReferenceFrame,'laplace');

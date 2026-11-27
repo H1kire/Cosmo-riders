@@ -45,13 +45,17 @@ const planet = (id: string, name: string, massKg: number, meanRadiusM: number, a
  */
 const satellite = (
   id: string, name: string, parentId: string, gmKm3S2: number, radiusKm: number,
-  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true, poleRaDeg:number|null=null, poleDecDeg:number|null=null
+  aKm: number, e = 0, inclinationDeg = 0, argumentDeg = 0, meanAnomalyDeg = 0, nodeDeg = 0, tidalLock = true, poleRaDeg:number|null=null, poleDecDeg:number|null=null,
+  orbitalFrame:'ecliptic'|'parent-equator'|'laplace' = parentId==='earth'?'ecliptic':'parent-equator',
+  orbitalPlanePoleRaDeg:number|null=null, orbitalPlanePoleDecDeg:number|null=null
 ) => ({
   id, name, parentId,
   massKg: gmKm3S2 * 1e9 / G,j2:J2_COEFFICIENTS[id]??0,
   meanRadiusM: radiusKm * 1000,
   rotationPeriodSeconds:null,tidalLock,equatorialRadiusM:id==='moon'?1738100:null,poleRightAscensionRad:poleRaDeg===null?null:deg(poleRaDeg),poleDeclinationRad:poleDecDeg===null?null:deg(poleDecDeg),
-  orbitalReferenceFrame:(parentId==='earth'?'ecliptic':'parent-equator') as 'ecliptic'|'parent-equator',
+  orbitalReferenceFrame:orbitalFrame,
+  orbitalPlanePoleRightAscensionRad:orbitalPlanePoleRaDeg===null?null:deg(orbitalPlanePoleRaDeg),
+  orbitalPlanePoleDeclinationRad:orbitalPlanePoleDecDeg===null?null:deg(orbitalPlanePoleDecDeg),
   surface:ENVIRONMENT[id],atmosphereComposition:ATMOSPHERES[id]??[],
   elements: {
     semiMajorAxisM: aKm * 1000,
@@ -76,17 +80,17 @@ const satellites = [
   satellite('thebe','Thebe','jupiter',.03015,49.3,221900,.018,1.1,26.6,182.1,340.4),
   satellite('adrastea','Adrastea','jupiter',.00014,8.2,129000,0,0,0,214.5,0),
   satellite('metis','Metis','jupiter',.00250,21.5,128000,0,0,0,166,0),
-  satellite('himalia','Himalia','jupiter',.15155,85,11439000,.160,28.4,321.1,78.3,64.2,false),
+  satellite('himalia','Himalia','jupiter',.15155,85,11439000,.160,28.4,321.1,78.3,64.2,false,null,null,'ecliptic'),
 
   satellite('mimas','Mimas','saturn',2.50349,198.2,186000,.020,1.6,160.4,275.3,66.2),
   satellite('enceladus','Enceladus','saturn',7.21037,252.1,238400,.005,0,119.5,57,0),
   satellite('tethys','Tethys','saturn',41.21353,531.1,295000,.001,1.1,335.3,0,273),
   satellite('dione','Dione','saturn',73.11607,561.4,377700,.002,0,116,212,0),
-  satellite('rhea','Rhea','saturn',153.94175,763.5,527040,.001,0.35,0,0,0),
-  satellite('titan','Titan','saturn',8978.13710,2574.76,1221860,.029,.33,0,0,0),
-  satellite('hyperion','Hyperion','saturn',.37049,135,1481000,.104,.43,0,0,0,false),
-  satellite('iapetus','Iapetus','saturn',120.51511,734.3,3560830,.028,15.47,0,0,0),
-  satellite('phoebe','Phoebe','saturn',.55479,106.5,12929400,.164,175.2,240.3,308,192.7,false),
+  satellite('rhea','Rhea','saturn',153.94175,763.5,527200,.001,.3,44.3,31.5,133.7),
+  satellite('titan','Titan','saturn',8978.13710,2574.76,1221900,.029,.3,78.3,11.7,78.6),
+  satellite('hyperion','Hyperion','saturn',.37049,135,1481500,.105,.6,214,122.9,87.1,false),
+  satellite('iapetus','Iapetus','saturn',120.51511,734.3,3561700,.028,7.6,254.5,74.8,86.5,true,null,null,'laplace',288.7,78.9),
+  satellite('phoebe','Phoebe','saturn',.55479,106.5,12929400,.164,175.2,240.3,308,192.7,false,null,null,'laplace',276,67.5),
   satellite('janus','Janus','saturn',.12662,89.2,151500,.007,.2,11.1,111.7,159.9),
   satellite('epimetheus','Epimetheus','saturn',.03514,58.2,151400,.020,.3,96.3,197.2,189.8),
   satellite('helene','Helene','saturn',.00048,18,377600,.007,.2,194.3,295.5,260.8),
@@ -95,21 +99,21 @@ const satellites = [
   satellite('pandora','Pandora','saturn',.00926,40.6,141700,.004,0,217.9,123.9,0),
   satellite('pan','Pan','saturn',.00028,14,133600,0,0,0,146.6,0),
 
-  satellite('miranda','Miranda','uranus',4.3,235.8,129900,.0013,4.34,0,0,0),
-  satellite('ariel','Ariel','uranus',83.5,578.9,190900,.0012,.04,0,0,0),
-  satellite('umbriel','Umbriel','uranus',85.1,584.7,265969,.0039,.13,0,0,0),
-  satellite('titania','Titania','uranus',226.9,788.9,436300,.0011,.08,0,0,0),
-  satellite('oberon','Oberon','uranus',205.3,761.4,583400,.0014,.07,0,0,0),
+  satellite('miranda','Miranda','uranus',4.3,235.8,129846,.001,4.4,154.8,73,100.9),
+  satellite('ariel','Ariel','uranus',83.5,578.9,190929,.001,0,9.6,193.5,0),
+  satellite('umbriel','Umbriel','uranus',85.1,584.7,265986,.004,.1,183.4,253,174.8),
+  satellite('titania','Titania','uranus',226.9,788.9,436298,.002,.1,184,68.1,29.5),
+  satellite('oberon','Oberon','uranus',205.3,761.4,583511,.002,.1,132.2,143.6,76.8),
 
-  satellite('naiad','Naiad','neptune',.00853,29,48227,.0003,4.7,0,0,0),
-  satellite('thalassa','Thalassa','neptune',.02359,40,50075,.0002,0.2,0,0,0),
-  satellite('despina','Despina','neptune',.11673,74,52526,.0002,.1,0,0,0),
-  satellite('galatea','Galatea','neptune',.18990,79,61953,.0002,.1,0,0,0),
-  satellite('larissa','Larissa','neptune',.25484,96,73548,.0014,.2,0,0,0),
-  satellite('proteus','Proteus','neptune',2.58342,208,117647,.0005,.5,0,0,0),
-  satellite('triton','Triton','neptune',1428.49546,1352.60,354760,.000016,156.8,0,0,0),
+  satellite('naiad','Naiad','neptune',.00853,29,48300,.001,4.7,144.5,6.1,38.7),
+  satellite('thalassa','Thalassa','neptune',.02359,40,50100,.001,.2,223.6,3,124.7),
+  satellite('despina','Despina','neptune',.11673,74,52600,.001,0,182.1,354.1,0),
+  satellite('galatea','Galatea','neptune',.18990,79,62000,.001,0,113.9,12,0),
+  satellite('larissa','Larissa','neptune',.25484,96,73600,.001,.2,222,215.1,317.4),
+  satellite('proteus','Proteus','neptune',2.58342,208,117700,.001,.6,357.2,297.4,355.5),
+  satellite('triton','Triton','neptune',1428.49546,1352.60,354800,0,157.3,0,63,177.7),
   // Nereid's mass is not measured in the JPL parameter table; this low-impact estimate assumes 1.5 g/cm³.
-  satellite('nereid','Nereid','neptune',.206,170,5513400,.751,7.2,0,0,0,false)
+  satellite('nereid','Nereid','neptune',.206,170,5513900,.751,5.1,296.8,216.6984,319.5,false,null,null,'ecliptic')
 ] as const;
 
 /** Approximate J2000.0 planetary elements. Planetary values follow the JPL

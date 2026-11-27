@@ -100,7 +100,8 @@ export class WebGPUGeodesicSurfaceSystem {
     for (const item of layers) {
       renderer.draw(pass, item.key, {
         viewProjection, model, radiusM: profile.meanRadiusM, pageLayer: item.layer!, lightDirection,
-        cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])]
+        cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
+        pageResolution: this.settings.pageResolution, gutter: 2
       });
     }
     return true;

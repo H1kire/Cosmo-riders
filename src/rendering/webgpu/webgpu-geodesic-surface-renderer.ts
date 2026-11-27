@@ -12,6 +12,8 @@ export interface WebGPUGeodesicDraw {
   readonly albedoTint?: readonly [number, number, number];
   readonly lightDirection?: readonly [number, number, number];
   readonly cameraPosition?: readonly [number, number, number];
+  readonly pageResolution?: number;
+  readonly gutter?: number;
 }
 
 /** WebGPU-only indexed geodesic tile pipeline using all five generated surface channels. */
@@ -34,7 +36,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const errors = info.messages.filter((item: any) => item.type === 'error');
     if (errors.length) throw new Error('Geodesic WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const layout = device.createBindGroupLayout({ entries: [
-      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 176 } },
+      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 192 } },
       { binding: 1, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 2, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: 1, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
@@ -66,7 +68,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       this.device.queue.writeBuffer(buffer, 0, data);
       return buffer;
     };
-    const uniform = this.device.createBuffer({ label: 'Geodesic tile uniforms ' + meshKey, size: 176, usage: USAGE.UNIFORM | USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ label: 'Geodesic tile uniforms ' + meshKey, size: 192, usage: USAGE.UNIFORM | USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({ layout: this.layout, entries: [
       { binding: 0, resource: { buffer: uniform } },
       { binding: 1, resource: this.pages.albedoView },
@@ -103,12 +105,14 @@ export class WebGPUGeodesicSurfaceRenderer {
   }
 
   private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {
-    const data = new Float32Array(44);
+    const data = new Float32Array(48);
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, 0], 32);
     data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), 0], 36);
     data.set([...(draw.cameraPosition ?? [0, 0, 0]), 1], 40);
+    const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
+    data.set([resolution, resolution + gutter * 2, 0, 0], 44);
     this.device.queue.writeBuffer(buffer, 0, data);
     return buffer;
   }
@@ -124,7 +128,7 @@ export class WebGPUGeodesicSurfaceRenderer {
 }
 
 const WGSL = `
-struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirection: vec4<f32>, cameraPosition: vec4<f32>, };
+struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirection: vec4<f32>, cameraPosition: vec4<f32>, pageInfo: vec4<f32>, };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var albedoTex: texture_2d_array<f32>;
 @group(0) @binding(2) var normalTex: texture_2d_array<f32>;
@@ -137,14 +141,16 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
 @vertex fn vs(input: VIn) -> VOut {
   var out: VOut;
   let layer = i32(u.params.y);
-  let heightSize = vec2<i32>(textureDimensions(heightTex));
-  let heightCoord = clamp(vec2<i32>(input.uv * vec2<f32>(heightSize)), vec2<i32>(0), heightSize - vec2<i32>(1));
+  let resolution = max(u.pageInfo.x, 1.0);
+  let pageSize = max(u.pageInfo.y, 1.0);
+  let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(u.params.w);
+  let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSize) - vec2<i32>(1));
   let h = textureLoad(heightTex, heightCoord, layer, 0).r;
   let radiusRatio = 1.0 + (h * u.params.z) / max(u.params.x, 1.0);
   let local = input.direction * radiusRatio;
   let world = u.model * vec4<f32>(local, 1.0);
   out.clip = u.vp * world;
-  out.uv = input.uv;
+  out.uv = (core + vec2<f32>(0.5)) / pageSize;
   out.worldNormal = normalize((u.model * vec4<f32>(input.normal, 0.0)).xyz);
   out.worldPosition = world.xyz;
   out.layer = layer;

@@ -34,6 +34,7 @@ export class WebGPUGeodesicSurfaceRenderer {
   private readonly layout: any;
   private readonly sampler: any;
   private readonly meshes = new Map<string, GpuMesh>();
+  private readonly retiredMeshes: GpuMesh[] = [];
   private disposed = false;
 
   private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, sourcePipeline: any, crossfadePipeline: any, depthPipeline: any, layout: any, sampler: any) {
@@ -148,8 +149,24 @@ export class WebGPUGeodesicSurfaceRenderer {
   releaseMesh(tileKey: string): void {
     const mesh = this.meshes.get(tileKey);
     if (!mesh) return;
-    mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.(); mesh.indices.destroy?.(); mesh.uniform.destroy?.();
+    // Буфери можуть бути вже записані в поточний command encoder; звільняємо їх лише після submit.
+    this.retiredMeshes.push(mesh);
     this.meshes.delete(tileKey);
+  }
+
+  /** Викликається після queue.submit; GPU-ресурси звільняються після завершення всіх поданих команд. */
+  afterSubmit(): void {
+    if (this.retiredMeshes.length === 0) return;
+    const retired = this.retiredMeshes.splice(0);
+    const destroy = () => {
+      for (const mesh of retired) {
+        mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.();
+        mesh.indices.destroy?.(); mesh.uniform.destroy?.();
+      }
+    };
+    const completion = this.device.queue.onSubmittedWorkDone;
+    if (typeof completion !== 'function') { destroy(); return; }
+    void completion.call(this.device.queue).then(destroy, destroy);
   }
 
   getMeshIndexCount(tileKey: string): number { return this.meshes.get(tileKey)?.indexCount ?? 0; }
@@ -189,10 +206,9 @@ export class WebGPUGeodesicSurfaceRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const mesh of this.meshes.values()) {
-      mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.(); mesh.indices.destroy?.(); mesh.uniform.destroy?.();
-    }
+    for (const mesh of this.meshes.values()) this.retiredMeshes.push(mesh);
     this.meshes.clear();
+    this.afterSubmit();
   }
 }
 

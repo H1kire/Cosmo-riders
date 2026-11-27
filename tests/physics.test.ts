@@ -19,20 +19,24 @@ test('TeX formatter',()=>{assert.equal(formatScientific(1000),'1\\times 10^{3}')
 test('day constant',()=>assert.equal(DAY,86400));
 test('all eight J2000 planetary semimajor axes, eccentricities and inclinations match the catalogue reference',()=>{
  const expected=[
-  ['mercury',.38709927,.20563593,7.00497902],
-  ['venus',.72333566,.00677672,3.39467605],
-  ['earth',1.00000011,.01671022,.00005],
-  ['mars',1.52371034,.09339410,1.84969142],
-  ['jupiter',5.20288700,.04838624,1.30439695],
-  ['saturn',9.53667594,.05386179,2.48599187],
-  ['uranus',19.18916464,.04725744,.77263783],
-  ['neptune',30.06992276,.00859048,1.77004347]
+  ['mercury',.38709927,.20563593,7.00497902,48.33076593,77.45779628,252.25032350],
+  ['venus',.72333566,.00677672,3.39467605,76.67984255,131.60246718,181.97909950],
+  ['earth',1.00000011,.01671022,.00005,-11.26064,102.94719,100.46457166],
+  ['mars',1.52371034,.09339410,1.84969142,49.55953891,336.05637041,355.44656795],
+  ['jupiter',5.20288700,.04838624,1.30439695,100.47390909,14.72847983,34.39644051],
+  ['saturn',9.53667594,.05386179,2.48599187,113.66242448,92.59887831,49.95424423],
+  ['uranus',19.18916464,.04725744,.77263783,74.01692503,170.95427630,313.23810451],
+  ['neptune',30.06992276,.00859048,1.77004347,131.78422574,44.96476227,304.88003]
  ] as const;
- for(const [id,a,e,i] of expected){
+ const wrap=(value:number)=>((value%360)+360)%360;
+ for(const [id,a,e,i,node,perihelion,meanLongitude] of expected){
   const elements=SOLAR_SYSTEM_DATA[id].elements;
   assert.ok(Math.abs(elements.semiMajorAxisM/AU-a)<1e-10,id+' semimajor axis');
   assert.ok(Math.abs(elements.eccentricity-e)<1e-10,id+' eccentricity');
   assert.ok(Math.abs(elements.inclination*180/Math.PI-i)<1e-8,id+' inclination');
+  assert.ok(Math.abs(wrap(elements.longitudeAscendingNode*180/Math.PI)-wrap(node))<1e-8,id+' ascending node');
+  assert.ok(Math.abs(wrap(elements.argumentOfPeriapsis*180/Math.PI)-wrap(perihelion-node))<1e-8,id+' argument of periapsis');
+  assert.ok(Math.abs(wrap(elements.meanAnomaly*180/Math.PI)-wrap(meanLongitude-perihelion))<1e-8,id+' mean anomaly');
  }
 });
 

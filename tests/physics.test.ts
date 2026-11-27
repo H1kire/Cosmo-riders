@@ -323,3 +323,13 @@ test('WASM body catalogue preserves explicit Laplace-plane pole metadata',()=>{
  assert.ok(Math.abs(Number(phoebe.orbitalPlanePoleRightAscensionRad)-276*Math.PI/180)<1e-12);
  assert.ok(Math.abs(Number(phoebe.orbitalPlanePoleDeclinationRad)-67.5*Math.PI/180)<1e-12);
 });
+
+
+test('non-synchronous irregular moons use measured sidereal spin periods',()=>{
+ const catalogue=createSolarSystemBodyCatalog();
+ const period=(id:string)=>Number(catalogue.find(body=>body.id===id)?.rotationPeriodSeconds);
+ assert.ok(Math.abs(period('himalia')-7.7819*3600)<1e-9);
+ assert.ok(Math.abs(period('phoebe')-9*3600)<1e-9);
+ assert.ok(Math.abs(period('nereid')-11.594*3600)<1e-9);
+ assert.equal(catalogue.find(body=>body.id==='hyperion')?.rotationPeriodSeconds,null,'Hyperion is chaotically tumbling and has no stable single period');
+});

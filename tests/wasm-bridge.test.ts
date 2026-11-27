@@ -5,7 +5,7 @@ import init, { generate_surface_tile } from '../src/wasm/pkg/cosmo_core.js';
 import { generateSurfaceTile } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { tileId } from '../src/rendering/geodesic/icosphere.ts';
-import { createSolarSystemBodyCatalog, createSolarSystemWorld } from '../src/physics/solar-system.ts';
+import { createSolarSystemBodyCatalog, createSolarSystemWorld, SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
 import { executeIdealizedBurn } from '../src/physics/propulsion.ts';
 import { create_physics_world, hohmann_transfer, plane_change_delta_v, orbital_period, propagate_kepler, conic_elements_to_state, state_to_orbital_elements, build_geodesic_stitch_indices, thrust_to_weight_ratio } from '../src/wasm/pkg/cosmo_core.js';
 
@@ -53,8 +53,9 @@ async function initializeWasm():Promise<void>{
 test('Rust/WASM surface pages match the retained TypeScript reference channels',async()=>{
  await initializeWasm();
  const bodies=[
-  {id:'earth',massKg:5.9722e24,meanRadiusM:6371008.4,surfaceSeed:101,surface:{temperatureK:288,pressurePa:101325,waterFraction:.71,iceFraction:.025,ironFraction:.32,tectonicActivity:.8,volcanicActivity:.32,erosion:.78,impactAge:.18},rotationPeriodSeconds:86164},
-  {id:'saturn',massKg:5.6834e26,meanRadiusM:58232000,surfaceSeed:77,surface:{temperatureK:134,pressurePa:1e5},rotationPeriodSeconds:38362}
+  {...SOLAR_SYSTEM_DATA.earth,surfaceSeed:101},
+  {...SOLAR_SYSTEM_DATA.europa,surfaceSeed:77},
+  {...SOLAR_SYSTEM_DATA.saturn,surfaceSeed:88}
  ];
  for(const body of bodies){
   const profile=createGeologicalProfile(body as never);

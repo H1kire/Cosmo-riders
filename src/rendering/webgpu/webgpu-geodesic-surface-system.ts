@@ -6,6 +6,7 @@ import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
 import { WebGPUSurfacePageCache } from './webgpu-surface-page-cache.ts';
 import { WebGPUSurfaceRuntime } from './webgpu-surface-runtime.ts';
 import { WebGPUGeodesicSurfaceRenderer } from './webgpu-geodesic-surface-renderer.ts';
+import { solarIrradianceForDisplay } from '../lighting/lighting-system.ts';
 
 export interface WebGPUGeodesicSurfaceSettings {
   readonly pageResolution: number;
@@ -66,6 +67,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameSunRadius = 0;
   private frameShadowsEnabled = true;
   private currentSunPosition: readonly [number, number, number] = [0, 0, 0];
+  private currentSunIntensity = 1;
   private frameDrawCalls=0;
   private frameTriangles=0;
   private frameSubmittedVertices=0;
@@ -114,6 +116,12 @@ export class WebGPUGeodesicSurfaceSystem {
     this.frameSunRadius = shadowsEnabled ? sunRadius : 0;
     this.frameShadowsEnabled = shadowsEnabled;
     this.currentSunPosition = sunPosition;
+    const sunDistanceAU = Math.hypot(
+      sunPosition[0] - body.position[0],
+      sunPosition[1] - body.position[1],
+      sunPosition[2] - body.position[2]
+    );
+    this.currentSunIntensity = solarIrradianceForDisplay(sunDistanceAU);
     const model = body.model;
     if (!Number.isFinite(Number(model[0])) || !Number.isFinite(Number(model[5]))) return false;
 
@@ -388,6 +396,7 @@ export class WebGPUGeodesicSurfaceSystem {
       if (item.layer === undefined) continue;
       const drawn=renderer.draw(pass, item.key, {
         viewProjection, model, radiusM, pageLayer: item.layer, lightDirection,
+        lightIntensity: this.currentSunIntensity,
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
         sunPosition: this.currentSunPosition,
         sunRadius: this.frameSunRadius,

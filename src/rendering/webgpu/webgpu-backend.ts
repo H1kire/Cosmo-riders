@@ -1052,7 +1052,26 @@ export class WebGPUBackend {
     });
     pass.setPipeline(this.pipeline);
     const matrix = new Float32Array(96);
-    for (const body of frame.bodies) {
+    const camera = frame.cameraPosition;
+    // Великі видимі тіла отримують пріоритет під час обмеженого завантаження VT-сторінок.
+    const orderedBodies = [...frame.bodies].sort((a, b) => {
+      const projectedPriority = (body: WebGPUFrame['bodies'][number]) => {
+        const model = body.model;
+        const radius = Math.max(
+          Math.hypot(Number(model[0]), Number(model[1]), Number(model[2])),
+          Math.hypot(Number(model[4]), Number(model[5]), Number(model[6])),
+          Math.hypot(Number(model[8]), Number(model[9]), Number(model[10]))
+        );
+        const distance = Math.hypot(
+          body.position[0] - Number(camera[0]),
+          body.position[1] - Number(camera[1]),
+          body.position[2] - Number(camera[2])
+        );
+        return radius / Math.max(distance, radius * 1e-6, 1e-12);
+      };
+      return projectedPriority(b) - projectedPriority(a);
+    });
+    for (const body of orderedBodies) {
       const bodyRadius = modelRadius(body.model);
       if (!isRenderSphereVisible(body.position, bodyRadius, frame)) continue;
       const usesGeodesicSurface = Boolean(body.surfaceProfile &&
@@ -1094,7 +1113,7 @@ export class WebGPUBackend {
     }
     this.geodesicSystem?.endFrame();
     const geoStats=this.geodesicSystem?.getFrameDiagnostics();
-    if(geoStats){metrics.drawCalls+=geoStats.geodesicDrawCalls;metrics.geodesicDrawCalls=geoStats.geodesicDrawCalls;metrics.visibleGeodesicTiles=geoStats.visibleGeodesicTiles;metrics.submittedVertices+=geoStats.geodesicSubmittedVertices;metrics.triangles+=geoStats.geodesicTriangles;}
+    if(geoStats){metrics.drawCalls+=geoStats.geodesicDrawCalls;metrics.geodesicDrawCalls=geoStats.geodesicDrawCalls;metrics.visibleGeodesicTiles=geoStats.visibleGeodesicTiles;metrics.surfaceUploadsPerFrame=geoStats.surfaceUploadsPerFrame;metrics.submittedVertices+=geoStats.geodesicSubmittedVertices;metrics.triangles+=geoStats.geodesicTriangles;}
     pass.setPipeline(this.effectPipeline);
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;

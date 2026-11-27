@@ -19,3 +19,17 @@ test('adaptive quality steps down after sustained slow frames and recovers after
 test('all graphics presets enable optional adaptive quality by default',()=>{
  for(const preset of ['low','medium','high','ultra'] as const)assert.equal(createGraphicsSettings(preset).adaptiveQuality,true);
 });
+
+test('adaptive quality is wired into the active WebGPU LOD selector without cache recreation',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [presentation,backend,system]=await Promise.all([
+  readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(presentation.includes('this.adaptiveQuality.addFrameTime(intervalMs)'));
+ assert.ok(presentation.includes('geodesicTargetErrorPx:'));
+ assert.ok(backend.includes('frame.geodesicTargetErrorPx'));
+ assert.ok(system.includes('topology.lastSelectionErrorPx !== targetErrorPx'));
+ assert.ok(system.includes('targetErrorPx: Math.max(0.5, Math.min(8, targetErrorPx))'));
+});

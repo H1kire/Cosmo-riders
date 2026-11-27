@@ -102,3 +102,14 @@ test('geodesic LOD caches immutable tile angular geometry between frames', async
   assert.ok(source.includes('function tileGeometry(tile:GeoTile)'));
   assert.ok(source.includes('const sagitta=radius*geometry.sagittaFactor'));
 });
+
+
+test('geodesic LOD selection is reused for a stable camera and refreshed on movement or viewport changes', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('lastSelection: { readonly tiles: readonly GeoTile[]; readonly stats: GeodesicLodStats } | null'));
+  assert.ok(source.includes('const selectionStale = selectionTime - topology.lastSelectionAt >= 120'));
+  assert.ok(source.includes('const selectionChanged = moved || rotated || selectionStale'));
+  assert.ok(source.includes('topology.lastSelectionWidth !== viewportWidthPx'));
+  assert.ok(source.includes('topology.lastSelectionBudget !== transitionBudget'));
+});

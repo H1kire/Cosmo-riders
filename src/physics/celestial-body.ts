@@ -27,7 +27,9 @@ export interface CelestialBodyOptions {
   readonly solarDaySeconds?: number | null;
   readonly atmosphereComposition?: readonly string[];
   readonly hasRings?: boolean;
-  readonly orbitalReferenceFrame?: 'ecliptic' | 'parent-equator';
+  readonly orbitalReferenceFrame?: 'ecliptic' | 'parent-equator' | 'laplace';
+  readonly orbitalPlanePoleRightAscensionRad?: number | null;
+  readonly orbitalPlanePoleDeclinationRad?: number | null;
 }
 
 export class CelestialBody {
@@ -56,7 +58,9 @@ export class CelestialBody {
   readonly solarDaySeconds: number | null;
   readonly atmosphereComposition: readonly string[];
   readonly hasRings: boolean;
-  readonly orbitalReferenceFrame: 'ecliptic' | 'parent-equator';
+  readonly orbitalReferenceFrame: 'ecliptic' | 'parent-equator' | 'laplace';
+  readonly orbitalPlanePoleRightAscensionRad: number | null;
+  readonly orbitalPlanePoleDeclinationRad: number | null;
 
   constructor({
     id,
@@ -84,6 +88,8 @@ export class CelestialBody {
     atmosphereComposition = [],
     hasRings = false,
     orbitalReferenceFrame = 'ecliptic',
+    orbitalPlanePoleRightAscensionRad = null,
+    orbitalPlanePoleDeclinationRad = null,
   }: CelestialBodyOptions) {
     if (typeof id !== 'string' || !id.trim()) throw new TypeError('Body id must be non-empty.');
     if (typeof name !== 'string' || !name.trim()) throw new TypeError('Body name must be non-empty.');
@@ -100,6 +106,8 @@ export class CelestialBody {
     if (axialTiltRad !== null && !Number.isFinite(axialTiltRad)) throw new RangeError('axialTiltRad must be finite.');
     if (poleRightAscensionRad !== null && !Number.isFinite(poleRightAscensionRad)) throw new RangeError('poleRightAscensionRad must be finite.');
     if (poleDeclinationRad !== null && (!Number.isFinite(poleDeclinationRad)||Math.abs(poleDeclinationRad)>Math.PI/2)) throw new RangeError('poleDeclinationRad must be within +/- pi/2.');
+    if (orbitalPlanePoleRightAscensionRad !== null && !Number.isFinite(orbitalPlanePoleRightAscensionRad)) throw new RangeError('orbitalPlanePoleRightAscensionRad must be finite.');
+    if (orbitalPlanePoleDeclinationRad !== null && (!Number.isFinite(orbitalPlanePoleDeclinationRad)||Math.abs(orbitalPlanePoleDeclinationRad)>Math.PI/2)) throw new RangeError('orbitalPlanePoleDeclinationRad must be within +/- pi/2.');
     if (rotationDirection !== 1 && rotationDirection !== -1) throw new RangeError('rotationDirection must be 1 or -1.');
     if (!Number.isFinite(primeMeridianRad) || !Number.isFinite(rotationEpochSeconds)) throw new RangeError('Rotation phase and epoch must be finite.');
     if (!Array.isArray(atmosphereComposition) || atmosphereComposition.some(value => typeof value !== 'string')) throw new TypeError('atmosphereComposition must be a string array.');
@@ -147,8 +155,11 @@ export class CelestialBody {
     this.solarDaySeconds = solarDaySeconds;
     this.atmosphereComposition = Object.freeze([...atmosphereComposition]);
     this.hasRings = Boolean(hasRings);
-    if(orbitalReferenceFrame!=='ecliptic'&&orbitalReferenceFrame!=='parent-equator')throw new RangeError('Unsupported orbital reference frame.');
+    if(orbitalReferenceFrame!=='ecliptic'&&orbitalReferenceFrame!=='parent-equator'&&orbitalReferenceFrame!=='laplace')throw new RangeError('Unsupported orbital reference frame.');
+    if(orbitalReferenceFrame==='laplace'&&(orbitalPlanePoleRightAscensionRad===null||orbitalPlanePoleDeclinationRad===null))throw new RangeError('Laplace-plane orbits require a reference pole.');
     this.orbitalReferenceFrame=orbitalReferenceFrame;
+    this.orbitalPlanePoleRightAscensionRad=orbitalPlanePoleRightAscensionRad;
+    this.orbitalPlanePoleDeclinationRad=orbitalPlanePoleDeclinationRad;
     Object.freeze(this);
   }
   /** Сидерический угол вычисляется непосредственно из единого времени симуляции. */

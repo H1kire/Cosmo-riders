@@ -20,7 +20,7 @@ export class PhysicsWorldClient{
   await this.bridge.initialize(this.catalog,options);
   for(const entry of this.catalog){
    const b=entry as Record<string,any>;
-   const metadata=new CelestialBody({...b,id:String(b.id),name:String(b.name),massKg:Number(b.massKg),meanRadiusM:Number(b.meanRadiusM),position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,j2:b.j2??0,solarDaySeconds:b.solarDaySeconds??null});
+   const metadata=new CelestialBody({...b,id:String(b.id),name:String(b.name),massKg:Number(b.massKg),meanRadiusM:Number(b.meanRadiusM),position:vector3(),velocity:vector3(),surfaceSeed:b.surfaceSeed??undefined,rotationPeriodSeconds:b.rotationPeriodSeconds??null,axialTiltRad:b.axialTiltRad??null,poleRightAscensionRad:b.poleRightAscensionRad??null,poleDeclinationRad:b.poleDeclinationRad??null,orbitalReferenceFrame:b.orbitalReferenceFrame??'ecliptic',orbitalPlanePoleRightAscensionRad:b.orbitalPlanePoleRightAscensionRad??null,orbitalPlanePoleDeclinationRad:b.orbitalPlanePoleDeclinationRad??null,equatorialRadiusM:b.equatorialRadiusM??null,j2:b.j2??0,solarDaySeconds:b.solarDaySeconds??null});
    this.bodies.set(metadata.id,metadata);
   }
   await Promise.all(this.catalog.map(async entry=>{

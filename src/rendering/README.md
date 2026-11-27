@@ -75,6 +75,10 @@ The page cache is shared between all solid bodies. Its capacity is constrained b
 - The planetary catalogue uses J2000 mean elements and a hierarchical two-body approximation. It is not a DE440/Horizons ephemeris integration.
 - Visual correctness, seams, temporal stability and target-device performance still require browser/WebGPU runtime verification. CI and static inspection do not establish visual correctness.
 
+## Adaptive quality
+
+The existing `AdaptiveQuality` controller is connected to the active `Solar3DView → WebGPUBackend` frame path. It evaluates a rolling 30–90 frame interval, steps down after sustained frame-time overruns and recovers after sustained headroom. It is capped by the user-selected preset and can be disabled in Graphics settings. Adaptation changes render scale, MSAA, atmosphere/cloud sampling, post-processing cost and the geodesic screen-space error threshold; it does not change simulation data or rebuild the geodesic page cache when only the LOD threshold changes.
+
 ## Solar illumination contract
 
 The WebGPU body, geodesic, atmosphere, cloud and ring paths use the same solar-distance policy. Render positions are camera-relative AU, so the renderer computes the body-to-star distance in AU, applies inverse-square attenuation, then applies the bounded display compensation from `solarIrradianceForDisplay()`. This keeps the physical falloff explicit while preventing distant bodies from collapsing to near-black in the HDR display. It is not a second physical light source and does not alter simulation data.

@@ -35,13 +35,14 @@ export interface WebGPUBodyDraw {
   eclipseVisibility?: number;
   shadowOccluders?: Float32Array;
   shadowsEnabled?: boolean;
+  ringShadow?: { innerRadiusAU: number; outerRadiusAU: number; opacity: number; };
   surfaceProfile?: SurfaceProfile;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; rayleighScaleHeightRatio: number; mieScaleHeightRatio: number; };
   clouds?: readonly { altitudeRatio: number; thicknessRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; erosion: number; banding: number; detail: number; }[];
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
-export interface WebGPURingDraw { id: string; model: ArrayLike<number>; }
+export interface WebGPURingDraw { id: string; model: ArrayLike<number>; shadowOccluders?: Float32Array; sunPosition?: readonly [number, number, number]; sunRadius?: number; shadowsEnabled?: boolean; }
 
 export interface WebGPUFrame {
   viewProjection: ArrayLike<number>;
@@ -152,19 +153,33 @@ export function createSphereGeometry(latitudeSegments: number, longitudeSegments
 }
 
 const RING_SHADER = `
-struct RingUniforms { viewProjection: mat4x4<f32>, model: mat4x4<f32>, color: vec4<f32>, params: vec4<f32>, };
+struct RingUniforms { viewProjection: mat4x4<f32>, model: mat4x4<f32>, color: vec4<f32>, params: vec4<f32>, sunPosition: vec4<f32>, shadowOccluders: array<vec4<f32>, 8>, };
 @group(0) @binding(0) var<uniform> ring: RingUniforms;
 struct VertexInput { @location(0) position: vec3<f32>, };
-struct VertexOutput { @builtin(position) clipPosition: vec4<f32>, @location(0) localPosition: vec3<f32>, };
-@vertex fn vertexMain(input: VertexInput) -> VertexOutput { var output: VertexOutput; output.localPosition=input.position; output.clipPosition=ring.viewProjection*ring.model*vec4<f32>(input.position,1.0); return output; }
+struct VertexOutput { @builtin(position) clipPosition: vec4<f32>, @location(0) localPosition: vec3<f32>, @location(1) worldPosition: vec3<f32>, };
+@vertex fn vertexMain(input: VertexInput) -> VertexOutput { var output: VertexOutput; output.localPosition=input.position; let world=ring.model*vec4<f32>(input.position,1.0); output.worldPosition=world.xyz; output.clipPosition=ring.viewProjection*world; return output; }
+fn diskOverlap(sourceRadius:f32,occluderRadius:f32,separation:f32)->f32 {
+ let r=max(sourceRadius,0.0000001);let q=max(occluderRadius,0.0000001);let d=max(0.0,separation);
+ if(d>=r+q){return 0.0;} if(d<=abs(r-q)){if(q>=r){return 1.0;}return clamp(q*q/(r*r),0.0,1.0);}
+ let x=clamp((d*d+r*r-q*q)/(2.0*d*r),-1.0,1.0);let y=clamp((d*d+q*q-r*r)/(2.0*d*q),-1.0,1.0);
+ let area=r*r*acos(x)+q*q*acos(y)-0.5*sqrt(max(0.0,(-d+r+q)*(d+r-q)*(d-r+q)*(d+r+q)));
+ return clamp(area/(3.14159265*r*r),0.0,1.0);
+}
+fn ringLightVisibility(worldPosition:vec3<f32>,sunDirection:vec3<f32>,sunDistance:f32)->f32 {
+ if(ring.params.w<0.5||ring.sunPosition.w<=0.0){return 1.0;}
+ let sunAngular=asin(clamp(ring.sunPosition.w/sunDistance,0.0,0.999));let center=ring.model[3].xyz;
+ let planetRadius=length(ring.model[0].xyz)*ring.params.z;let toPlanet=center-worldPosition;let planetDistance=length(toPlanet);var visibility=1.0;
+ if(planetDistance>0.000001&&planetDistance<sunDistance){let angular=asin(clamp(planetRadius/planetDistance,0.0,0.999));let separation=acos(clamp(dot(sunDirection,toPlanet/planetDistance),-1.0,1.0));visibility*=1.0-diskOverlap(sunAngular,angular,separation);}
+ for(var i=0u;i<8u;i=i+1u){let caster=ring.shadowOccluders[i];if(caster.w<=0.0){continue;}let toCaster=caster.xyz-worldPosition;let distance=length(toCaster);if(distance<=0.000001||distance>=sunDistance){continue;}let angular=asin(clamp(caster.w/distance,0.0,0.999));let separation=acos(clamp(dot(sunDirection,toCaster/distance),-1.0,1.0));visibility*=1.0-diskOverlap(sunAngular,angular,separation);}
+ return clamp(visibility,0.0,1.0);
+}
 @fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
- let radius=length(input.localPosition.xz);
- let edge=smoothstep(ring.params.x,ring.params.x+0.012,radius)*(1.0-smoothstep(0.985,1.0,radius));
- let bands=0.72+0.16*sin(radius*410.0)+0.08*sin(radius*1270.0)+0.04*sin(radius*2830.0);
- let division=1.0-0.82*smoothstep(0.003,0.012,abs(radius-0.78));
- let alpha=ring.params.y*edge*bands*division;
- if(alpha<0.012){discard;}
- return vec4<f32>(ring.color.rgb*(0.62+0.38*bands),alpha);
+ let radius=length(input.localPosition.xz);let edge=smoothstep(ring.params.x,ring.params.x+0.012,radius)*(1.0-smoothstep(0.985,1.0,radius));
+ let bands=0.72+0.16*sin(radius*410.0)+0.08*sin(radius*1270.0)+0.04*sin(radius*2830.0);let division=1.0-0.82*smoothstep(0.003,0.012,abs(radius-0.78));
+ let alpha=ring.params.y*edge*bands*division;if(alpha<0.012){discard;}
+ let toSun=ring.sunPosition.xyz-input.worldPosition;let sunDistance=length(toSun);let sunDirection=toSun/max(sunDistance,0.000001);
+ let normal=normalize(ring.model[1].xyz);let incidence=abs(dot(normal,sunDirection));let shadow=ringLightVisibility(input.worldPosition,sunDirection,sunDistance);
+ return vec4<f32>(ring.color.rgb*(0.62+0.38*bands)*(0.045+incidence*shadow*0.955),alpha);
 }
 `;
 
@@ -188,6 +203,7 @@ struct BodyUniforms {
   lighting: vec4<f32>,
   sunPosition: vec4<f32>,
   shadowOccluders: array<vec4<f32>, 8>,
+  ringParams: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> body: BodyUniforms;
@@ -256,27 +272,51 @@ fn fbm3(p: vec3<f32>) -> f32 {
   return value;
 }
 
+fn angularDiskOverlap(sourceRadius: f32, occluderRadius: f32, separation: f32) -> f32 {
+  let r = max(sourceRadius, 0.0000001); let q = max(occluderRadius, 0.0000001); let d = max(0.0, separation);
+  if (d >= r + q) { return 0.0; }
+  if (d <= abs(r - q)) { if (q >= r) { return 1.0; } return clamp((q * q) / (r * r), 0.0, 1.0); }
+  let x = clamp((d * d + r * r - q * q) / (2.0 * d * r), -1.0, 1.0);
+  let y = clamp((d * d + q * q - r * r) / (2.0 * d * q), -1.0, 1.0);
+  let area = r * r * acos(x) + q * q * acos(y) - 0.5 * sqrt(max(0.0, (-d + r + q) * (d + r - q) * (d - r + q) * (d + r + q)));
+  return clamp(area / (3.14159265 * r * r), 0.0, 1.0);
+}
 fn surfaceShadowVisibility(worldPosition: vec3<f32>) -> f32 {
   if (body.sunPosition.w < 0.5) { return 1.0; }
   let toSun = body.sunPosition.xyz - worldPosition;
   let sunDistance = length(toSun);
   if (sunDistance <= 0.000001) { return 1.0; }
   let lightDirection = toSun / sunDistance;
+  let sunAngularRadius = asin(clamp(body.lighting.z / sunDistance, 0.0, 0.999));
   var visibility = 1.0;
   for (var index = 0u; index < 8u; index = index + 1u) {
     let occluder = body.shadowOccluders[index];
     if (occluder.w <= 0.0) { continue; }
     let toOccluder = occluder.xyz - worldPosition;
-    let alongRay = dot(toOccluder, lightDirection);
-    if (alongRay <= 0.0 || alongRay >= sunDistance) { continue; }
-    let perpendicular = length(toOccluder - lightDirection * alongRay);
-    let angularSunRadius = body.lighting.z * alongRay / max(sunDistance - alongRay, 0.0000001);
-    let penumbra = occluder.w + angularSunRadius;
-    let umbra = max(0.0, occluder.w - angularSunRadius);
-    visibility *= smoothstep(umbra, max(umbra + 0.0000001, penumbra), perpendicular);
-    if (visibility < 0.001) { break; }
+    let distance = length(toOccluder);
+    if (distance <= 0.000001 || distance >= sunDistance) { continue; }
+    let direction = toOccluder / distance;
+    let angularRadius = asin(clamp(occluder.w / distance, 0.0, 0.999));
+    let separation = acos(clamp(dot(lightDirection, direction), -1.0, 1.0));
+    visibility *= 1.0 - angularDiskOverlap(sunAngularRadius, angularRadius, separation);
+    if (visibility < 0.001) { return 0.0; }
   }
-  return visibility;
+  if (body.ringParams.w > 0.5) {
+    let center = body.model[3].xyz;
+    let normal = normalize(body.model[1].xyz);
+    let denominator = dot(lightDirection, normal);
+    if (abs(denominator) > 0.000001) {
+      let distance = dot(center - worldPosition, normal) / denominator;
+      if (distance > 0.000001 && distance < sunDistance) {
+        let radial = length(worldPosition + lightDirection * distance - center);
+        if (radial > body.ringParams.x && radial < body.ringParams.y) {
+          let t = (radial - body.ringParams.x) / max(body.ringParams.y - body.ringParams.x, 0.000001);
+          visibility *= 1.0 - clamp(body.ringParams.z * (0.65 + 0.35 * sin(t * 800.0)), 0.0, 0.98);
+        }
+      }
+    }
+  }
+  return clamp(visibility, 0.0, 1.0);
 }
 ${WEBGPU_ATMOSPHERE_WGSL}
 
@@ -496,7 +536,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   }
   let diffuse = max(dot(normalize(input.worldNormal), normalize(input.lightDirection)), 0.0);
   let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
-  let illumination = 0.10 + diffuse * 0.90 * shadowFactor;
+  let illumination = 0.035 + diffuse * 0.965 * shadowFactor;
   return vec4<f32>(albedo * illumination, 1.0);
 }
 `;
@@ -608,7 +648,7 @@ export class WebGPUBackend {
     const errors = compilation.messages.filter((message: any) => message.type === 'error');
     if (errors.length) throw new Error('WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 368 } }]
+      entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 384 } }]
     });
     const layout = this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
     this.pipeline = await this.device.createRenderPipelineAsync({
@@ -667,7 +707,7 @@ export class WebGPUBackend {
     const ringCompilation = await ringModule.getCompilationInfo();
     const ringErrors = ringCompilation.messages.filter((message: any) => message.type === 'error');
     if (ringErrors.length) throw new Error('WGSL ring compilation failed: ' + ringErrors.map((item: any) => item.message).join('; '));
-    this.ringBindGroupLayout = this.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 160 } }] });
+    this.ringBindGroupLayout = this.device.createBindGroupLayout({ entries: [{ binding: 0, visibility: 3, buffer: { type: 'uniform', minBindingSize: 304 } }] });
     this.ringPipeline = await this.device.createRenderPipelineAsync({
       layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.ringBindGroupLayout] }),
       vertex: { module: ringModule, entryPoint: 'vertexMain', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
@@ -766,10 +806,10 @@ export class WebGPUBackend {
   private resourcesFor(id: string): BodyGpuResources {
     let resources = this.bodyResources.get(id);
     if (resources) return resources;
-    const uniform = this.device.createBuffer({ size: 368, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ size: 384, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 368 } }]
+      entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 384 } }]
     });
     resources = { uniform, bindGroup };
     this.bodyResources.set(id, resources);
@@ -805,7 +845,7 @@ export class WebGPUBackend {
       }
     });
     pass.setPipeline(this.pipeline);
-    const matrix = new Float32Array(92);
+    const matrix = new Float32Array(96);
     for (const body of frame.bodies) {
       const usesGeodesicSurface = Boolean(body.surfaceProfile &&
         body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant');
@@ -814,7 +854,8 @@ export class WebGPUBackend {
           pass, body, body.surfaceProfile!, frame.viewProjection, frame.cameraPosition,
           frame.sunPosition, frame.cameraForward ?? [0, 0, -1],
           frame.verticalFovRadians ?? Math.PI / 3,
-          frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height
+          frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height,
+          body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, frame.sunRadius ?? 0, body.shadowsEnabled !== false
         );
         // Тверда планета не переходить на спрощену сферу, поки геодезичні сторінки завантажуються.
         continue;
@@ -834,9 +875,10 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set(body.gasGiant ? [body.gasGiant.type, body.gasGiant.bandStrength, body.gasGiant.stormStrength, body.gasGiant.jetCount] : [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      matrix.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
+      matrix.set([1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
+      matrix.set(body.ringShadow ? [body.ringShadow.innerRadiusAU, body.ringShadow.outerRadiusAU, body.ringShadow.opacity, 1] : [0, 0, 0, 0], 92);
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
@@ -846,7 +888,7 @@ export class WebGPUBackend {
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
-      const base = new Float32Array(92);
+      const base = new Float32Array(96);
       base.set(Array.from(body.model).slice(0, 16), 0);
       base.set(Array.from(frame.viewProjection).slice(0, 16), 16);
       base.set([1, 1, 1, 1], 32);
@@ -856,9 +898,10 @@ export class WebGPUBackend {
       base.set([0, 0, 0, 0], 40);
       base.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      base.set([body.eclipseVisibility ?? 1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
+      base.set([1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
+      base.set(body.ringShadow ? [body.ringShadow.innerRadiusAU, body.ringShadow.outerRadiusAU, body.ringShadow.opacity, 1] : [0, 0, 0, 0], 92);
       const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], lighting?: readonly [number, number, number, number], cloudErosion = 0) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);
@@ -885,7 +928,7 @@ export class WebGPUBackend {
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
           [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)],
           [cloud.wind[0], cloud.wind[1], cloud.altitudeRatio, cloud.thicknessRatio],
-          [body.eclipseVisibility ?? 1, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
+          [1, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
           cloud.erosion);
       }
     }
@@ -900,15 +943,17 @@ export class WebGPUBackend {
       if (!config || !this.ringVertexBuffer) continue;
       let resources = this.ringResources.get(ringDraw.id);
       if (!resources) {
-        const uniform = this.device.createBuffer({ size: 160, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
-        const bindGroup = this.device.createBindGroup({ layout: this.ringBindGroupLayout, entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 160 } }] });
+        const uniform = this.device.createBuffer({ size: 304, usage: BUFFER_USAGE.UNIFORM | BUFFER_USAGE.COPY_DST });
+        const bindGroup = this.device.createBindGroup({ layout: this.ringBindGroupLayout, entries: [{ binding: 0, resource: { buffer: uniform, offset: 0, size: 304 } }] });
         resources = { uniform, bindGroup }; this.ringResources.set(ringDraw.id, resources);
       }
-      const uniforms = new Float32Array(40);
+      const uniforms = new Float32Array(76);
       uniforms.set(Array.from(frame.viewProjection).slice(0, 16), 0);
       uniforms.set(Array.from(ringDraw.model).slice(0, 16), 16);
       uniforms.set([config.color[0], config.color[1], config.color[2], 1], 32);
-      uniforms.set([config.inner / config.outer, config.opacity, 0, 0], 36);
+      uniforms.set([config.inner / config.outer, config.opacity, 1 / config.outer, ringDraw.shadowsEnabled === false ? 0 : 1], 36);
+      uniforms.set([...(ringDraw.sunPosition ?? frame.sunPosition), ringDraw.shadowsEnabled === false ? 0 : (ringDraw.sunRadius ?? frame.sunRadius ?? 0)], 40);
+      uniforms.set(ringDraw.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 44);
       this.device.queue.writeBuffer(resources.uniform, 0, uniforms);
       pass.setPipeline(this.ringPipeline); pass.setBindGroup(0, resources.bindGroup);
       pass.setVertexBuffer(0, this.ringVertexBuffer); pass.draw(this.ringVertexCount);

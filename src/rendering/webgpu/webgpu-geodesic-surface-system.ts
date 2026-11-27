@@ -51,6 +51,10 @@ export class WebGPUGeodesicSurfaceSystem {
   private renderer: WebGPUGeodesicSurfaceRenderer | null = null;
   private rendererPromise: Promise<void> | null = null;
   private disposed = false;
+  private frameShadowOccluders = new Float32Array(32);
+  private frameSunRadius = 0;
+  private frameShadowsEnabled = true;
+  private currentSunPosition: readonly [number, number, number] = [0, 0, 0];
 
   constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings) {
     this.manager = new VirtualSurfaceManager({ cpuBudgetBytes: settings.cpuBudgetBytes, workerCount: settings.workerCount });
@@ -82,9 +86,16 @@ export class WebGPUGeodesicSurfaceSystem {
     cameraForward: ArrayLike<number>,
     verticalFovRadians: number,
     viewportWidthPx: number,
-    viewportHeightPx: number
+    viewportHeightPx: number,
+    shadowOccluders: Float32Array = new Float32Array(32),
+    sunRadius = 0,
+    shadowsEnabled = true
   ): boolean {
     if (this.disposed || profile.kind === 'gas-giant' || profile.kind === 'ice-giant') return false;
+    this.frameShadowOccluders = shadowOccluders;
+    this.frameSunRadius = shadowsEnabled ? sunRadius : 0;
+    this.frameShadowsEnabled = shadowsEnabled;
+    this.currentSunPosition = sunPosition;
     const model = body.model;
     if (!Number.isFinite(Number(model[0])) || !Number.isFinite(Number(model[5]))) return false;
 
@@ -277,6 +288,10 @@ export class WebGPUGeodesicSurfaceSystem {
       renderer.draw(pass, item.key, {
         viewProjection, model, radiusM, pageLayer: item.layer, lightDirection,
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
+        sunPosition: this.currentSunPosition,
+        sunRadius: this.frameSunRadius,
+        shadowOccluders: this.frameShadowOccluders,
+        shadowsEnabled: this.frameShadowsEnabled,
         pageResolution: this.settings.pageResolution, gutter: 2,
         morph: options.forceMorph ? 1 : Math.min(1, Math.max(0, (clockNow() - (this.meshMorphStartedAt.get(item.key) ?? clockNow())) / 280)),
         transitionAlpha: options.transitionAlpha,

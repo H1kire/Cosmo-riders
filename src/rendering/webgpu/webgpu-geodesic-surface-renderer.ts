@@ -14,6 +14,10 @@ export interface WebGPUGeodesicDraw {
   readonly cameraPosition?: readonly [number, number, number];
   readonly pageResolution?: number;
   readonly gutter?: number;
+  readonly sunPosition?: readonly [number, number, number];
+  readonly sunRadius?: number;
+  readonly shadowOccluders?: Float32Array;
+  readonly shadowsEnabled?: boolean;
   readonly morph?: number;
   /** Частка дочірнього кольору під час піксельного переходу LOD. */
   readonly transitionAlpha?: number;
@@ -47,7 +51,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const errors = info.messages.filter((item: any) => item.type === 'error');
     if (errors.length) throw new Error('Geodesic WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const layout = device.createBindGroupLayout({ entries: [
-      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 192 } },
+      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 336 } },
       { binding: 1, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 2, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: 1, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
@@ -111,7 +115,7 @@ export class WebGPUGeodesicSurfaceRenderer {
       this.device.queue.writeBuffer(buffer, 0, data);
       return buffer;
     };
-    const uniform = this.device.createBuffer({ label: 'Geodesic tile uniforms ' + meshKey, size: 192, usage: USAGE.UNIFORM | USAGE.COPY_DST });
+    const uniform = this.device.createBuffer({ label: 'Geodesic tile uniforms ' + meshKey, size: 336, usage: USAGE.UNIFORM | USAGE.COPY_DST });
     const bindGroup = this.device.createBindGroup({ layout: this.layout, entries: [
       { binding: 0, resource: { buffer: uniform } },
       { binding: 1, resource: this.pages.albedoView },
@@ -162,7 +166,7 @@ export class WebGPUGeodesicSurfaceRenderer {
   }
 
   private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {
-    const data = new Float32Array(48);
+    const data = new Float32Array(84);
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, Math.max(0, Math.min(1, draw.morph ?? 1))], 32);
@@ -170,6 +174,8 @@ export class WebGPUGeodesicSurfaceRenderer {
     data.set([...(draw.cameraPosition ?? [0, 0, 0]), 1], 40);
     const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
     data.set([resolution, resolution + gutter * 2, 0, 0], 44);
+    data.set([...(draw.sunPosition ?? [0, 0, 0]), draw.shadowsEnabled === false ? 0 : (draw.sunRadius ?? 0)], 48);
+    data.set(draw.shadowOccluders ?? new Float32Array(32), 52);
     this.device.queue.writeBuffer(buffer, 0, data);
     return buffer;
   }
@@ -185,7 +191,7 @@ export class WebGPUGeodesicSurfaceRenderer {
 }
 
 const WGSL = `
-struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirection: vec4<f32>, cameraPosition: vec4<f32>, pageInfo: vec4<f32>, };
+struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirection: vec4<f32>, cameraPosition: vec4<f32>, pageInfo: vec4<f32>, sunPosition: vec4<f32>, shadowOccluders: array<vec4<f32>, 8>, };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var albedoTex: texture_2d_array<f32>;
 @group(0) @binding(2) var normalTex: texture_2d_array<f32>;
@@ -242,6 +248,27 @@ fn geometrySmith(nDotV: f32, nDotL: f32, roughness: f32) -> f32 {
   return geometrySchlickGGX(nDotV, roughness) * geometrySchlickGGX(nDotL, roughness);
 }
 
+fn angularDiskOverlap(sourceRadius:f32,occluderRadius:f32,separation:f32)->f32 {
+ let r=max(sourceRadius,0.0000001);let q=max(occluderRadius,0.0000001);let d=max(0.0,separation);
+ if(d>=r+q){return 0.0;} if(d<=abs(r-q)){if(q>=r){return 1.0;}return clamp(q*q/(r*r),0.0,1.0);}
+ let x=clamp((d*d+r*r-q*q)/(2.0*d*r),-1.0,1.0);let y=clamp((d*d+q*q-r*r)/(2.0*d*q),-1.0,1.0);
+ let area=r*r*acos(x)+q*q*acos(y)-0.5*sqrt(max(0.0,(-d+r+q)*(d+r-q)*(d-r+q)*(d+r+q)));
+ return clamp(area/(PI*r*r),0.0,1.0);
+}
+fn shadowVisibility(worldPosition:vec3<f32>)->f32 {
+ let toSun=u.sunPosition.xyz-worldPosition;let sunDistance=length(toSun);
+ if(sunDistance<=0.000001||u.sunPosition.w<=0.0){return 1.0;}
+ let sunDirection=toSun/sunDistance;let sunAngular=asin(clamp(u.sunPosition.w/sunDistance,0.0,0.999));var visibility=1.0;
+ for(var i=0u;i<8u;i=i+1u){
+  let caster=u.shadowOccluders[i];if(caster.w<=0.0){continue;}
+  let toCaster=caster.xyz-worldPosition;let distance=length(toCaster);
+  if(distance<=0.000001||distance>=sunDistance){continue;}
+  let angular=asin(clamp(caster.w/distance,0.0,0.999));let separation=acos(clamp(dot(sunDirection,toCaster/distance),-1.0,1.0));
+  visibility*=1.0-angularDiskOverlap(sunAngular,angular,separation);if(visibility<0.001){return 0.0;}
+ }
+ return clamp(visibility,0.0,1.0);
+}
+
 @fragment fn fs(input: VOut) -> @location(0) vec4<f32> {
   let layer = input.layer;
   let baseColor = textureSample(albedoTex, surfaceSampler, input.uv, layer).rgb;
@@ -266,7 +293,7 @@ fn geometrySmith(nDotV: f32, nDotL: f32, roughness: f32) -> f32 {
   let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * max(nDotL, 0.0001), 0.0001);
   let diffuseWeight = (vec3<f32>(1.0) - fresnel) * (1.0 - metallic);
   let diffuse = diffuseWeight * baseColor / PI;
-  let direct = (diffuse + specular) * nDotL;
+  let direct = (diffuse + specular) * nDotL * shadowVisibility(input.worldPosition);
 
   // Небесне заповнення зберігає читабельність нічного боку без фальшивого другого джерела світла.
   let hemisphere = mix(0.018, 0.075, clamp(normal.y * 0.5 + 0.5, 0.0, 1.0));

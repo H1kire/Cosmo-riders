@@ -27,8 +27,9 @@ test('adaptive quality is wired into the active WebGPU LOD selector without cach
   readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8')
  ]);
- assert.ok(presentation.includes('this.adaptiveQuality.addFrameTime(intervalMs)'));
+ assert.ok(presentation.includes('this.adaptiveQuality.addFrameTime(workloadMs)'));
  assert.ok(presentation.includes('geodesicTargetErrorPx:'));
+ assert.ok(presentation.includes('Math.max(this.lastFrameDurationMs,typeof gpuFrameMs===\'number\'?gpuFrameMs:0)'));
  assert.ok(backend.includes('frame.geodesicTargetErrorPx'));
  assert.ok(system.includes('topology.lastSelectionErrorPx !== targetErrorPx'));
  assert.ok(system.includes('targetErrorPx: Math.max(0.5, Math.min(8, targetErrorPx))'));

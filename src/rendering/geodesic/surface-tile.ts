@@ -98,7 +98,7 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
  if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.08){color=color.map((v,i)=>v+(i===0?.84:i===1?.9:.96-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
  height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
  // Мікрорельєф має фізичний масштаб і не перевищує частку допустимого перепаду висот.
- height+=(micro-.5)*2*(heightLimitM(p).positive*.0015/p.meanRadiusM);
+ height+=(micro-.5)*.003;
  const microTone=(micro-.5)*.055;
  color=color.map(value=>clamp(value*(1+microTone))) as [number,number,number];
  rough=clamp(rough+(micro-.5)*.045);
@@ -162,7 +162,8 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  // Усі профілі мають фізичні межі рельєфу; Земля зберігає асиметричний океанічний діапазон.
  // Значення лишається часткою радіуса до побудови нормалей і запису каналу Height.
  const limits=heightLimitM(profile);
- const heightFraction=(value:number)=>clamp(value,-limits.negative/profile.meanRadiusM,limits.positive/profile.meanRadiusM);
+ // Процедурна висота є безрозмірним рельєфом; масштабуємо її до метричного діапазону конкретного тіла.
+ const heightFraction=(value:number)=>clamp(value*(value<0?limits.negative:limits.positive)/profile.meanRadiusM,-limits.negative/profile.meanRadiusM,limits.positive/profile.meanRadiusM);
  let index=0;
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){

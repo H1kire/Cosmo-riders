@@ -72,6 +72,7 @@ test('surface relief stays inside body-specific physical elevation limits',()=>{
   const p=createGeologicalProfile(item.body as never);
   const generated=generateSurfaceTile({planetId:p.bodyId,seed:p.seed,tile:tileId(0,'1'),resolution:24,gutter:2,profile:p});
   assert.ok(generated.height.every(value=>Number.isFinite(value)&&Math.abs(value)<=item.limit+1e-3),p.bodyId+' exceeded physical relief limits');
+  assert.ok(generated.height.some(value=>Math.abs(value)<item.limit*.8),p.bodyId+' terrain appears clamped across the whole tile');
  }
 });
 
@@ -81,5 +82,6 @@ test('higher geodesic LOD reveals deterministic additional microdetail',()=>{
  assert.ok(root.height.every(Number.isFinite));
  assert.ok(child.height.every(Number.isFinite));
  assert.notDeepEqual(root.height,child.height);
+ assert.ok(root.height.some(value=>Math.abs(value)<9000),'root relief must preserve natural elevation variation instead of saturating the cap');
  assert.equal(createGeologicalProfile(earth as never).algorithmVersion,2);
 });

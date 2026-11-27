@@ -106,3 +106,16 @@ test('higher geodesic LOD reveals deterministic additional microdetail',async()=
  assert.ok(root.height.some(value=>Math.abs(value)<9000),'root relief must preserve natural elevation variation instead of saturating the cap');
  assert.equal(createGeologicalProfile(earth as never).algorithmVersion,2);
 });
+
+
+test('whole-body frustum culling includes diagonal rectangle corners without admitting distant outside spheres',()=>{
+ const vertical=Math.PI/3,aspect=16/9,distance=10;
+ const direction=(horizontal:number,elevation:number):[number,number,number]=>{
+  const x=Math.sin(horizontal)*Math.cos(elevation),y=Math.sin(elevation),z=-Math.cos(horizontal)*Math.cos(elevation);
+  return[-x*distance,-y*distance,-z*distance];
+ };
+ const insideCorner=direction(40*Math.PI/180,25*Math.PI/180);
+ const outsideCorner=direction(52*Math.PI/180,36*Math.PI/180);
+ assert.equal(isSpherePotentiallyVisibleInFrustum(insideCorner,[0,0,-1],.01,vertical,1600,900),true);
+ assert.equal(isSpherePotentiallyVisibleInFrustum(outsideCorner,[0,0,-1],.01,vertical,1600,900),false);
+});

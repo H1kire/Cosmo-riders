@@ -325,7 +325,18 @@ export class Solar3DView{
   },{passive:false});
   c.addEventListener('keydown',e=>{if(e.key==='Home')this.home();});
  }
- getGeodesicEarthDiagnostics(){return{state:'webgpu',ready:this.webgpuBackend?.state==='ready',failed:this.webgpuBackend?.state==='failed',loaded:0,visible:0,gpuResident:0,workers:0,queued:0,cpuBytes:0,pinned:0,errors:this.webgpuBackend?.state==='failed'?1:0,fallbackReason:this.webgpuBackend?.error??null};}
+ getGeodesicEarthDiagnostics(){
+  const cache=this.webgpuBackend?.surfaceCacheDiagnostics;
+  const rendererError=cache?.rendererInitializationError??null;
+  const workerErrors=(cache?.workerStartupErrors??0)+(cache?.workerRuntimeErrors??0)+(cache?.workerTaskErrors??0);
+  return{
+   state:'webgpu',ready:this.webgpuBackend?.state==='ready'&&Boolean(cache?.ready),failed:this.webgpuBackend?.state==='failed'||Boolean(rendererError),
+   loaded:cache?.generatedPages??0,visible:cache?.visiblePages??0,gpuResident:cache?.residentPages??0,
+   workers:cache?.workerActive??0,queued:cache?.queuedPages??0,cpuBytes:cache?.cpuCacheBytes??0,pinned:cache?.pinnedPages??0,
+   errors:(cache?.failedPages??0)+(cache?.uploadFailureCount??0)+workerErrors+(rendererError?1:0),
+   fallbackReason:rendererError??this.webgpuBackend?.error??cache?.firstWorkerFailure??null
+  };
+ }
  setStellarSource(id:string,positionSI:[number,number,number],options:{intensity?:number;color?:[number,number,number]}={}){
   if(!id||id==='sun')throw new TypeError('Use a unique non-primary stellar source id.');
   if(!positionSI.every(Number.isFinite))throw new TypeError('Stellar source coordinates must be finite SI values.');

@@ -5,7 +5,7 @@ import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, s
 import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
 import { findTileNeighbors } from '../src/rendering/geodesic/tile-neighbors.ts';
 import { balanceGeodesicTiles } from '../src/rendering/geodesic/quadtree-balancer.ts';
-import { selectGeodesicLod, horizonCapUpperBound, isTilePotentiallyVisibleFromHorizon } from '../src/rendering/geodesic/quadtree-selector.ts';
+import { selectGeodesicLod, horizonCapUpperBound, isTilePotentiallyVisibleFromHorizon, isAngularCapPotentiallyVisibleInFrustum } from '../src/rendering/geodesic/quadtree-selector.ts';
 import { GeodesicSurfaceRuntime } from '../src/rendering/geodesic/geodesic-surface-runtime.ts';
 import { buildStitchIndexTemplate, triangleGridVertexIndex } from '../src/rendering/geodesic/tile-stitching.ts';
 import { buildGeodesicTileMesh } from '../src/rendering/geodesic/tile-mesh.ts';
@@ -720,4 +720,16 @@ test('reconciliation defaults to showing the requested cover when no visibility 
  const roots=baseGeoTiles(),runtime=new GeodesicSurfaceRuntime('default-visible',{maxTiles:128,stitchResolution:8});
  runtime.reconcile(roots);
  assert.equal(runtime.getTileStates().filter(state=>state.visible).length,20);
+});
+
+
+test('tile frustum culling includes diagonal screen corners and rejects separated caps',()=>{
+ const direction=(horizontal:number,elevation:number):Vec3=>{
+  const x=Math.sin(horizontal)*Math.cos(elevation),y=Math.sin(elevation),z=-Math.cos(horizontal)*Math.cos(elevation);
+  return[x,y,z];
+ };
+ const inside=direction(40*Math.PI/180,25*Math.PI/180);
+ const outside=direction(52*Math.PI/180,36*Math.PI/180);
+ assert.equal(isAngularCapPotentiallyVisibleInFrustum(inside,.01,[0,0,-1],Math.PI/3,1600,900),true);
+ assert.equal(isAngularCapPotentiallyVisibleInFrustum(outside,.01,[0,0,-1],Math.PI/3,1600,900),false);
 });

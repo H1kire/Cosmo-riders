@@ -229,6 +229,45 @@ test('all 49 satellite and planetary orbits remain inside their J2000 Keplerian 
  }
 });
 
+test('corrected JPL satellite angles and reference planes are preserved in the 49-body catalogue',()=>{
+ const world=createSolarSystemWorld();
+ const expected=[
+  ['rhea',527200,.001,44.3,31.5,.3,133.7],
+  ['titan',1221900,.029,78.3,11.7,.3,78.6],
+  ['hyperion',1481500,.105,214,122.9,.6,87.1],
+  ['iapetus',3561700,.028,254.5,74.8,7.6,86.5],
+  ['miranda',129846,.001,154.8,73,4.4,100.9],
+  ['ariel',190929,.001,9.6,193.5,0,0],
+  ['umbriel',265986,.004,183.4,253,.1,174.8],
+  ['titania',436298,.002,184,68.1,.1,29.5],
+  ['oberon',583511,.002,132.2,143.6,.1,76.8],
+  ['triton',354800,0,0,63,157.3,177.7],
+  ['naiad',48300,.001,144.5,6.1,4.7,38.7],
+  ['thalassa',50100,.001,223.6,3,.2,124.7],
+  ['despina',52600,.001,182.1,354.1,0,0],
+  ['galatea',62000,.001,113.9,12,0,0],
+  ['larissa',73600,.001,222,215.1,.2,317.4],
+  ['proteus',117700,.001,357.2,297.4,.6,355.5]
+ ] as const;
+ for(const [id,a,e,omega,mean,inclination,node] of expected){
+  const elements=world.bodies.get(id)!.orbitalElements!;
+  assert.ok(Math.abs(elements.semiMajorAxisM/1000-a)<1e-6,id+' semi-major axis');
+  assert.ok(Math.abs(elements.eccentricity-e)<1e-12,id+' eccentricity');
+  assert.ok(Math.abs(elements.argumentOfPeriapsis*180/Math.PI-omega)<1e-8,id+' argument of periapsis');
+  assert.ok(Math.abs(elements.meanAnomaly*180/Math.PI-mean)<1e-8,id+' mean anomaly');
+  assert.ok(Math.abs(elements.inclination*180/Math.PI-inclination)<1e-8,id+' inclination');
+  assert.ok(Math.abs(elements.longitudeAscendingNode*180/Math.PI-node)<1e-8,id+' ascending node');
+ }
+ const himalia=world.bodies.get('himalia')!,nereid=world.bodies.get('nereid')!,iapetus=world.bodies.get('iapetus')!,phoebe=world.bodies.get('phoebe')!;
+ assert.equal(himalia.orbitalReferenceFrame,'ecliptic');
+ assert.equal(nereid.orbitalReferenceFrame,'ecliptic');
+ assert.ok(Math.abs(nereid.orbitalElements!.meanAnomaly*180/Math.PI-216.6984)<1e-3);
+ assert.equal(iapetus.orbitalReferenceFrame,'laplace');
+ assert.equal(phoebe.orbitalReferenceFrame,'laplace');
+ assert.ok(Math.abs(iapetus.orbitalPlanePoleRightAscensionRad!*180/Math.PI-288.7)<1e-8);
+ assert.ok(Math.abs(phoebe.orbitalPlanePoleDeclinationRad!*180/Math.PI-67.5)<1e-8);
+});
+
 test('J2000 Moon mean elements match the JPL planetary satellite table',()=>{
  const moon=SOLAR_SYSTEM_DATA.moon.elements;
  assert.equal(moon.semiMajorAxisM,384400000);

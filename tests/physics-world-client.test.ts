@@ -26,3 +26,25 @@ test('osculating orbit cache refreshes after simulation state advances without p
  await client.ensureOrbitPath('earth',16);
  assert.equal(requests,2,'advanced simulation state triggers a refreshed osculating path');
 });
+
+test('all 49 planetary and satellite osculating paths pass through current parent-relative positions',async()=>{
+ const client=new PhysicsWorldClient();
+ await client.initialize();
+ try{
+  let checked=0;
+  for(const [id,body] of client.bodies){
+   if(!body.parentId)continue;
+   const path=await client.ensureOrbitPath(id,64);
+   const state=client.getBodyState(id),parent=client.getBodyState(body.parentId);
+   const dx=path[0]-(state.position.x-parent.position.x);
+   const dy=path[1]-(state.position.y-parent.position.y);
+   const dz=path[2]-(state.position.z-parent.position.z);
+   const radius=Math.hypot(state.position.x-parent.position.x,state.position.y-parent.position.y,state.position.z-parent.position.z);
+   assert.ok(Math.hypot(dx,dy,dz)<=Math.max(1e-3,radius*1e-8),id+' osculating path start must match current state');
+   checked++;
+  }
+  assert.equal(checked,49);
+ }finally{
+  await client.dispose();
+ }
+});

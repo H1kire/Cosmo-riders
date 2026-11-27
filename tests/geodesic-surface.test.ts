@@ -159,3 +159,18 @@ test('every satellite in the Solar System catalogue receives an explicit geologi
   assert.ok(profile.waterFraction>=0&&profile.waterFraction<=1,id+' has invalid water fraction');
  }
 });
+
+
+test('icy moons produce composition- and age-dependent albedo and relief fields',()=>{
+ const sample=(id:string)=>{
+  const body=SOLAR_SYSTEM_DATA[id] as unknown as Record<string,unknown>;
+  const profile=createGeologicalProfile(body as never);
+  return generateSurfaceTile({planetId:id,seed:profile.seed,tile:tileId(0),resolution:16,gutter:1,profile});
+ };
+ const europa=sample('europa'),enceladus=sample('enceladus'),callisto=sample('callisto');
+ assert.notDeepEqual(europa.albedo,enceladus.albedo);
+ assert.notDeepEqual(europa.albedo,callisto.albedo);
+ assert.notDeepEqual(europa.height,enceladus.height);
+ assert.notDeepEqual(europa.height,callisto.height);
+ assert.ok(enceladus.height.some(value=>Math.abs(value)>0));
+});

@@ -3,6 +3,7 @@ import { LightingSystem } from '../rendering/lighting/lighting-system.ts';
 import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
 import { CloudSystem, type CloudLayer } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
+import { AdaptiveQuality } from '../rendering/quality/adaptive-quality.ts';
 import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
 import { createGeologicalProfile, surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
@@ -85,6 +86,32 @@ export function calculateCameraClipPlanes(cameraRadiusAU:number,focusRadiusAU:nu
 export class Solar3DView{
  [key: string]: any;
  private readonly surfaceProfileCache = new Map<string,{source:object;profile:ReturnType<typeof createGeologicalProfile>}>();
+ private requestedGraphics!:GraphicsSettings;
+ private adaptiveQuality!:AdaptiveQuality;
+ private adaptiveQualityLevel:GraphicsSettings['preset']='high';
+ private applyAdaptiveGraphics(requested:GraphicsSettings):GraphicsSettings{
+  if(!requested.adaptiveQuality)return{...requested,geodesic:{...requested.geodesic}};
+  const active=createGraphicsSettings(this.adaptiveQualityLevel);
+  const rank:Record<GraphicsSettings['preset'],number>={low:0,medium:1,high:2,ultra:3};
+  const textureQuality=rank[requested.textureQuality]<=rank[active.textureQuality]?requested.textureQuality:active.textureQuality;
+  return{
+   ...requested,
+   renderScale:Math.min(requested.renderScale,active.renderScale),
+   msaaSamples:Math.min(requested.msaaSamples,active.msaaSamples),
+   atmosphereIntensity:Math.min(requested.atmosphereIntensity,active.atmosphereIntensity),
+   atmosphereSamples:Math.min(requested.atmosphereSamples,active.atmosphereSamples),
+   clouds:requested.clouds&&active.clouds,
+   cloudDetail:Math.min(requested.cloudDetail,active.cloudDetail),
+   bloom:requested.bloom&&active.bloom,
+   bloomIterations:Math.min(requested.bloomIterations,active.bloomIterations),
+   glare:requested.glare&&active.glare,
+   lensFlare:requested.lensFlare&&active.lensFlare,
+   shadowOccluders:Math.min(requested.shadowOccluders,active.shadowOccluders),
+   maxMeshLod:Math.min(requested.maxMeshLod,active.maxMeshLod),
+   textureQuality,
+   geodesic:{...requested.geodesic}
+  };
+ }
  private surfaceProfileFor(body:Parameters<typeof createGeologicalProfile>[0]){
   const cached=this.surfaceProfileCache.get(body.id);
   if(cached?.source===body)return cached.profile;
@@ -152,7 +179,7 @@ export class Solar3DView{
   const canvas=this.canvas;
   this.initializationStartedAt=performance.now();this.initializationStageStartedAt=this.initializationStartedAt;this.initializationStages={};
   this.syncSliceStartedAt=this.initializationStartedAt;this.longestSynchronousChunkMs=0;this.longTaskCount=0;this.longestLongTaskMs=0;
-  this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference='webgpu';
+  this.observeLongTasks();this.requestedGraphics=loadGraphicsSettings();this.adaptiveQuality=new AdaptiveQuality(this.requestedGraphics.preset);this.adaptiveQualityLevel=this.requestedGraphics.preset;this.graphics=this.applyAdaptiveGraphics(this.requestedGraphics);this.backendPreference='webgpu';
   const webgpuReady=await this.initializeWebGPUBackend();
   if(!webgpuReady)throw new Error('Cosmo-riders требует WebGPU: '+(this.backendFallbackReason??'инициализация WebGPU не удалась.'));
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;this.frameIntervalSamples=[];this.lastFrameStartedAt=0;
@@ -161,7 +188,15 @@ export class Solar3DView{
   await this.yieldToBrowser();this.markInitializationStage('webgpu-device-ready');
   this.graphicsChangeHandler=(event:Event)=>{
    const value=(event as CustomEvent<Partial<GraphicsSettings>>).detail??{};
-   this.graphics={...this.graphics,...value};
+   const previousPreset=this.requestedGraphics.preset;
+   const previousAdaptive=this.requestedGraphics.adaptiveQuality;
+   this.requestedGraphics={...this.requestedGraphics,...value,geodesic:{...this.requestedGraphics.geodesic,...(value.geodesic??{})}};
+   if(value.preset&&value.preset!==previousPreset||value.adaptiveQuality!==undefined&&value.adaptiveQuality!==previousAdaptive){
+    this.adaptiveQuality=new AdaptiveQuality(this.requestedGraphics.preset);
+    this.adaptiveQualityLevel=this.requestedGraphics.preset;
+   }
+   if(!this.requestedGraphics.adaptiveQuality)this.adaptiveQualityLevel=this.requestedGraphics.preset;
+   this.graphics=this.applyAdaptiveGraphics(this.requestedGraphics);
   };
   window.addEventListener('graphics-settings-change',this.graphicsChangeHandler);
   this.atmosphereSystem=new AtmosphereSystem();this.cloudSystem=new CloudSystem();this.lighting=new LightingSystem();
@@ -179,6 +214,7 @@ export class Solar3DView{
    webgpuError:backend?.error??this.backendFallbackReason??null,webgpuInitializationMs:backend?.initializationMs??0,
    initializationStages:{...(this.initializationStages??{})},initializationElapsedMs:this.initializationStartedAt?performance.now()-this.initializationStartedAt:0,
    performance:{...summarizeFrameTimes(this.frameIntervalSamples??[]),cpuFrameMs:this.lastFrameDurationMs??0,...(backend?.performanceDiagnostics??{}),gpuUtilizationPercent:null},
+   requestedQuality:this.requestedGraphics?.preset??this.graphics?.preset??'high',adaptiveQualityEnabled:Boolean(this.requestedGraphics?.adaptiveQuality),adaptiveQualityLevel:this.adaptiveQualityLevel??this.graphics?.preset??'high',
    longestSynchronousChunkMs:this.longestSynchronousChunkMs??0,longTaskCount:this.longTaskCount??0,longestLongTaskMs:this.longestLongTaskMs??0,
    webgl2:false,maxArrayTextureLayers:'—',maxTextureSize:limits.maxTextureDimension2D??'—',
    maxVertexTextureImageUnits:'—',maxFragmentTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
@@ -521,9 +557,17 @@ export class Solar3DView{
    }
    sunVisible=visibility>.02;
   }
-  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,cloudDetail:this.graphics.cloudDetail,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,renderScale:this.graphics.renderScale,msaaSamples:this.graphics.msaaSamples,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
+  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,atmosphereSamples:this.graphics.atmosphereSamples,cloudDetail:this.graphics.cloudDetail,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,cameraForward:norm(sub(this.target,eye)),verticalFovRadians:Math.PI/3,viewportWidthPx:w,viewportHeightPx:h,renderScale:this.graphics.renderScale,msaaSamples:this.graphics.msaaSamples,geodesicSettings:this.graphics.geodesic,geodesicTargetErrorPx:({low:3,medium:2.5,high:1.8,ultra:1.5} as const)[this.adaptiveQualityLevel],postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
+  if(this.requestedGraphics.adaptiveQuality){
+   const intervalMs=this.frameIntervalSamples.at(-1)??this.lastFrameDurationMs;
+   const nextLevel=this.adaptiveQuality.addFrameTime(intervalMs);
+   if(nextLevel!==this.adaptiveQualityLevel){
+    this.adaptiveQualityLevel=nextLevel;
+    this.graphics=this.applyAdaptiveGraphics(this.requestedGraphics);
+   }
+  }else this.adaptiveQualityLevel=this.requestedGraphics.preset;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
   if(frameStarted-(this.lastDiagnosticsPublish??0)>=500){this.lastDiagnosticsPublish=frameStarted;window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:this.getGraphicsDiagnostics()}));}
  }

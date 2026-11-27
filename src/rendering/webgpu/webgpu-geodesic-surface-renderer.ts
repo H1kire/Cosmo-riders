@@ -146,6 +146,8 @@ export class WebGPUGeodesicSurfaceRenderer {
     return [...this.meshes.keys()].filter(key => key.startsWith(prefix));
   }
 
+  meshKeys(): string[] { return [...this.meshes.keys()]; }
+
   releaseMesh(tileKey: string): void {
     const mesh = this.meshes.get(tileKey);
     if (!mesh) return;

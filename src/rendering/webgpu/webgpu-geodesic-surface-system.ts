@@ -1,5 +1,5 @@
 import { GeodesicSurfaceRuntime, type GeodesicTileState } from '../geodesic/geodesic-surface-runtime.ts';
-import { isSpherePotentiallyVisibleInFrustum, selectGeodesicLod, type GeodesicLodStats } from '../geodesic/quadtree-selector.ts';
+import { selectGeodesicLod, type GeodesicLodStats } from '../geodesic/quadtree-selector.ts';
 import { baseGeoTiles, type GeoTile, type Vec3 } from '../geodesic/icosphere.ts';
 import { VirtualSurfaceManager } from '../geodesic/virtual-surface-manager.ts';
 import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
@@ -137,13 +137,6 @@ export class WebGPUGeodesicSurfaceSystem {
     const localCamera: Vec3 = [dot(cameraDeltaWorld, axisX), dot(cameraDeltaWorld, axisY), dot(cameraDeltaWorld, axisZ)];
     const forwardWorld = normalize([Number(cameraForward[0]), Number(cameraForward[1]), Number(cameraForward[2])]);
     const localForward: Vec3 = normalize([dot(forwardWorld, axisX), dot(forwardWorld, axisY), dot(forwardWorld, axisZ)]);
-
-    // Не запускаємо Quadtree, генерацію мешів і завантаження сторінок для планет поза кадром.
-    // Перевірка консервативна: кутовий радіус сфери додається до половини більшого FOV.
-    if (!isSpherePotentiallyVisibleInFrustum(
-      localCamera, localForward, profile.meanRadiusM,
-      verticalFovRadians, viewportWidthPx, viewportHeightPx
-    )) return false;
 
     const runtime = this.runtimeFor(body.id, profile);
     const topology = this.topologyFor(body.id);

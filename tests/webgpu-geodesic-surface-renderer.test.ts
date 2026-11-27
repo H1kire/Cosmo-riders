@@ -4,9 +4,10 @@ import { WebGPUGeodesicSurfaceRenderer } from '../src/rendering/webgpu/webgpu-ge
 
 test('geodesic renderer creates indexed GPU buffers and submits page-backed draws', async () => {
   const buffers: any[] = [], calls: string[] = [];
+  let bindGroupLayout: any = null;
   const device = {
     createShaderModule: () => ({ getCompilationInfo: async () => ({ messages: [] }) }),
-    createBindGroupLayout: (value: any) => value,
+    createBindGroupLayout: (value: any) => { bindGroupLayout = value; return value; },
     createPipelineLayout: (value: any) => value,
     createRenderPipelineAsync: async (value: any) => value,
     createSampler: (value: any) => value,
@@ -17,6 +18,10 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
   const views = Array.from({ length: 5 }, () => ({}));
   const pages: any = { ready: true, albedoView: views[0], normalView: views[1], heightView: views[2], roughnessView: views[3], materialView: views[4] };
   const renderer = await WebGPUGeodesicSurfaceRenderer.create(device, pages);
+  const entries = bindGroupLayout.entries as Array<{ binding: number; visibility: number }>;
+  assert.equal(entries.find(entry => entry.binding === 0)?.visibility, 3, 'uniform is used by vertex and fragment stages');
+  assert.equal(entries.find(entry => entry.binding === 3)?.visibility, 1, 'height texture is vertex-only');
+  for (const binding of [1, 2, 4, 5, 6]) assert.equal(entries.find(entry => entry.binding === binding)?.visibility, 2, `binding ${binding} is fragment-only`);
   renderer.uploadMesh({
     tileKey: '0:root', resolution: 2, radiusM: 10,
     directions: new Float32Array([1,0,0, 0,1,0, 0,0,1]),

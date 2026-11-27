@@ -15,6 +15,8 @@ export interface WebGPUGeodesicDraw {
   readonly pageResolution?: number;
   readonly gutter?: number;
   readonly morph?: number;
+  /** Частка дочірнього кольору під час піксельного переходу LOD. */
+  readonly transitionAlpha?: number;
 }
 
 /** WebGPU-only indexed geodesic tile pipeline using all five generated surface channels. */
@@ -25,7 +27,7 @@ export class WebGPUGeodesicSurfaceRenderer {
   private readonly meshes = new Map<string, GpuMesh>();
   private disposed = false;
 
-  private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, layout: any, sampler: any) {
+  private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, private readonly crossfadePipeline: any, layout: any, sampler: any) {
     this.pipeline = pipeline;
     this.layout = layout;
     this.sampler = sampler;
@@ -45,19 +47,35 @@ export class WebGPUGeodesicSurfaceRenderer {
       { binding: 5, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 6, visibility: 2, sampler: { type: 'filtering' } }
     ] });
+    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] });
+    const vertex = { module: shader, entryPoint: 'vs', buffers: [
+      { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
+      { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
+      { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x2' }] }
+    ] };
     const pipeline = await device.createRenderPipelineAsync({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
-      vertex: { module: shader, entryPoint: 'vs', buffers: [
-        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
-        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x2' }] }
-      ] },
+      layout: pipelineLayout,
+      vertex,
       fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less-equal' }
     });
+    // Дочірні тайли змішуються поверх повністю намальованого батьківського покриття.
+    const crossfadePipeline = await device.createRenderPipelineAsync({
+      layout: pipelineLayout,
+      vertex,
+      fragment: { module: shader, entryPoint: 'fs', targets: [{
+        format: 'rgba16float',
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+        }
+      }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
+    });
     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'nearest', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
-    return new WebGPUGeodesicSurfaceRenderer(device, pages, pipeline, layout, sampler);
+    return new WebGPUGeodesicSurfaceRenderer(device, pages, pipeline, crossfadePipeline, layout, sampler);
   }
 
   uploadMesh(mesh: GeodesicTileMesh, meshKey = mesh.tileKey): void {
@@ -107,7 +125,8 @@ export class WebGPUGeodesicSurfaceRenderer {
     const mesh = this.meshes.get(tileKey);
     if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return false;
     const uniform = this.uniformFor(mesh.uniform, draw);
-    pass.setPipeline(this.pipeline);
+    const transitionAlpha = Math.max(0, Math.min(1, draw.transitionAlpha ?? 1));
+    pass.setPipeline(transitionAlpha < 1 ? this.crossfadePipeline : this.pipeline);
     pass.setBindGroup(0, mesh.bindGroup);
     pass.setVertexBuffer(0, mesh.positions);
     pass.setVertexBuffer(1, mesh.normals);
@@ -122,7 +141,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, Math.max(0, Math.min(1, draw.morph ?? 1))], 32);
-    data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), 0], 36);
+    data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), Math.max(0, Math.min(1, draw.transitionAlpha ?? 1))], 36);
     data.set([...(draw.cameraPosition ?? [0, 0, 0]), 1], 40);
     const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
     data.set([resolution, resolution + gutter * 2, 0, 0], 44);
@@ -229,6 +248,6 @@ fn geometrySmith(nDotV: f32, nDotL: f32, roughness: f32) -> f32 {
   let ambientDiffuse = baseColor * diffuseWeight * hemisphere * (1.0 - roughness * 0.22);
   let ambientSpecular = fresnel * (0.012 + (1.0 - roughness) * 0.018);
   let radiance = direct + ambientDiffuse + ambientSpecular;
-  return vec4<f32>(radiance, 1.0);
+  return vec4<f32>(radiance, clamp(u.lightDirection.w, 0.0, 1.0));
 }
 `;

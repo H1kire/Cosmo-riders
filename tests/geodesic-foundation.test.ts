@@ -662,3 +662,25 @@ test('geodesic topology accepts a temporary reconciliation budget without changi
  assert.ok(source.includes('maxTiles=this.options.maxTiles'));
  assert.ok(source.includes('balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles})'));
 });
+
+
+test('WebGPU geodesic LOD performs a real pixel alpha crossfade after every target tile is ready',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [renderer,system]=await Promise.all([
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(renderer.includes('crossfadePipeline'));
+ assert.ok(renderer.includes("srcFactor: 'src-alpha'"));
+ assert.ok(renderer.includes("dstFactor: 'one-minus-src-alpha'"));
+ assert.ok(renderer.includes('transitionAlpha ?? 1'));
+ assert.ok(renderer.includes('clamp(u.lightDirection.w, 0.0, 1.0)'));
+ assert.ok(system.includes('const LOD_CROSSFADE_MS = 420'));
+ assert.ok(system.includes('transition.blendStartedAt === null'));
+ assert.ok(system.includes('transitionAlpha: blend'));
+ assert.ok(system.includes('forceMorph: true'));
+ assert.ok(system.includes('this.drawTileStates(pass, sourceItems'));
+ assert.ok(system.indexOf('this.drawTileStates(pass, sourceItems')<system.indexOf('transitionAlpha: blend'));
+ assert.ok(system.includes('if (!targetReady) return true'));
+ assert.ok(system.includes('if (blend >= 1)'));
+});

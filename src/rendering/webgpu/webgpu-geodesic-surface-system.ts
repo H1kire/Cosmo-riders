@@ -23,6 +23,8 @@ interface TopologyTransition {
   /** Попереднє повне покриття залишається видимим до готовності всіх нових листків. */
   readonly source: readonly GeodesicTileState[];
   targetSignature: string;
+  /** Час початку змішування після повної готовності цільового покриття. */
+  blendStartedAt: number | null;
 }
 interface PlanetTopology {
   readonly runtime: GeodesicSurfaceRuntime;
@@ -33,6 +35,7 @@ interface PlanetTopology {
 }
 const MAX_PAGE_LAYERS = 256;
 const METERS_PER_AU = 149597870700;
+const LOD_CROSSFADE_MS = 420;
 const clockNow = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
 
 /** WebGPU geodesic renderer with screen-error Quadtree LOD, 2:1 balancing and edge stitching. */
@@ -136,10 +139,11 @@ export class WebGPUGeodesicSurfaceSystem {
         if (!topology.transition) {
           const source = topology.runtime.getTileStates().filter(state => state.visible);
           if (source.length > 0 && source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity) {
-            topology.transition = { source, targetSignature: signature };
+            topology.transition = { source, targetSignature: signature, blendStartedAt: null };
           }
-        } else {
+        } else if (topology.transition.targetSignature !== signature) {
           topology.transition.targetSignature = signature;
+          topology.transition.blendStartedAt = null;
         }
         topology.runtime.reconcile(
           selection.tiles,
@@ -202,20 +206,30 @@ export class WebGPUGeodesicSurfaceSystem {
     }
     const targetItems = states.map(state => ({ state, layer: runtime.getPageLayer(state.tile.id.key), key: body.id + '|' + state.tile.id.key + '|s' + state.stitchMask }));
     const targetReady = targetItems.length > 0 && targetItems.every(item => item.layer !== undefined && renderer.hasMesh(item.key));
-    if (topology.transition && targetReady) {
-      topology.transition = null;
-      runtime.setVisibleTiles(targetTiles);
-      runtime.retainMeshes(new Set(states.map(state => state.tile.id.key + ':' + this.settings.meshResolution + ':' + profile.meanRadiusM + ':' + state.stitchMask)));
-      this.desiredMeshes.set(body.id, new Set(targetItems.map(item => item.key)));
-      this.drawTileStates(pass, targetItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition);
-      return true;
-    }
     if (topology.transition) {
       const sourceItems = sourceStates.map(state => ({ state, layer: runtime.getPageLayer(state.tile.id.key), key: body.id + '|' + state.tile.id.key + '|s' + state.stitchMask }));
       const sourceReady = sourceItems.length > 0 && sourceItems.every(item => item.layer !== undefined && renderer.hasMesh(item.key));
       this.desiredMeshes.set(body.id, desired);
       if (!sourceReady) return false;
+
+      // Батьківська сітка спершу повністю заповнює кадр і записує коректну глибину.
       this.drawTileStates(pass, sourceItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition);
+      if (!targetReady) return true;
+
+      const transition = topology.transition;
+      if (transition.blendStartedAt === null) transition.blendStartedAt = clockNow();
+      const blend = Math.min(1, Math.max(0, (clockNow() - transition.blendStartedAt) / LOD_CROSSFADE_MS));
+      // Фрагментний alpha blending виконує попіксельне змішування кольорів дочірніх і батьківських сторінок.
+      this.drawTileStates(pass, targetItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, {
+        transitionAlpha: blend,
+        forceMorph: true
+      });
+      if (blend >= 1) {
+        topology.transition = null;
+        runtime.setVisibleTiles(targetTiles);
+        runtime.retainMeshes(new Set(states.map(state => state.tile.id.key + ':' + this.settings.meshResolution + ':' + profile.meanRadiusM + ':' + state.stitchMask)));
+        this.desiredMeshes.set(body.id, new Set(targetItems.map(item => item.key)));
+      }
       return true;
     }
     this.desiredMeshes.set(body.id, new Set(targetItems.map(item => item.key)));
@@ -248,7 +262,8 @@ export class WebGPUGeodesicSurfaceSystem {
     model: ArrayLike<number>,
     radiusM: number,
     lightDirection: readonly [number, number, number],
-    cameraPosition: ArrayLike<number>
+    cameraPosition: ArrayLike<number>,
+    options: { readonly transitionAlpha?: number; readonly forceMorph?: boolean } = {}
   ): void {
     for (const item of items) {
       if (item.layer === undefined) continue;
@@ -256,7 +271,8 @@ export class WebGPUGeodesicSurfaceSystem {
         viewProjection, model, radiusM, pageLayer: item.layer, lightDirection,
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
         pageResolution: this.settings.pageResolution, gutter: 2,
-        morph: Math.min(1, Math.max(0, (clockNow() - (this.meshMorphStartedAt.get(item.key) ?? clockNow())) / 280))
+        morph: options.forceMorph ? 1 : Math.min(1, Math.max(0, (clockNow() - (this.meshMorphStartedAt.get(item.key) ?? clockNow())) / 280)),
+        transitionAlpha: options.transitionAlpha
       });
     }
   }

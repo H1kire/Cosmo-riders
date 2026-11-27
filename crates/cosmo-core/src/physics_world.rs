@@ -117,6 +117,7 @@ impl PhysicsWorld{
  pub fn circular_orbit_speed(&self,id:&str,radius:f64)->Result<f64,String>{positive(radius,"orbitRadiusM")?;crate::maneuvers::circular_orbit_speed(self.gravitational_parameter(id)?,radius)}
 
  pub fn orbit_path(&self,id:&str,segments:u32)->Result<Vec<f64>,String>{
+  if !self.initialized||self.states.len()!=self.bodies.len(){return Err("Physics ephemerides must be initialized before requesting an orbit path.".into())}
   if !(16..=4096).contains(&segments){return Err("Orbit path segments must be in [16, 4096].".into())}
   let i=*self.indices.get(id).ok_or_else(||format!("Unknown body: {id}"))?;
   let body=&self.bodies[i];

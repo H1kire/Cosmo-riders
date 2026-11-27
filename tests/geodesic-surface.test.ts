@@ -4,6 +4,7 @@ import { ICOSAHEDRON_FACES,barycentricDirection,baseGeoTiles,childrenOf,resolveG
 import { generateSurfaceTile,surfaceTileKey } from '../src/rendering/geodesic/surface-tile.ts';
 import { isSpherePotentiallyVisibleInFrustum } from '../src/rendering/geodesic/quadtree-selector.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
+import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
 
 const earth={id:'earth',massKg:5.9722e24,meanRadiusM:6371008.4,surfaceSeed:101,surface:{temperatureK:288,pressurePa:101325,waterFraction:.71,iceFraction:.025,ironFraction:.32,tectonicActivity:.8,volcanicActivity:.32,erosion:.78,impactAge:.18},rotationPeriodSeconds:86164};
 const profile=createGeologicalProfile(earth as never);
@@ -118,4 +119,26 @@ test('whole-body frustum culling includes diagonal rectangle corners without adm
  const outsideCorner=direction(52*Math.PI/180,36*Math.PI/180);
  assert.equal(isSpherePotentiallyVisibleInFrustum(insideCorner,[0,0,-1],.01,vertical,1600,900),true);
  assert.equal(isSpherePotentiallyVisibleInFrustum(outsideCorner,[0,0,-1],.01,vertical,1600,900),false);
+});
+
+
+test('every satellite in the Solar System catalogue receives an explicit geological class',()=>{
+ const expected=[
+  ['moon','rocky'],['phobos','rocky'],['deimos','rocky'],['io','volcanic'],['europa','icy'],
+  ['ganymede','icy'],['callisto','icy'],['amalthea','icy'],['thebe','rocky'],['adrastea','rocky'],
+  ['metis','rocky'],['himalia','rocky'],['mimas','icy'],['enceladus','icy'],['tethys','icy'],
+  ['dione','icy'],['rhea','icy'],['titan','desert'],['hyperion','icy'],['iapetus','icy'],
+  ['phoebe','icy'],['janus','icy'],['epimetheus','icy'],['helene','icy'],['atlas','icy'],
+  ['prometheus','icy'],['pandora','icy'],['pan','icy'],['miranda','icy'],['ariel','icy'],
+  ['umbriel','icy'],['titania','icy'],['oberon','icy'],['naiad','icy'],['thalassa','icy'],
+  ['despina','icy'],['galatea','icy'],['larissa','icy'],['proteus','icy'],['triton','icy'],
+  ['nereid','icy']
+ ] as const;
+ for(const [id,kind] of expected){
+  const body=SOLAR_SYSTEM_DATA[id] as unknown as Record<string,unknown>;
+  const profile=createGeologicalProfile({...body,surfaceSeed:1} as never);
+  assert.equal(profile.kind,kind,id+' has the wrong surface renderer class');
+  assert.ok(profile.iceFraction>=0&&profile.iceFraction<=1,id+' has invalid ice fraction');
+  assert.ok(profile.waterFraction>=0&&profile.waterFraction<=1,id+' has invalid water fraction');
+ }
 });

@@ -6,10 +6,12 @@ export function relativeGravitationalParameter(body:CelestialBody,parent:Celesti
  return body.mu+parent.mu;
 }
 
-/** Rotate parent-equatorial mean elements into the shared ecliptic inertial frame. */
+/** Перетворює parent-equator або Laplace-plane елементи до спільної екліптичної інерціальної системи. */
 export function rotateStateToParentEquator(state:OrbitalState,body:CelestialBody,parent:CelestialBody):OrbitalState {
- const ra=parent.poleRightAscensionRad,dec=parent.poleDeclinationRad;
- if(body.orbitalReferenceFrame!=='parent-equator'||ra===null||dec===null)return state;
+ if(body.orbitalReferenceFrame==='ecliptic')return state;
+ const ra=body.orbitalReferenceFrame==='laplace'?body.orbitalPlanePoleRightAscensionRad:parent.poleRightAscensionRad;
+ const dec=body.orbitalReferenceFrame==='laplace'?body.orbitalPlanePoleDeclinationRad:parent.poleDeclinationRad;
+ if(ra===null||dec===null)return state;
  const epsilon=23.4392911*Math.PI/180;
  const pole=[Math.cos(dec)*Math.cos(ra),Math.cos(epsilon)*Math.cos(dec)*Math.sin(ra)+Math.sin(epsilon)*Math.sin(dec),-Math.sin(epsilon)*Math.cos(dec)*Math.sin(ra)+Math.cos(epsilon)*Math.sin(dec)];
  const normalize=(v:number[])=>{const m=Math.hypot(...v)||1;return v.map(x=>x/m);};

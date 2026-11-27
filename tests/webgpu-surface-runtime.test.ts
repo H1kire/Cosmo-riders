@@ -85,6 +85,17 @@ test('WebGPU runtime unpins pages when geodesic visibility changes', async () =>
   runtime.dispose();
 });
 
+test('synchronous surface upload scheduling respects one shared per-frame request allowance',()=>{
+  const device=fakeDevice(),manager=new FakeManager();
+  const runtime=new WebGPUSurfaceRuntime(device,'global-upload-budget',profile,{resolution:8,gutter:0,maxPages:4},manager as any);
+  for(let i=0;i<5;i++)runtime.initializeStep();
+  runtime.setVisibleTiles(baseGeoTiles().slice(0,3));
+  const started=runtime.startVisibleTileUploads(()=>1,1);
+  assert.equal(started,1);
+  assert.equal(manager.requests.length,1);
+  runtime.dispose();
+});
+
 test('WebGPU runtime rejects duplicate visible geodesic tiles', () => {
   const runtime = new WebGPUSurfaceRuntime(fakeDevice(), 'test-planet', profile, { resolution: 8, gutter: 0 }, new FakeManager() as any);
   assert.throws(() => runtime.setVisibleTiles([baseGeoTiles()[0], baseGeoTiles()[0]]), /duplicate/);

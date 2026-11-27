@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSphereGeometry } from '../src/rendering/webgpu/webgpu-backend.ts';
-import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
+import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
+import { summarizeFrameTimes } from '../src/rendering/webgpu/webgpu-backend.ts';
 
 test('WebGPU sphere source creates indexed unit-sphere geometry', () => {
   const geometry = createSphereGeometry(10, 14);
@@ -145,4 +146,22 @@ test('GPU cache diagnostics flow from the shared page cache into the graphics pa
   assert.match(panel, /LRU evictions/);
   assert.match(panel, /cacheHitCount/);
   assert.match(panel, /unpinnedResidentPages/);
+});
+
+test('frame-time summary reports average, percentiles, peak and FPS',()=>{
+ const stats=summarizeFrameTimes([16,20,12,40,Number.NaN,-1]);
+ assert.equal(stats.sampleCount,4);assert.equal(stats.averageMs,22);assert.equal(stats.medianMs,20);
+ assert.equal(stats.p95Ms,40);assert.equal(stats.peakMs,40);assert.ok(Math.abs(stats.fps-1000/22)<1e-9);
+ assert.deepEqual(summarizeFrameTimes([]),{sampleCount:0,averageMs:0,medianMs:0,p95Ms:0,peakMs:0,fps:0});
+});
+test('performance diagnostics use real pass timestamps and active renderer work counters',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const backend=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
+ const geo=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
+ const panel=await readFile(new URL('../lab/graphics-settings.ts',import.meta.url),'utf8');
+ assert.match(backend,/timestamp-query/);assert.match(backend,/resolveQuerySet/);
+ assert.match(backend,/gpuTimingSupported:Boolean\(this\.timestampQuerySet\)/);
+ assert.match(backend,/metrics\.drawCalls\+\+/);assert.match(backend,/metrics\.renderPasses\+=postPasses/);
+ assert.match(geo,/getFrameDiagnostics\(\)/);assert.match(geo,/frameDrawCalls\+\+/);
+ assert.match(panel,/timestamp-query не поддерживается/);assert.match(panel,/GPU utilization: API не предоставляет/);
 });

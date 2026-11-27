@@ -11,6 +11,15 @@ import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
  * body transforms are supplied by Solar3DView so physics remains single-source.
  * It intentionally does not wrap or call WebGL.
  */
+export interface SphereGeometryData {/** Підсумовує обмежене ковзне вікно часу кадру. */
+export function summarizeFrameTimes(samples: readonly number[]) {
+  const valid=samples.filter(value=>Number.isFinite(value)&&value>=0).slice().sort((a,b)=>a-b);
+  if(!valid.length)return{sampleCount:0,averageMs:0,medianMs:0,p95Ms:0,peakMs:0,fps:0};
+  const averageMs=valid.reduce((sum,value)=>sum+value,0)/valid.length;
+  const percentile=(fraction:number)=>valid[Math.min(valid.length-1,Math.max(0,Math.ceil(valid.length*fraction)-1))];
+  return{sampleCount:valid.length,averageMs,medianMs:percentile(.5),p95Ms:percentile(.95),peakMs:valid[valid.length-1],fps:averageMs>0?1000/averageMs:0};
+}
+
 export interface SphereGeometryData {
   positions: Float32Array;
   normals: Float32Array;
@@ -591,6 +600,16 @@ export class WebGPUBackend {
   private geodesicSettingsKey = '';
   private msaaSamples: 1 | 4 = 1;
   private msaaColorTexture: any = null;
+  private msaaColorTexture: any = null;
+  private timestampQuerySet: any = null;
+  private timestampReadbacks: Array<{ resolve:any; readback:any; busy:boolean }> = [];
+  private activeTimestampSlot: { resolve:any; readback:any; busy:boolean } | null = null;
+  private timestampQueryCursor = 0;
+  private readonly timestampQueryCapacity = 40;
+  private gpuFrameMs: number | null = null;
+  private gpuTimingError: string | null = null;
+  private frameMetrics: Record<string, number | boolean | null> = {};
+  private previousUploadCount = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -609,7 +628,10 @@ export class WebGPUBackend {
       const limits = this.adapter.limits ?? {};
       const maxBuffer = Number(limits.maxBufferSize ?? 0);
       if (maxBuffer > 0 && maxBuffer < 1024 * 1024) throw new Error('WebGPU adapter сообщает слишком малый maxBufferSize.');
-      this.device = await this.adapter.requestDevice();
+      const timestampFeature=this.adapter.features?.has?.('timestamp-query')===true;
+      try { this.device=await this.adapter.requestDevice(timestampFeature?{requiredFeatures:['timestamp-query']}:undefined); }
+      catch(error) { if(!timestampFeature)throw error; this.device=await this.adapter.requestDevice(); }
+      this.initializeTimestampQueries();
       this.device.addEventListener?.('uncapturederror', (event: any) => {
         const message = event?.error?.message || 'Uncaptured WebGPU validation error.';
         this.error = 'WebGPU validation error: ' + message;
@@ -639,6 +661,37 @@ export class WebGPUBackend {
   }
 
   private configure(requestedScale = this.renderScale): void {
+  private initializeTimestampQueries():void {
+    if(!this.device?.features?.has?.('timestamp-query'))return;
+    try{
+      this.timestampQuerySet=this.device.createQuerySet({type:'timestamp',count:this.timestampQueryCapacity});
+      for(let i=0;i<2;i++)this.timestampReadbacks.push({
+        resolve:this.device.createBuffer({size:this.timestampQueryCapacity*8,usage:0x0200|0x0004}),
+        readback:this.device.createBuffer({size:this.timestampQueryCapacity*8,usage:0x0001|0x0008}),busy:false
+      });
+    }catch(error){this.disposeTimestampResources();this.gpuTimingError=error instanceof Error?error.message:String(error);}
+  }
+  private timestampWrites():any|undefined {
+    if(!this.timestampQuerySet||!this.activeTimestampSlot||this.timestampQueryCursor+2>this.timestampQueryCapacity)return undefined;
+    const beginningOfPassWriteIndex=this.timestampQueryCursor;this.timestampQueryCursor+=2;
+    return{querySet:this.timestampQuerySet,beginningOfPassWriteIndex,endOfPassWriteIndex:beginningOfPassWriteIndex+1};
+  }
+  private readTimestampResults(slot:{resolve:any;readback:any;busy:boolean},count:number):void {
+    void slot.readback.mapAsync(1).then(()=>{
+      const values=new BigUint64Array(slot.readback.getMappedRange());let total=0;
+      for(let i=0;i+1<count;i+=2)if(values[i+1]>=values[i])total+=Number(values[i+1]-values[i]);
+      this.gpuFrameMs=total/1_000_000;slot.readback.unmap();
+    }).catch(error=>{this.gpuTimingError=error instanceof Error?error.message:String(error);}).finally(()=>{slot.busy=false;});
+  }
+  private disposeTimestampResources():void {
+    this.timestampQuerySet?.destroy?.();this.timestampQuerySet=null;
+    for(const slot of this.timestampReadbacks){slot.resolve.destroy?.();slot.readback.destroy?.();}
+    this.timestampReadbacks=[];this.activeTimestampSlot=null;
+  }
+  get performanceDiagnostics(){
+    return{...this.frameMetrics,gpuFrameMs:this.gpuFrameMs,gpuTimingSupported:Boolean(this.timestampQuerySet),gpuTimingError:this.gpuTimingError};
+  }
+
     if (!this.device || !this.context) throw new Error('WebGPU device/context не готовы.');
     this.renderScale = resolveRenderScale(requestedScale);
     const rect = this.canvas.getBoundingClientRect();
@@ -787,7 +840,7 @@ export class WebGPUBackend {
     this.postGroups=[make(this.sceneTexture,this.sceneTexture,0),make(this.brightTexture,this.brightTexture,1),make(this.pingTexture,this.pingTexture,2),make(this.sceneTexture,this.pongTexture,3),make(this.pongTexture,this.pongTexture,4)];
   }
 
-  private encodePost(encoder:any,frame:WebGPUFrame):void {
+  private encodePost(encoder:any,frame:WebGPUFrame):number {
     if(!this.postPipelines.composite||this.postGroups.length!==5)return;
     const settings=frame.postProcessing??{},enabled=settings.bloom!==false,uv=frame.sunUv??[0.5,0.5];
     const visible=frame.sunVisible?1:0;
@@ -804,7 +857,8 @@ export class WebGPUBackend {
     write(0,0,0);
     write(1,1/bloomWidth,0);write(2,0,1/bloomHeight);
     write(3,0,0);write(4,1/bloomWidth,0);
-    const draw=(target:any,pipeline:any,group:any)=>{const p=encoder.beginRenderPass({colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});p.setPipeline(pipeline);p.setBindGroup(0,group);p.draw(3);p.end();};
+    let passCount=0;
+    const draw=(target:any,pipeline:any,group:any)=>{const timestampWrites=this.timestampWrites();const p=encoder.beginRenderPass({...(timestampWrites?{timestampWrites}:{}),colorAttachments:[{view:target.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});p.setPipeline(pipeline);p.setBindGroup(0,group);p.draw(3);p.end();passCount++;};
     if(enabled){
       draw(this.brightTexture,this.postPipelines.bright,this.postGroups[0]);
       const iterations=resolveBloomIterations(settings.bloomIterations);
@@ -816,6 +870,7 @@ export class WebGPUBackend {
       }
     }
     draw(this.context.getCurrentTexture(),this.postPipelines.composite,this.postGroups[3]);
+    return passCount;
   }
 
   private bindGroupLayout: any = null;
@@ -909,6 +964,17 @@ export class WebGPUBackend {
       this.geodesicSystem.initializeStep();
       this.geodesicSystem.beginFrame();
     }
+    const frameStarted=performance.now();
+    this.activeTimestampSlot=this.timestampReadbacks.find(slot=>!slot.busy)??null;this.timestampQueryCursor=0;
+    const metrics:Record<string,number>={
+      frameIndex:Number(this.frameMetrics.frameIndex??0)+1,drawCalls:0,renderPasses:1,postProcessingPasses:0,
+      bodyCount:frame.bodies.length,
+      surfaceBodyCount:frame.bodies.filter(b=>b.surfaceProfile&&b.surfaceProfile.kind!=='gas-giant'&&b.surfaceProfile.kind!=='ice-giant').length,
+      atmosphereBodyCount:frame.bodies.filter(b=>Boolean(b.atmosphere)).length,
+      cloudBodyCount:frame.bodies.filter(b=>Boolean(b.clouds?.length)).length,
+      cloudLayerCount:frame.bodies.reduce((n,b)=>n+(b.clouds?.length??0),0),
+      orbitCount:0,ringCount:0,submittedVertices:0,triangles:0,geodesicDrawCalls:0,visibleGeodesicTiles:0,surfaceUploadsPerFrame:0,backendEncodeMs:0
+    };
     const encoder = this.device.createCommandEncoder();
     const colorAttachment: any = {
       view: this.msaaSamples > 1 ? this.msaaColorTexture.createView() : this.sceneTexture.createView(),
@@ -917,7 +983,9 @@ export class WebGPUBackend {
       storeOp: 'store'
     };
     if (this.msaaSamples > 1) colorAttachment.resolveTarget = this.sceneTexture.createView();
+    const mainTimestampWrites=this.timestampWrites();
     const pass = encoder.beginRenderPass({
+      ...(mainTimestampWrites?{timestampWrites:mainTimestampWrites}:{}),
       colorAttachments: [colorAttachment],
       depthStencilAttachment: {
         view: this.depthTexture.createView(),
@@ -964,8 +1032,11 @@ export class WebGPUBackend {
       this.device.queue.writeBuffer(resources.uniform, 0, matrix);
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+      metrics.drawCalls++;metrics.submittedVertices+=mesh.indexCount;metrics.triangles+=Math.floor(mesh.indexCount/3);
     }
     this.geodesicSystem?.endFrame();
+    const geoStats=this.geodesicSystem?.getFrameDiagnostics();
+    if(geoStats){metrics.drawCalls+=geoStats.geodesicDrawCalls;metrics.geodesicDrawCalls=geoStats.geodesicDrawCalls;metrics.visibleGeodesicTiles=geoStats.visibleGeodesicTiles;}
     pass.setPipeline(this.effectPipeline);
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
@@ -998,6 +1069,7 @@ export class WebGPUBackend {
         pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
         pass.setBindGroup(0, resources.bindGroup);
         pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+        metrics.drawCalls++;metrics.submittedVertices+=mesh.indexCount;metrics.triangles+=Math.floor(mesh.indexCount/3);
       };
       if (body.atmosphere) {
         const atmosphere = body.atmosphere;
@@ -1039,6 +1111,7 @@ export class WebGPUBackend {
       this.device.queue.writeBuffer(resources.uniform, 0, uniforms);
       pass.setPipeline(this.ringPipeline); pass.setBindGroup(0, resources.bindGroup);
       pass.setVertexBuffer(0, this.ringVertexBuffer); pass.draw(this.ringVertexCount);
+      metrics.drawCalls++;metrics.ringCount++;metrics.submittedVertices+=this.ringVertexCount;metrics.triangles+=Math.max(0,this.ringVertexCount-2);
     }
     for (const orbit of frame.orbits) {
       let resources = this.orbitResources.get(orbit.id);
@@ -1062,15 +1135,25 @@ export class WebGPUBackend {
       this.device.queue.writeBuffer(resources.uniform, 0, uniforms);
       pass.setPipeline(this.orbitPipeline); pass.setBindGroup(0, resources.bindGroup);
       pass.setVertexBuffer(0, resources.vertex); pass.draw(resources.count);
+      metrics.drawCalls++;metrics.orbitCount++;metrics.submittedVertices+=resources.count;
     }
     pass.end();
-    this.encodePost(encoder, frame);
-    this.device.queue.submit([encoder.finish()]);
+    const postPasses=this.encodePost(encoder,frame);metrics.postProcessingPasses=postPasses;metrics.renderPasses+=postPasses;
+    const uploads=Number(this.geodesicSystem?.getCacheDiagnostics().uploadCount??this.previousUploadCount);
+    metrics.surfaceUploadsPerFrame=Math.max(0,uploads-this.previousUploadCount);this.previousUploadCount=uploads;
+    const slot=this.activeTimestampSlot,queryCount=this.timestampQueryCursor;
+    if(slot&&this.timestampQuerySet&&queryCount>0){
+      encoder.resolveQuerySet(this.timestampQuerySet,0,queryCount,slot.resolve,0);
+      encoder.copyBufferToBuffer(slot.resolve,0,slot.readback,0,queryCount*8);slot.busy=true;
+      this.device.queue.submit([encoder.finish()]);this.readTimestampResults(slot,queryCount);
+    }else this.device.queue.submit([encoder.finish()]);
+    metrics.backendEncodeMs=performance.now()-frameStarted;this.frameMetrics=metrics;this.activeTimestampSlot=null;
   }
 
   async recover(): Promise<boolean> {
     if (this.recoveryAttempted || this.disposed) return false;
     this.recoveryAttempted = true;
+    this.disposeTimestampResources();
     this.disposeGpuResources();
     this.state = 'initializing';
     try {
@@ -1109,6 +1192,7 @@ export class WebGPUBackend {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.disposeTimestampResources();
     this.disposeGpuResources();
     this.device?.destroy();
     this.state = 'disposed';

@@ -56,6 +56,8 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameSunRadius = 0;
   private frameShadowsEnabled = true;
   private currentSunPosition: readonly [number, number, number] = [0, 0, 0];
+  private frameDrawCalls=0;
+  private readonly frameVisibleTiles=new Set<string>();
 
   constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings, private readonly sampleCount: 1 | 4 = 1) {
     this.manager = new VirtualSurfaceManager({ cpuBudgetBytes: settings.cpuBudgetBytes, workerCount: settings.workerCount });
@@ -73,8 +75,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   beginFrame(): void {
-    this.active.clear();
-    this.desiredMeshes.clear();
+    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameVisibleTiles.clear();
   }
 
   drawBody(
@@ -271,6 +272,8 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   getPlanetLodStats(bodyId: string): GeodesicLodStats | null {
+  getFrameDiagnostics(){return{surfaceBodyCount:this.active.size,visibleGeodesicTiles:this.frameVisibleTiles.size,geodesicDrawCalls:this.frameDrawCalls};}
+
     return this.topologies.get(bodyId)?.lastStats ?? null;
   }
 
@@ -312,7 +315,7 @@ export class WebGPUGeodesicSurfaceSystem {
   ): void {
     for (const item of items) {
       if (item.layer === undefined) continue;
-      renderer.draw(pass, item.key, {
+      const drawn=renderer.draw(pass, item.key, {
         viewProjection, model, radiusM, pageLayer: item.layer, lightDirection,
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
         sunPosition: this.currentSunPosition,
@@ -324,6 +327,7 @@ export class WebGPUGeodesicSurfaceSystem {
         transitionAlpha: options.transitionAlpha,
         transitionRole: options.transitionRole
       });
+      if(drawn){this.frameDrawCalls++;this.frameVisibleTiles.add(item.state.tile.id.key);}
     }
   }
 

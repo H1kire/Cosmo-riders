@@ -69,6 +69,8 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameDrawCalls=0;
   private frameTriangles=0;
   private frameSubmittedVertices=0;
+  private frameSurfaceUploads=0;
+  private uploadsRemainingThisFrame=0;
   private readonly frameVisibleTiles=new Set<string>();
 
   constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings, private readonly sampleCount: 1 | 4 = 1) {
@@ -90,7 +92,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   beginFrame(): void {
-    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.frameVisibleTiles.clear();
+    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.frameSurfaceUploads=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
   }
 
   drawBody(
@@ -225,13 +227,15 @@ export class WebGPUGeodesicSurfaceSystem {
     runtime.retainMeshes(retainedMeshKeys);
     runtime.setVisibleTiles(retainedTiles);
     const sourceKeys = new Set(sourceStates.map(state => state.tile.id.key));
-    if (this.pages.ready) {
-      void runtime.uploadVisibleTiles(tile =>
+    if (this.pages.ready && this.uploadsRemainingThisFrame > 0) {
+      const started = runtime.startVisibleTileUploads(tile =>
         (sourceKeys.has(tile.id.key) ? 1_000_000 : 0) -
         tile.id.level * 100 +
         dot(tileCenter(tile), localCamera) / Math.max(1, Math.hypot(...localCamera)),
-        this.settings.uploadsPerFrame
-      ).catch(() => undefined);
+        this.uploadsRemainingThisFrame
+      );
+      this.uploadsRemainingThisFrame = Math.max(0, this.uploadsRemainingThisFrame - started);
+      this.frameSurfaceUploads += started;
     }
 
     const renderer = this.renderer;
@@ -339,7 +343,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   getFrameDiagnostics() {
-    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls, geodesicTriangles: this.frameTriangles, geodesicSubmittedVertices: this.frameSubmittedVertices };
+    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls, geodesicTriangles: this.frameTriangles, geodesicSubmittedVertices: this.frameSubmittedVertices, surfaceUploadsPerFrame: this.frameSurfaceUploads };
   }
 
   getCacheDiagnostics() {

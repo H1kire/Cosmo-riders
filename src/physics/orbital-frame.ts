@@ -20,3 +20,6 @@ export function rotateStateToParentEquator(state:OrbitalState,body:CelestialBody
  const transform=(v:{x:number;y:number;z:number})=>({x:x[0]*v.x+y[0]*v.y+pole[0]*v.z,y:x[1]*v.x+y[1]*v.y+pole[1]*v.z,z:x[2]*v.x+y[2]*v.y+pole[2]*v.z});
  return {position:transform(state.position),velocity:transform(state.velocity)};
 }
+
+/** @deprecated Use rotateStateToOrbitalReferenceFrame; retained for existing callers. */
+export const rotateStateToParentEquator=rotateStateToOrbitalReferenceFrame;

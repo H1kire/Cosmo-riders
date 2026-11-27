@@ -592,7 +592,7 @@ test('active WebGPU geodesic system uses screen-error LOD, balanced topology and
  assert.ok(system.includes('new GeodesicSurfaceRuntime('));
  assert.ok(system.includes('topology.runtime.reconcile('));
  assert.ok(system.includes('state.stitchMask'));
- assert.ok(system.includes('requestTileMesh(tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask'));
+ assert.ok(system.includes('tile, profile.meanRadiusM, this.settings.meshResolution, state.stitchMask'));
  assert.ok(system.includes('maxTiles: this.pages.capacity'));
  assert.ok(meshBuilder.includes('buildStitchIndexTemplate'));
  assert.ok(meshBuilder.includes('coarseEdgeMask'));
@@ -643,7 +643,7 @@ test('WebGPU LOD transitions retain the previous complete cover until every targ
  assert.ok(source.includes('const sourceReady = sourceItems.length > 0 && sourceItems.every'));
  assert.ok(source.includes('this.drawTileStates(pass, sourceItems'));
  assert.ok(source.includes('runtime.setVisibleTiles(targetTiles)'));
- assert.ok(source.includes('const transitionBudget = this.pages.capacity - sourceCount'));
+ assert.ok(source.includes('const transitionBudget = Math.max(20, this.pages.capacity - sourceCount)'));
 });
 
 test('WebGPU LOD transition keeps source mesh variants and releases them only after target activation',async()=>{

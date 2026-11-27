@@ -36,7 +36,7 @@ Satellite parameters are sourced from the JPL Planetary Satellite Mean Elements 
 
 The catalogue was corrected for Phobos, Deimos, Ganymede, Callisto, Rhea, Titan, Hyperion, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton, Naiad, Thalassa, Despina, Galatea, Larissa, Proteus and Nereid. Himalia and Nereid use the ecliptic reference frame. Phobos, Deimos, Ganymede, Callisto, Titan, Hyperion, Iapetus and Phoebe carry explicit Laplace-plane pole metadata.
 
-These mean elements describe average orbit shape/orientation; they do not reproduce short-period perturbations, resonance libration, apsidal/node precession or exact date-specific positions. Accurate time-tagged positions require JPL Horizons/SPICE ephemerides.
+These mean elements describe average orbit shape/orientation; they do not reproduce short-period perturbations, resonance libration, apsidal/node precession or exact date-specific positions. Accurate time-tagged positions require JPL Horizons/SPICE ephemerides. At runtime, rendered orbit curves are rebuilt from the current body-minus-parent position and velocity as osculating Keplerian ellipses (throttled to at most four refreshes per real-time second). Their first sample is the body's current relative position, so the marker and orbit curve remain aligned as N-body states evolve.
 
 ## Sources
 - NASA/JPL Solar System Dynamics, *Approximate Positions of the Planets*: https://ssd.jpl.nasa.gov/planets/approx_pos.html — planetary secular elements, conventions and validity interval.

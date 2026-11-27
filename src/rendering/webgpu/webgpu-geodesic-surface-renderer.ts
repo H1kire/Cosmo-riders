@@ -11,6 +11,7 @@ export interface WebGPUGeodesicDraw {
   readonly heightScale?: number;
   readonly albedoTint?: readonly [number, number, number];
   readonly lightDirection?: readonly [number, number, number];
+  readonly lightIntensity?: number;
   readonly cameraPosition?: readonly [number, number, number];
   readonly pageResolution?: number;
   readonly gutter?: number;
@@ -200,7 +201,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const light = draw.lightDirection ?? [0.42, 0.76, 0.38];
     data.set([light[0], light[1], light[2], Math.max(0, Math.min(1, draw.transitionAlpha ?? 1))], 36);
     const camera = draw.cameraPosition ?? [0, 0, 0];
-    data.set([camera[0], camera[1], camera[2], 1], 40);
+    data.set([camera[0], camera[1], camera[2], Math.max(0, draw.lightIntensity ?? 1)], 40);
     const resolution = draw.pageResolution ?? 1, gutter = draw.gutter ?? 0;
     const occluders = draw.shadowOccluders;
     let occluderCount = 0;
@@ -329,7 +330,7 @@ fn shadowVisibility(worldPosition:vec3<f32>)->f32 {
   let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * max(nDotL, 0.0001), 0.0001);
   let diffuseWeight = (vec3<f32>(1.0) - fresnel) * (1.0 - metallic);
   let diffuse = diffuseWeight * baseColor / PI;
-  let direct = (diffuse + specular) * nDotL * shadowVisibility(input.worldPosition);
+  let direct = (diffuse + specular) * nDotL * shadowVisibility(input.worldPosition) * max(u.cameraPosition.w, 0.0);
 
   // Небесне заповнення зберігає читабельність нічного боку без фальшивого другого джерела світла.
   let hemisphere = mix(0.018, 0.075, clamp(normal.y * 0.5 + 0.5, 0.0, 1.0));

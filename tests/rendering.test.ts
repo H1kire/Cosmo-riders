@@ -227,6 +227,7 @@ test('active cloud shader keeps solar angular radius separate from cloud banding
  assert.ok(backend.includes('shell.set([body.gasGiant?.type ?? 0, body.gasGiant?.bandStrength ?? 0, body.gasGiant?.stormStrength ?? 0, cloudBanding], 36)'));
  assert.ok(backend.includes('[solarIrradiance, 1, frame.sunRadius ?? 0,'));
  assert.ok(backend.includes('cloud.erosion, cloud.banding)'));
+ assert.ok(!backend.includes('shell[39] = 1'));
 });
 
 

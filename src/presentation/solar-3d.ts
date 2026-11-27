@@ -71,6 +71,17 @@ function loadGraphicsSettings():GraphicsSettings{
  try{const saved=JSON.parse(localStorage.getItem('cosmo-riders.graphics.v1')??'null') as Partial<GraphicsSettings>|null;const preset=saved&&['low','medium','high','ultra'].includes(saved.preset??'')?saved.preset!:'high';const base=createGraphicsSettings(preset);return saved?{...base,...saved,preset,geodesic:{...base.geodesic,...(saved.geodesic??{})}}:base;}
  catch{return createGraphicsSettings('high');}
 }
+/** Обчислює ближню та дальню площини так, щоб близький рельєф не відсікався near plane. */
+export function calculateCameraClipPlanes(cameraRadiusAU:number,focusRadiusAU:number):readonly [number,number]{
+ const cameraRadius=Math.max(0,Number.isFinite(cameraRadiusAU)?cameraRadiusAU:0);
+ const radius=Math.max(0,Number.isFinite(focusRadiusAU)?focusRadiusAU:0);
+ if(radius<=0)return[Math.max(1e-10,cameraRadius*.01),100];
+ const clearance=Math.max(0,cameraRadius-radius);
+ const near=Math.max(1e-12,Math.min(cameraRadius*.01,clearance>0?clearance*.1:cameraRadius*.001));
+ const far=Math.max(radius*8,cameraRadius*8,near*1e4);
+ return[near,far];
+}
+
 export class Solar3DView{
  [key: string]: any;
  private readonly surfaceProfileCache = new Map<string,{source:object;profile:ReturnType<typeof createGeologicalProfile>}>();
@@ -424,7 +435,7 @@ export class Solar3DView{
   else{this.cameraOrigin=[0,0,0];this.target=[0,0,0];}
   const eye=[this.target[0]+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target[1]+this.distance*Math.sin(this.pitch),this.target[2]+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)];
   const focusRadius=focus?focus.meanRadiusM/AU:0;
-  const far=100,near=Math.max(1e-10,Math.min(this.distance*.01,focusRadius>0?focusRadius*.02:this.distance*.01));
+  const [near,far]=calculateCameraClipPlanes(Math.hypot(...eye),focusRadius);
   const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
   const webgpuBodies:WebGPUBodyDraw[]=[];this.webgpuOrbits=[];this.webgpuRings=[];

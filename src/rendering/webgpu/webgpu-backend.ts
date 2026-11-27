@@ -36,7 +36,7 @@ export interface WebGPUBodyDraw {
   shadowsEnabled?: boolean;
   surfaceProfile?: SurfaceProfile;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; rayleighScaleHeightRatio: number; mieScaleHeightRatio: number; };
-  clouds?: readonly { altitudeRatio: number; thicknessRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; erosion: number; banding: number; }[];
+  clouds?: readonly { altitudeRatio: number; thicknessRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; erosion: number; banding: number; detail: number; }[];
 }
 
 export interface WebGPUOrbitDraw { id: string; model: ArrayLike<number>; points: Float32Array; color: readonly [number, number, number]; opacity: number; }
@@ -814,7 +814,7 @@ export class WebGPUBackend {
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
           [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)],
           [cloud.wind[0], cloud.wind[1], cloud.altitudeRatio, cloud.thicknessRatio],
-          [body.eclipseVisibility ?? 1, 1, cloud.banding, Math.max(1, Math.min(6, frame.cloudDetail ?? 3))],
+          [body.eclipseVisibility ?? 1, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
           cloud.erosion);
       }
     }

@@ -444,7 +444,7 @@ export class Solar3DView{
     webgpuDraw.atmosphere={color:profile.rayleigh,intensity:(profile.intensity??1)*this.graphics.atmosphereIntensity,thicknessRatio:profile.atmosphereHeightM/body.meanRadiusM,mie:profile.mie,anisotropy:profile.mieAnisotropy,rayleighScaleHeightRatio:atmosphereScaleHeightRatio(profile.rayleighScaleHeightM,body.meanRadiusM),mieScaleHeightRatio:atmosphereScaleHeightRatio(profile.mieScaleHeightM,body.meanRadiusM)};
    }
    if(this.graphics.clouds&&cloudLayers.length){
-    webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,thicknessRatio:(layer.thicknessM??Math.max(1000,layer.altitudeM*.22))/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind,erosion:layer.erosion??.45,banding:layer.banding??0}));
+    webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,thicknessRatio:(layer.thicknessM??Math.max(1000,layer.altitudeM*.22))/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind,erosion:layer.erosion??.45,banding:layer.banding??0,detail:layer.detail??3}));
    }
    const screen=projectedScreen;
    if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);

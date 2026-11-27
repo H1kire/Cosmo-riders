@@ -4,6 +4,7 @@ import { resolveMsaaSamples, resolveRenderScale } from '../quality/quality-setti
 import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
 import { isSpherePotentiallyVisibleInFrustum } from '../geodesic/quadtree-selector.ts';
 import { WEBGPU_ATMOSPHERE_WGSL } from './atmosphere-scattering.ts';
+import { solarIrradianceForDisplay } from '../lighting/lighting-system.ts';
 
 /**
  * First native WebGPU sphere renderer.
@@ -224,7 +225,7 @@ fn ringLightVisibility(worldPosition:vec3<f32>,sunDirection:vec3<f32>,sunDistanc
  let alpha=ring.params.y*edge*bands*division;if(alpha<0.012){discard;}
  let toSun=ring.sunPosition.xyz-input.worldPosition;let sunDistance=length(toSun);let sunDirection=toSun/max(sunDistance,0.000001);
  let normal=normalize(ring.model[1].xyz);let incidence=abs(dot(normal,sunDirection));let shadow=ringLightVisibility(input.worldPosition,sunDirection,sunDistance);
- return vec4<f32>(ring.color.rgb*(0.62+0.38*bands)*(0.045+incidence*shadow*0.955),alpha);
+ return vec4<f32>(ring.color.rgb*(0.62+0.38*bands)*(0.045+incidence*shadow*0.955)*max(ring.color.w,0.0),alpha);
 }
 `;
 
@@ -524,7 +525,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     if (body.material.x < 9.5) { return atmosphereScattering(input.worldPosition, normal); }
     let viewDirection = normalize(body.cameraPosition.xyz - input.worldPosition);
     let rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0), 2.35);
-    let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
+    let shadowVisibility = mix(1.0, surfaceShadowVisibility(input.worldPosition), clamp(body.lighting.y, 0.0, 1.0));
+    let shadowFactor = max(body.lighting.x, 0.0) * shadowVisibility;
     let daylight = 0.18 + 0.82 * max(dot(normal, normalize(input.lightDirection)), 0.0) * shadowFactor;
     if (body.material.x < 9.5) {
       let scattering = rim * body.material.y * daylight * (0.65 + body.material.z * 8.0);
@@ -580,7 +582,8 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
     albedo *= 0.78 + detail * 0.42;
   }
   let diffuse = max(dot(normalize(input.worldNormal), normalize(input.lightDirection)), 0.0);
-  let shadowFactor = mix(1.0, min(body.lighting.x, surfaceShadowVisibility(input.worldPosition)), clamp(body.lighting.y, 0.0, 1.0));
+  let shadowVisibility = mix(1.0, surfaceShadowVisibility(input.worldPosition), clamp(body.lighting.y, 0.0, 1.0));
+  let shadowFactor = max(body.lighting.x, 0.0) * shadowVisibility;
   let illumination = 0.035 + diffuse * 0.965 * shadowFactor;
   return vec4<f32>(albedo * illumination, 1.0);
 }
@@ -1102,7 +1105,13 @@ export class WebGPUBackend {
       matrix.set([body.kind, body.seed, body.waterFraction, body.iceFraction], 40);
       matrix.set(body.gasGiant ? [body.gasGiant.type, body.gasGiant.bandStrength, body.gasGiant.stormStrength, body.gasGiant.jetCount] : [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       matrix.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      matrix.set([1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
+      const sunDistanceAU = Math.hypot(
+        frame.sunPosition[0] - body.position[0],
+        frame.sunPosition[1] - body.position[1],
+        frame.sunPosition[2] - body.position[2]
+      );
+      const solarIrradiance = solarIrradianceForDisplay(sunDistanceAU);
+      matrix.set([solarIrradiance, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       matrix.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       matrix.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       matrix.set(body.ringShadow ? [body.ringShadow.innerRadiusAU, body.ringShadow.outerRadiusAU, body.ringShadow.opacity, 1] : [0, 0, 0, 0], 92);
@@ -1134,7 +1143,13 @@ export class WebGPUBackend {
       base.set([0, 0, 0, 0], 40);
       base.set([body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], 44);
       base.set([Number(frame.cameraPosition[0]), Number(frame.cameraPosition[1]), Number(frame.cameraPosition[2]), frame.timeSeconds], 48);
-      base.set([1, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
+      const sunDistanceAU = Math.hypot(
+        frame.sunPosition[0] - body.position[0],
+        frame.sunPosition[1] - body.position[1],
+        frame.sunPosition[2] - body.position[2]
+      );
+      const solarIrradiance = solarIrradianceForDisplay(sunDistanceAU);
+      base.set([solarIrradiance, 1, frame.sunRadius ?? 0, body.detail ?? 1], 52);
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       base.set(body.ringShadow ? [body.ringShadow.innerRadiusAU, body.ringShadow.outerRadiusAU, body.ringShadow.opacity, 1] : [0, 0, 0, 0], 92);
@@ -1165,7 +1180,7 @@ export class WebGPUBackend {
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
           [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)],
           [cloud.wind[0], cloud.wind[1], cloud.altitudeRatio, cloud.thicknessRatio],
-          [1, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
+          [solarIrradiance, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
           cloud.erosion);
       }
     }
@@ -1189,7 +1204,13 @@ export class WebGPUBackend {
       const uniforms = new Float32Array(76);
       uniforms.set(Array.from(frame.viewProjection).slice(0, 16), 0);
       uniforms.set(Array.from(ringDraw.model).slice(0, 16), 16);
-      uniforms.set([config.color[0], config.color[1], config.color[2], 1], 32);
+      const ringSun = ringDraw.sunPosition ?? frame.sunPosition;
+      const ringSunDistanceAU = Math.hypot(
+        ringSun[0] - Number(ringDraw.model[12]),
+        ringSun[1] - Number(ringDraw.model[13]),
+        ringSun[2] - Number(ringDraw.model[14])
+      );
+      uniforms.set([config.color[0], config.color[1], config.color[2], solarIrradianceForDisplay(ringSunDistanceAU)], 32);
       uniforms.set([config.inner / config.outer, config.opacity, 1 / config.outer, ringDraw.shadowsEnabled === false ? 0 : 1], 36);
       uniforms.set([...(ringDraw.sunPosition ?? frame.sunPosition), ringDraw.shadowsEnabled === false ? 0 : (ringDraw.sunRadius ?? frame.sunRadius ?? 0)], 40);
       uniforms.set(ringDraw.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 44);

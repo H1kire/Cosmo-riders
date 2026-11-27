@@ -457,8 +457,11 @@ export class Solar3DView{
    let source=world.orbitPaths?.get(body.id);if(!source){if(typeof world.ensureOrbitPath==='function')void world.ensureOrbitPath(body.id,segments).catch(error=>{this.orbitPathErrors??=new Map();this.orbitPathErrors.set(body.id,error instanceof Error?error.message:String(error));});return;}if(source.length<6)return;
    const sourceSegments=source.length/3-1;path=new Float32Array((segments+1)*3);
    for(let i=0;i<=segments;i++){
-    const sourceIndex=Math.round(i*sourceSegments/segments),o=sourceIndex*3;
-    path[i*3]=source[o]/AU;path[i*3+1]=source[o+2]/AU;path[i*3+2]=source[o+1]/AU;
+    const sourcePosition=i*sourceSegments/segments,lower=Math.floor(sourcePosition),upper=Math.min(sourceSegments,lower+1),blend=sourcePosition-lower;
+    const a=lower*3,b=upper*3,o=i*3;
+    path[o]=(source[a]+(source[b]-source[a])*blend)/AU;
+    path[o+1]=(source[a+2]+(source[b+2]-source[a+2])*blend)/AU;
+    path[o+2]=(source[a+1]+(source[b+1]-source[a+1])*blend)/AU;
    }
    this.orbitCache.set(body.id,path);this.orbitElementRefs.set(body.id,elements);
   }

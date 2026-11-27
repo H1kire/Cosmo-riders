@@ -16,6 +16,25 @@ test('sphere of influence scale and invalid mass',()=>{const soi=sphereOfInfluen
 test('world fixed-step clock pause and time scale',()=>{const w=new PhysicsWorld({fixedStepSeconds:1});w.addBody(new CelestialBody({id:'earth',name:'Earth',massKg:earthMass,meanRadiusM:6.371e6}));w.addVessel({id:'v',primaryBodyId:'earth',position:vector3(7e6,0,0),velocity:vector3(0,7500,0)});w.setTimeScale(2);assert.equal(w.advance(1.5),3);assert.equal(w.simulationTimeSeconds,3);w.setPaused(true);assert.equal(w.advance(10),0);assert.equal(w.simulationTimeSeconds,3);});
 test('TeX formatter',()=>{assert.equal(formatScientific(1000),'1\\times 10^{3}');assert.equal(formatScientific(0),'0');assert.throws(()=>formatScientific(NaN),/NaN/);});
 test('day constant',()=>assert.equal(DAY,86400));
+test('all eight J2000 planetary semimajor axes, eccentricities and inclinations match the catalogue reference',()=>{
+ const expected=[
+  ['mercury',.38709927,.20563593,7.00497902],
+  ['venus',.72333566,.00677672,3.39467605],
+  ['earth',1.00000011,.01671022,.00005],
+  ['mars',1.52371034,.09339410,1.84969142],
+  ['jupiter',5.20288700,.04838624,1.30439695],
+  ['saturn',9.53667594,.05386179,2.48599187],
+  ['uranus',19.18916464,.04725744,.77263783],
+  ['neptune',30.06992276,.00859048,1.77004347]
+ ] as const;
+ for(const [id,a,e,i] of expected){
+  const elements=SOLAR_SYSTEM_DATA[id].elements;
+  assert.ok(Math.abs(elements.semiMajorAxisM/AU-a)<1e-10,id+' semimajor axis');
+  assert.ok(Math.abs(elements.eccentricity-e)<1e-10,id+' eccentricity');
+  assert.ok(Math.abs(elements.inclination*180/Math.PI-i)<1e-8,id+' inclination');
+ }
+});
+
 test('J2000 Earth orbital parameters match NASA reference values',()=>{const e=SOLAR_SYSTEM_DATA.earth.elements;assert.ok(Math.abs(e.semiMajorAxisM/AU-1.00000011)<1e-12);assert.ok(Math.abs(e.eccentricity-0.01671022)<1e-12);assert.ok(Math.abs(e.inclination*180/Math.PI-0.00005)<1e-10);});
 test('orbital elements convert to a valid state and back',()=>{const mu=earthMu,el={semiMajorAxisM:7e6,eccentricity:0.1,inclination:0.3,longitudeAscendingNode:0.4,argumentOfPeriapsis:0.5,meanAnomaly:1.2},s=orbitalElementsToState(el,mu),out=stateToOrbitalElements(s.position,s.velocity,mu);assert.ok(Math.abs(out.semiMajorAxis-el.semiMajorAxisM)<1e-5);assert.ok(Math.abs(out.eccentricity-el.eccentricity)<1e-10);});
 test('Sun-Earth-Moon ephemeris hierarchy updates with time',()=>{const w=createSolarSystemWorld({fixedStepSeconds:3600});const e0=w.getBodyState('earth'),m0=w.getBodyState('moon');assert.ok(Math.abs(magnitude(e0.position)-AU)<4e9);assert.ok(Math.abs(magnitude(add(m0.position,{x:-e0.position.x,y:-e0.position.y,z:-e0.position.z}))-384400000)<5e7);w.step();const e1=w.getBodyState('earth'),m1=w.getBodyState('moon');assert.ok(magnitude(vector3(e1.position.x-e0.position.x,e1.position.y-e0.position.y,e1.position.z-e0.position.z))>1e5);assert.ok(magnitude(vector3(m1.position.x-m0.position.x,m1.position.y-m0.position.y,m1.position.z-m0.position.z))>1e4);});

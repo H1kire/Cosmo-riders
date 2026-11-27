@@ -38,7 +38,7 @@ test('geological profile is stable and uses measured body properties',()=>{
 test('all 50 catalogued bodies resolve to explicit geological or atmospheric profiles',()=>{
  const world=createSolarSystemWorld();
  assert.equal(world.bodies.size,50);
- const icy=['mimas','enceladus','tethys','dione','rhea','hyperion','iapetus','phoebe','janus','epimetheus','helene','atlas','prometheus','pandora','pan','miranda','ariel','umbriel','titania','oberon','naiad','thalassa','despina','galatea','larissa','proteus','nereid'];
+ const icy=['amalthea','mimas','enceladus','tethys','dione','rhea','hyperion','iapetus','phoebe','janus','epimetheus','helene','atlas','prometheus','pandora','pan','miranda','ariel','umbriel','titania','oberon','naiad','thalassa','despina','galatea','larissa','proteus','nereid'];
  for(const body of world.bodies.values()){
   const profile=createGeologicalProfile(body);
   assert.notEqual(profile.kind,'unknown',body.id+' has no resolved surface class');

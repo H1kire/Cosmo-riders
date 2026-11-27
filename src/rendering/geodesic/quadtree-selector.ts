@@ -29,8 +29,17 @@ const dot=(a:Vec3,b:Vec3)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const normalize=(v:Vec3):Vec3=>{const length=Math.hypot(...v)||1;return[v[0]/length,v[1]/length,v[2]/length];};
 const angle=(a:Vec3,b:Vec3)=>Math.acos(Math.max(-1,Math.min(1,dot(a,b))));
 
-function tileCenter(tile:GeoTile):Vec3{return normalize([tile.triangle.a[0]+tile.triangle.b[0]+tile.triangle.c[0],tile.triangle.a[1]+tile.triangle.b[1]+tile.triangle.c[1],tile.triangle.a[2]+tile.triangle.b[2]+tile.triangle.c[2]]);}
-function tileAngularRadius(tile:GeoTile,center:Vec3):number{return Math.max(angle(center,tile.triangle.a),angle(center,tile.triangle.b),angle(center,tile.triangle.c));}
+interface CachedTileGeometry { readonly center: Vec3; readonly angularRadius: number; readonly sagittaFactor: number; }
+const tileGeometryCache = new Map<string, CachedTileGeometry>();
+function tileGeometry(tile:GeoTile):CachedTileGeometry {
+ const cached=tileGeometryCache.get(tile.id.key);if(cached)return cached;
+ const center=normalize([tile.triangle.a[0]+tile.triangle.b[0]+tile.triangle.c[0],tile.triangle.a[1]+tile.triangle.b[1]+tile.triangle.c[1],tile.triangle.a[2]+tile.triangle.b[2]+tile.triangle.c[2]]);
+ const minDot=Math.max(-1,Math.min(1,Math.min(dot(center,tile.triangle.a),dot(center,tile.triangle.b),dot(center,tile.triangle.c))));
+ const angularRadius=Math.acos(minDot);
+ const value={center,angularRadius,sagittaFactor:1-Math.cos(angularRadius*0.5)};
+ if(tileGeometryCache.size>65536)tileGeometryCache.clear();
+ tileGeometryCache.set(tile.id.key,value);return value;
+}
 /** Maximum dot(direction, cameraDirection) over a spherical cap around center. */
 export function horizonCapUpperBound(center:Vec3,cameraDirection:Vec3,angularRadius:number):number{
  const c=normalize(center),v=normalize(cameraDirection),alpha=Math.max(0,Math.min(Math.PI,angularRadius));
@@ -73,11 +82,11 @@ export function selectGeodesicLod(camera:GeodesicLodCamera,options:GeodesicLodOp
  const selected:GeoTile[]=[],stats={tested:0,culledFrustum:0,culledHorizon:0,split:0,leaves:0,maxLevel:0,maxScreenErrorPx:0};
  const visit=(tile:GeoTile)=>{
   stats.tested++;
-  const center=tileCenter(tile),angularRadius=tileAngularRadius(tile,center),visibility=isVisible(tile,camera,radius,center,angularRadius);
+  const geometry=tileGeometry(tile),center=geometry.center,angularRadius=geometry.angularRadius,visibility=isVisible(tile,camera,radius,center,angularRadius);
   if(visibility==='frustum'){stats.culledFrustum++;return;}
   if(visibility==='horizon'){stats.culledHorizon++;return;}
   const surfaceDistance=Math.max(1,Math.hypot(camera.positionM[0]-center[0]*radius,camera.positionM[1]-center[1]*radius,camera.positionM[2]-center[2]*radius));
-  const sagitta=radius*(1-Math.cos(angularRadius/2));
+  const sagitta=radius*geometry.sagittaFactor;
   const errorPx=sagitta*focalPixels/surfaceDistance;
   stats.maxScreenErrorPx=Math.max(stats.maxScreenErrorPx,errorPx);
   const wasSplit=options.previousSplitKeys?.has(tile.id.key)??false;

@@ -14,6 +14,7 @@ export class VirtualSurfaceManager {
  private readonly cpu=new Map<string,CpuEntry>();
  private readonly statuses=new Map<string,SurfaceTileStatus>();
  private clock=0; private bytes=0;
+ private lastMeshGenerationMsValue=0; private lastSurfaceGenerationMsValue=0;
  constructor(options:{cpuBudgetBytes?:number;workerCount?:number;pool?:SurfaceTileWorkerPool}={}){
   this.cpuBudgetBytes=Math.max(1,options.cpuBudgetBytes??96*1024*1024);
   this.ownsPool=!options.pool;
@@ -40,7 +41,7 @@ export class VirtualSurfaceManager {
  requestMesh(tile:import('./icosphere.ts').GeoTile,resolution:number,radiusM:number,priority=0,signal?:AbortSignal,coarseEdgeMask=0):Promise<import('./tile-mesh.ts').GeodesicTileMesh>{
   if(this.disposed)return Promise.reject(new DOMException('Surface manager is disposed.','AbortError'));
   const combinedSignal=signal?AbortSignal.any([this.abortController.signal,signal]):this.abortController.signal;
-  return this.pool.requestMesh(tile,resolution,radiusM,priority,combinedSignal,coarseEdgeMask);
+  return this.pool.requestMesh(tile,resolution,radiusM,priority,combinedSignal,coarseEdgeMask).then(mesh=>{this.lastMeshGenerationMsValue=mesh.generationMs??0;return mesh;});
  }
  async request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{
   if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');
@@ -55,7 +56,7 @@ export class VirtualSurfaceManager {
    const combinedSignal=signal?AbortSignal.any([this.abortController.signal,signal]):this.abortController.signal;
    const promise=this.pool.request(request,priority,combinedSignal);
    state.state='Generating';
-   const tile=await promise;if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');this.remember(tile);state.state='CPU Ready';return tile;
+   const tile=await promise;if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');this.lastSurfaceGenerationMsValue=tile.generationMs;this.remember(tile);state.state='CPU Ready';return tile;
   }catch(error){
    if(error instanceof DOMException&&error.name==='AbortError'){state.state='Evicted';}
    else{state.state='Failed';state.error=error instanceof Error?error.message:String(error);}
@@ -71,6 +72,8 @@ export class VirtualSurfaceManager {
  releasePoolOwnership():void{this.ownsPool=false;}
  get workerPool():SurfaceTileWorkerPool{return this.pool;}
  get memoryBytes():number{return this.bytes;}
+ get lastMeshGenerationMs():number{return this.lastMeshGenerationMsValue;}
+ get lastSurfaceGenerationMs():number{return this.lastSurfaceGenerationMsValue;}
  get cacheSize():number{return this.cpu.size;}
  get queuedCount():number{return this.pool.queuedCount;}
  get pendingCount():number{return this.pool.pendingCount;}

@@ -563,8 +563,10 @@ export class Solar3DView{
   if(this.requestedGraphics.adaptiveQuality){
    const intervalMs=this.frameIntervalSamples.at(-1)??this.lastFrameDurationMs;
    const nextLevel=this.adaptiveQuality.addFrameTime(intervalMs);
-   if(nextLevel!==this.adaptiveQualityLevel){
-    this.adaptiveQualityLevel=nextLevel;
+   const qualityRank:Record<GraphicsSettings['preset'],number>={low:0,medium:1,high:2,ultra:3};
+   const boundedLevel=qualityRank[nextLevel]>qualityRank[this.requestedGraphics.preset]?this.requestedGraphics.preset:nextLevel;
+   if(boundedLevel!==this.adaptiveQualityLevel){
+    this.adaptiveQualityLevel=boundedLevel;
     this.graphics=this.applyAdaptiveGraphics(this.requestedGraphics);
    }
   }else this.adaptiveQualityLevel=this.requestedGraphics.preset;

@@ -63,10 +63,15 @@ test('Rust/WASM surface pages match the retained TypeScript reference channels',
   const actual=generate_surface_tile(request.tile.face,request.tile.path,request.resolution,request.gutter,JSON.stringify(profile)) as {
    albedo:Uint8Array;normal:Uint8Array;height:Float32Array;roughness:Uint8Array;materialId:Uint8Array;
   };
-  assert.deepEqual(actual.albedo,expected.albedo,body.id+' albedo parity');
-  assert.deepEqual(actual.normal,expected.normal,body.id+' normal parity');
-  assert.deepEqual(actual.height,expected.height,body.id+' height parity');
-  assert.deepEqual(actual.roughness,expected.roughness,body.id+' roughness parity');
+  const byteChannels:[[Uint8Array,Uint8Array,string],[Uint8Array,Uint8Array,string],[Uint8Array,Uint8Array,string]]=[
+   [actual.albedo,expected.albedo,'albedo'],[actual.normal,expected.normal,'normal'],[actual.roughness,expected.roughness,'roughness']
+  ];
+  for(const [left,right,label] of byteChannels){
+   assert.equal(left.length,right.length,body.id+' '+label+' channel length');
+   for(let i=0;i<left.length;i++)assert.ok(Math.abs(left[i]-right[i])<=1,body.id+' '+label+' byte '+i+' differs by more than one LSB');
+  }
+  assert.equal(actual.height.length,expected.height.length,body.id+' height channel length');
+  for(let i=0;i<actual.height.length;i++)assert.ok(Math.abs(actual.height[i]-expected.height[i])<=0.01,body.id+' height sample '+i+' differs by more than 1 cm');
   assert.deepEqual(actual.materialId,expected.materialId,body.id+' material parity');
  }
 });

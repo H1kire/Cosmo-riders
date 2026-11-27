@@ -51,6 +51,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private readonly meshMorphStartedAt = new Map<string, number>();
   private renderer: WebGPUGeodesicSurfaceRenderer | null = null;
   private rendererPromise: Promise<void> | null = null;
+  private rendererInitializationError: string | null = null;
   private disposed = false;
   private frameShadowOccluders = new Float32Array(32);
   private frameSunRadius = 0;
@@ -69,10 +70,13 @@ export class WebGPUGeodesicSurfaceSystem {
   initializeStep(): void {
     if (this.disposed) return;
     if (!this.pages.ready) this.pages.initializeStep();
-    if (this.pages.ready && !this.renderer && !this.rendererPromise) {
+    if (this.pages.ready && !this.renderer && !this.rendererPromise && !this.rendererInitializationError) {
       this.rendererPromise = WebGPUGeodesicSurfaceRenderer.create(this.device, this.pages, this.sampleCount)
         .then(renderer => { if (this.disposed) renderer.dispose(); else this.renderer = renderer; })
-        .catch(() => { this.rendererPromise = null; });
+        .catch(error => {
+          this.rendererInitializationError = error instanceof Error ? error.message : String(error);
+          this.rendererPromise = null;
+        });
     }
   }
 
@@ -286,6 +290,7 @@ export class WebGPUGeodesicSurfaceSystem {
     const cpuStateCounts = this.manager.stateCounts;
     return {
       ...page,
+      rendererInitializationError: this.rendererInitializationError,
       cpuCacheBytes: this.manager.memoryBytes,
       cpuCacheBudgetBytes: this.manager.cpuBudgetBytes,
       cpuCachePages: this.manager.cacheSize,

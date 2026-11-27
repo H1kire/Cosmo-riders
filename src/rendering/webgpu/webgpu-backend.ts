@@ -660,7 +660,6 @@ export class WebGPUBackend {
     }
   }
 
-  private configure(requestedScale = this.renderScale): void {
   private initializeTimestampQueries():void {
     if(!this.device?.features?.has?.('timestamp-query'))return;
     try{
@@ -692,6 +691,8 @@ export class WebGPUBackend {
     return{...this.frameMetrics,gpuFrameMs:this.gpuFrameMs,gpuTimingSupported:Boolean(this.timestampQuerySet),gpuTimingError:this.gpuTimingError};
   }
 
+
+  private configure(requestedScale = this.renderScale): void {
     if (!this.device || !this.context) throw new Error('WebGPU device/context не готовы.');
     this.renderScale = resolveRenderScale(requestedScale);
     const rect = this.canvas.getBoundingClientRect();

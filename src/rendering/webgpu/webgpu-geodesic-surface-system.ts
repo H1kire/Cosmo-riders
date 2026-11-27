@@ -92,7 +92,7 @@ export class WebGPUGeodesicSurfaceSystem {
     shadowsEnabled = true
   ): boolean {
     if (this.disposed || profile.kind === 'gas-giant' || profile.kind === 'ice-giant') return false;
-    this.frameShadowOccluders = shadowOccluders;
+    this.frameShadowOccluders.set(shadowOccluders);
     this.frameSunRadius = shadowsEnabled ? sunRadius : 0;
     this.frameShadowsEnabled = shadowsEnabled;
     this.currentSunPosition = sunPosition;

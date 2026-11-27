@@ -136,7 +136,7 @@ export class Solar3DView{
   this.observeLongTasks();this.graphics=loadGraphicsSettings();this.backendPreference='webgpu';
   const webgpuReady=await this.initializeWebGPUBackend();
   if(!webgpuReady)throw new Error('Cosmo-riders требует WebGPU: '+(this.backendFallbackReason??'инициализация WebGPU не удалась.'));
-  this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;this.frameTimeSamples=[];
+  this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;this.frameIntervalSamples=[];this.lastFrameStartedAt=0;
   this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();
   this.orbitCache=new Map();this.stellarSourceDefinitions=new Map();this.projected=[];this.labelNodes=new Map();
   await this.yieldToBrowser();this.markInitializationStage('webgpu-device-ready');
@@ -159,7 +159,7 @@ export class Solar3DView{
    webgpuAdapterInfo:backend?.adapter?.info?.description??backend?.adapter?.info?.device??null,
    webgpuError:backend?.error??this.backendFallbackReason??null,webgpuInitializationMs:backend?.initializationMs??0,
    initializationStages:{...(this.initializationStages??{})},initializationElapsedMs:this.initializationStartedAt?performance.now()-this.initializationStartedAt:0,
-   performance:{...summarizeFrameTimes(this.frameTimeSamples??[]),cpuFrameMs:this.lastFrameDurationMs??0,...(backend?.performanceDiagnostics??{}),gpuUtilizationPercent:null},
+   performance:{...summarizeFrameTimes(this.frameIntervalSamples??[]),cpuFrameMs:this.lastFrameDurationMs??0,...(backend?.performanceDiagnostics??{}),gpuUtilizationPercent:null},
    longestSynchronousChunkMs:this.longestSynchronousChunkMs??0,longTaskCount:this.longTaskCount??0,longestLongTaskMs:this.longestLongTaskMs??0,
    webgl2:false,maxArrayTextureLayers:'—',maxTextureSize:limits.maxTextureDimension2D??'—',
    maxVertexTextureImageUnits:'—',maxFragmentTextureImageUnits:'—',maxCombinedTextureImageUnits:'—',
@@ -378,6 +378,7 @@ export class Solar3DView{
  }
  render(world,states,timeSeconds,vesselState=null){
   const frameStarted=performance.now();
+  this.frameIntervalSamples??=[];if(this.lastFrameStartedAt>0){this.frameIntervalSamples.push(frameStarted-this.lastFrameStartedAt);if(this.frameIntervalSamples.length>180)this.frameIntervalSamples.splice(0,this.frameIntervalSamples.length-180);}this.lastFrameStartedAt=frameStarted;
   if(this.focusTransition){
    const progress=Math.min(1,(performance.now()-this.focusTransition.started)/this.focusTransition.duration);
    const eased=progress*progress*(3-2*progress);
@@ -491,7 +492,6 @@ export class Solar3DView{
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;
-  this.frameTimeSamples??=[];this.frameTimeSamples.push(this.lastFrameDurationMs);if(this.frameTimeSamples.length>180)this.frameTimeSamples.splice(0,this.frameTimeSamples.length-180);
   if(frameStarted-(this.lastDiagnosticsPublish??0)>=500){this.lastDiagnosticsPublish=frameStarted;window.dispatchEvent(new CustomEvent('graphics-diagnostics',{detail:this.getGraphicsDiagnostics()}));}
  }
  dispose(){

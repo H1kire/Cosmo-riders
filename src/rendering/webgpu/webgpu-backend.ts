@@ -593,7 +593,11 @@ export class WebGPUBackend {
   private orbitPipeline: any = null;
   private orbitBindGroupLayout: any = null;
   private disposed = false;
-  private recoveryAttempted = false;
+  private lifecycleGeneration = 0;
+  private recoveryAttempts = 0;
+  private recoveryPromise: Promise<boolean> | null = null;
+  private readonly maxRecoveryAttempts = 3;
+  private timestampGeneration = 0;
   private geodesicSystem: WebGPUGeodesicSurfaceSystem | null = null;
   private renderScale = 1;
   private sceneWidth = 1;
@@ -617,46 +621,66 @@ export class WebGPUBackend {
   }
 
   private async initialize(): Promise<void> {
+    const generation = ++this.lifecycleGeneration;
     const started = performance.now();
+    let generationDevice: any = null;
+    const assertCurrent = () => { if (this.disposed || generation !== this.lifecycleGeneration) throw new DOMException('WebGPU initialization was superseded.', 'AbortError'); };
     try {
       const gpu = (navigator as any).gpu;
       if (!gpu) throw new Error('navigator.gpu недоступен в этом браузере или origin.');
       // Chromium on Windows may ignore powerPreference; omit it to avoid a noisy no-op option.
       // A single default adapter request is deterministic and avoids retry loops.
       this.adapter = await gpu.requestAdapter();
+      assertCurrent();
       if (!this.adapter) throw new Error('WebGPU adapter недоступен.');
       const limits = this.adapter.limits ?? {};
       const maxBuffer = Number(limits.maxBufferSize ?? 0);
       if (maxBuffer > 0 && maxBuffer < 1024 * 1024) throw new Error('WebGPU adapter сообщает слишком малый maxBufferSize.');
       const timestampFeature=this.adapter.features?.has?.('timestamp-query')===true;
-      try { this.device=await this.adapter.requestDevice(timestampFeature?{requiredFeatures:['timestamp-query']}:undefined); }
-      catch(error) { if(!timestampFeature)throw error; this.device=await this.adapter.requestDevice(); }
+      try { generationDevice=await this.adapter.requestDevice(timestampFeature?{requiredFeatures:['timestamp-query']}:undefined); }
+      catch(error) { if(!timestampFeature)throw error; generationDevice=await this.adapter.requestDevice(); }
+      if (this.disposed || generation !== this.lifecycleGeneration) { generationDevice?.destroy?.(); throw new DOMException('WebGPU initialization was superseded.','AbortError'); }
+      this.device=generationDevice;
       this.initializeTimestampQueries();
+      const initializedDevice = this.device;
       this.device.addEventListener?.('uncapturederror', (event: any) => {
+        if (this.disposed || this.device !== initializedDevice) return;
         const message = event?.error?.message || 'Uncaptured WebGPU validation error.';
         this.error = 'WebGPU validation error: ' + message;
         console.error('[Cosmo-riders][WebGPU]', this.error);
       });
       this.device.lost.then((info: any) => {
-        if (this.disposed) return;
+        if (this.disposed || this.device !== initializedDevice || generation !== this.lifecycleGeneration) return;
         this.state = 'lost';
         this.error = 'WebGPU device lost: ' + (info?.message || info?.reason || 'unknown reason');
         window.dispatchEvent(new CustomEvent('graphics-backend-lost', { detail: { backend: 'WebGPU', error: this.error } }));
       });
       this.context = this.canvas.getContext('webgpu') as any;
+      assertCurrent();
       if (!this.context) throw new Error('Не удалось получить GPUCanvasContext.');
       this.format = gpu.getPreferredCanvasFormat();
       this.configure();
       await this.createPipeline();
+      assertCurrent();
       this.createGeometryBuffers();
+      assertCurrent();
       this.state = 'ready';
       this.error = null;
     } catch (error) {
-      this.state = 'failed';
-      this.error = error instanceof Error ? error.message : String(error);
+      if (!this.disposed && generation === this.lifecycleGeneration) {
+        this.state = 'failed';
+        this.error = error instanceof Error ? error.message : String(error);
+        this.disposeTimestampResources();
+        this.disposeGpuResources();
+        this.device?.destroy?.();
+        this.device = null;
+      } else if (generationDevice && this.device === generationDevice) {
+        generationDevice.destroy?.();
+        this.device = null;
+      }
       throw error;
     } finally {
-      this.initializationMs = performance.now() - started;
+      if (generation === this.lifecycleGeneration) this.initializationMs = performance.now() - started;
     }
   }
 
@@ -676,13 +700,17 @@ export class WebGPUBackend {
     return{querySet:this.timestampQuerySet,beginningOfPassWriteIndex,endOfPassWriteIndex:beginningOfPassWriteIndex+1};
   }
   private readTimestampResults(slot:{resolve:any;readback:any;busy:boolean},count:number):void {
+    const generation=this.timestampGeneration;
     void slot.readback.mapAsync(1).then(()=>{
+      if(generation!==this.timestampGeneration||this.disposed)return;
       const values=new BigUint64Array(slot.readback.getMappedRange());let total=0;
       for(let i=0;i+1<count;i+=2)if(values[i+1]>=values[i])total+=Number(values[i+1]-values[i]);
       this.gpuFrameMs=total/1_000_000;slot.readback.unmap();
-    }).catch(error=>{this.gpuTimingError=error instanceof Error?error.message:String(error);}).finally(()=>{slot.busy=false;});
+    }).catch(error=>{if(generation===this.timestampGeneration&&!this.disposed)this.gpuTimingError=error instanceof Error?error.message:String(error);}).finally(()=>{if(generation===this.timestampGeneration)slot.busy=false;});
   }
   private disposeTimestampResources():void {
+    this.timestampGeneration++;
+    this.gpuFrameMs=null;
     this.timestampQuerySet?.destroy?.();this.timestampQuerySet=null;
     for(const slot of this.timestampReadbacks){slot.resolve.destroy?.();slot.readback.destroy?.();}
     this.timestampReadbacks=[];this.activeTimestampSlot=null;
@@ -1152,17 +1180,32 @@ export class WebGPUBackend {
   }
 
   async recover(): Promise<boolean> {
-    if (this.recoveryAttempted || this.disposed) return false;
-    this.recoveryAttempted = true;
-    this.disposeTimestampResources();
-    this.disposeGpuResources();
-    this.state = 'initializing';
-    try {
-      await this.initialize();
-      return true;
-    } catch {
+    if (this.disposed) return false;
+    if (this.recoveryPromise) return this.recoveryPromise;
+    if (this.recoveryAttempts >= this.maxRecoveryAttempts) {
+      this.error = 'WebGPU recovery limit reached after ' + this.maxRecoveryAttempts + ' attempts.';
+      this.state = 'failed';
       return false;
     }
+    this.recoveryAttempts++;
+    this.recoveryPromise = (async () => {
+      const previousDevice = this.device;
+      this.state = 'initializing';
+      this.disposeTimestampResources();
+      this.disposeGpuResources();
+      previousDevice?.destroy?.();
+      this.device = null;
+      this.adapter = null;
+      try {
+        await this.initialize();
+        return !this.disposed && this.state === 'ready';
+      } catch {
+        return false;
+      } finally {
+        this.recoveryPromise = null;
+      }
+    })();
+    return this.recoveryPromise;
   }
 
   private disposeGpuResources(): void {
@@ -1193,6 +1236,7 @@ export class WebGPUBackend {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.lifecycleGeneration++;
     this.disposeTimestampResources();
     this.disposeGpuResources();
     this.device?.destroy();

@@ -302,6 +302,7 @@ export class WebGPUGeodesicSurfaceSystem {
       workerTaskErrors: this.manager.workerTaskErrors,
       cancelledTasks: this.manager.cancelledTasks,
       disposedTasks: this.manager.disposedTasks,
+      workerRestarts: this.manager.workerRestarts,
       firstWorkerFailure: this.manager.startupFailure
     };
   }

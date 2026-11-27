@@ -17,7 +17,7 @@ type WorkerReply={type?:string;id?:number;tile?:SurfaceTileData;mesh?:GeodesicTi
 /** Малий обмежений пул: задачі надсилаються лише після handshake готовності Worker. */
 export class SurfaceTileWorkerPool {
  private slots:WorkerSlot[]=[];private queue:Task[]=[];private pending=new Map<string,Task>();private ids=new Map<number,Task>();
- private sequence=0;private workerSequence=0;private disposed=false;private startupError:Error|null=null;
+ private sequence=0;private workerSequence=0;private disposed=false;private startupError:Error|null=null;private restartCountValue=0;private readonly maxWorkerRestarts=3;
  private workerStartupErrorsValue=0;private workerRuntimeErrorsValue=0;private workerTaskErrorsValue=0;private cancelledTasksValue=0;private disposedTasksValue=0;
  readonly concurrency:number;readonly maxPendingTasks:number;private readonly workerFactory:()=>Worker;private readonly hasWorkerFactory:boolean;
  constructor(options:{concurrency?:number;maxPendingTasks?:number;workerFactory?:()=>Worker}={}){
@@ -44,19 +44,23 @@ export class SurfaceTileWorkerPool {
     if(task){this.workerRuntimeErrorsValue++;this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker runtime failure: '+(event.message||'unknown worker error')));}
     else if(!slot.ready){this.workerStartupErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-startup','worker:'+slot.id,'startup','Surface worker startup failed: '+(event.message||'worker module could not be initialized'));}
     else{this.workerRuntimeErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker failed outside an active task: '+(event.message||'unknown worker error'));}
-    this.removeSlot(slot);
+    this.removeSlot(slot,slot.ready);
    };
    worker.onmessageerror=()=>{
     const task=slot.task;
     if(task){this.workerRuntimeErrorsValue++;this.rejectTask(slot,task,new SurfaceWorkerTaskError(task.payload.kind,task.key,'runtime','Surface worker returned a message that could not be deserialized.'));}
     else if(!slot.ready){this.workerStartupErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-startup','worker:'+slot.id,'startup','Surface worker startup message could not be deserialized.');}
     else{this.workerRuntimeErrorsValue++;if(!this.startupError)this.startupError=new SurfaceWorkerTaskError('worker-runtime','worker:'+slot.id,'runtime','Surface worker returned an unreadable message outside an active task.');}
-    this.removeSlot(slot);
+    this.removeSlot(slot,slot.ready);
    };
    this.slots.push(slot);
   }catch(error){this.workerStartupErrorsValue++;this.startupError=error instanceof Error?error:new Error(String(error));}
  }
- private removeSlot(slot:WorkerSlot):void{slot.worker.terminate();this.slots=this.slots.filter(item=>item!==slot);if(this.slots.length===0)this.rejectQueuedWithoutWorkers();else this.pump();}
+ private removeSlot(slot:WorkerSlot,restart=false):void{
+  slot.worker.terminate();this.slots=this.slots.filter(item=>item!==slot);
+  if(restart&&!this.disposed&&this.restartCountValue<this.maxWorkerRestarts){this.restartCountValue++;this.spawn();}
+  if(this.slots.length===0)this.rejectQueuedWithoutWorkers();else this.pump();
+ }
  private rejectQueuedWithoutWorkers():void{
   if(this.disposed||this.slots.length>0)return;const failure=this.startupError instanceof SurfaceWorkerTaskError?this.startupError:null,message=this.startupError?.message??'No healthy surface workers remain.';
   for(const task of this.queue.splice(0)){if(this.pending.get(task.key)===task)this.pending.delete(task.key);this.rejectSubscribers(task,new SurfaceWorkerTaskError(failure?.taskKind??'worker-startup',task.key,failure?.phase??'startup',message));}
@@ -113,5 +117,5 @@ export class SurfaceTileWorkerPool {
  get pendingCount():number{return this.ids.size+this.queue.length;}get workerCount():number{return this.slots.length;}
  get workerStartupErrors():number{return this.workerStartupErrorsValue;}get workerRuntimeErrors():number{return this.workerRuntimeErrorsValue;}
  get workerTaskErrors():number{return this.workerTaskErrorsValue;}get cancelledTasks():number{return this.cancelledTasksValue;}
- get disposedTasks():number{return this.disposedTasksValue;}get startupFailure():string|null{return this.startupError?.message??null;}
+ get disposedTasks():number{return this.disposedTasksValue;}get workerRestarts():number{return this.restartCountValue;}get startupFailure():string|null{return this.startupError?.message??null;}
 }

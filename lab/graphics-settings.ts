@@ -60,7 +60,7 @@ window.addEventListener('graphics-diagnostics',(event:Event)=>{
   'GPU cache high-water: '+value.highWaterResidentPages+'/'+value.capacity+' страниц',
   'CPU cache: '+bytes(value.cpuCacheBytes)+' / '+bytes(value.cpuCacheBudgetBytes)+' · '+value.cpuCachePages+' страниц',
   'Страницы: создано '+value.generatedPages+' · visible '+value.visiblePages+' · queued '+value.queuedPages+' · generating '+value.generatingPages+' · failed '+value.failedPages,
-  'Worker: '+value.workerActive+'/'+value.workerCount+' активно · очередь '+value.workerQueued,
+  'Worker: '+value.workerActive+'/'+value.workerCount+' активно · очередь '+value.workerQueued+' · перезапуски '+(value.workerRestarts??0),
   'Подготовка нового renderer: '+(value.pendingRendererState??'—'),
   'Ошибка новой конфигурации: '+(value.pendingRendererError??'нет'),
   'Ошибки Worker startup/runtime/task: '+value.workerStartupErrors+'/'+value.workerRuntimeErrors+'/'+value.workerTaskErrors,

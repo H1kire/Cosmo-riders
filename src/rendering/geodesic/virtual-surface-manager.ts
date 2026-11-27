@@ -78,7 +78,7 @@ export class VirtualSurfaceManager {
  get workerRuntimeErrors():number{return this.pool.workerRuntimeErrors;}
  get workerTaskErrors():number{return this.pool.workerTaskErrors;}
  get cancelledTasks():number{return this.pool.cancelledTasks;}
- get disposedTasks():number{return this.pool.disposedTasks;}
+ get disposedTasks():number{return this.pool.disposedTasks;}get workerRestarts():number{return this.pool.workerRestarts;}
  get startupFailure():string|null{return this.pool.startupFailure;}
  get activeWorkers():number{return this.pool.activeCount;}
  get workerCount():number{return this.pool.workerCount;}

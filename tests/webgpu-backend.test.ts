@@ -165,3 +165,16 @@ test('performance diagnostics use real pass timestamps and active renderer work 
  assert.match(geo,/getFrameDiagnostics\(\)/);assert.match(geo,/frameDrawCalls\+\+/);
  assert.match(panel,/timestamp-query не поддерживается/);assert.match(panel,/GPU utilization: API не предоставляет/);
 });
+
+
+test('WebGPU lifecycle guards stale initialization and allows bounded device recovery',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const backend=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
+ assert.match(backend,/lifecycleGeneration\+\+/);
+ assert.match(backend,/generation !== this\.lifecycleGeneration/);
+ assert.match(backend,/this\.device !== initializedDevice/);
+ assert.match(backend,/maxRecoveryAttempts = 3/);
+ assert.match(backend,/if \(this\.recoveryPromise\) return this\.recoveryPromise/);
+ assert.match(backend,/previousDevice\?\.destroy\?\.\(\)/);
+ assert.match(backend,/timestampGeneration\+\+/);
+});

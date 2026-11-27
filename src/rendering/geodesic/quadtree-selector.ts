@@ -29,6 +29,42 @@ const dot=(a:Vec3,b:Vec3)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const normalize=(v:Vec3):Vec3=>{const length=Math.hypot(...v)||1;return[v[0]/length,v[1]/length,v[2]/length];};
 const angle=(a:Vec3,b:Vec3)=>Math.acos(Math.max(-1,Math.min(1,dot(a,b))));
 
+/** Conservative sphere/frustum intersection using the four rectangular camera side planes. */
+export function isSpherePotentiallyVisibleInFrustum(
+ cameraPosition:Vec3,cameraForward:Vec3,radius:number,
+ verticalFovRadians:number,viewportWidthPx:number,viewportHeightPx:number
+):boolean{
+ if(!Number.isFinite(radius)||radius<=0)throw new RangeError('Sphere radius must be positive.');
+ if(!Number.isFinite(verticalFovRadians)||verticalFovRadians<=0||verticalFovRadians>=Math.PI)throw new RangeError('Vertical FOV must be between zero and pi.');
+ if(!Number.isFinite(viewportWidthPx)||viewportWidthPx<=0||!Number.isFinite(viewportHeightPx)||viewportHeightPx<=0)throw new RangeError('Viewport dimensions must be positive.');
+ const distance=Math.hypot(...cameraPosition);
+ if(!Number.isFinite(distance)||distance<=radius)return true;
+ const forward=normalize(cameraForward);
+ const worldUp:Vec3=[0,1,0];
+ let rightRaw:Vec3=[
+  forward[1]*worldUp[2]-forward[2]*worldUp[1],
+  forward[2]*worldUp[0]-forward[0]*worldUp[2],
+  forward[0]*worldUp[1]-forward[1]*worldUp[0]
+ ];
+ if(Math.hypot(...rightRaw)<1e-8)rightRaw=[1,0,0];
+ const right=normalize(rightRaw);
+ const up=normalize([
+  right[1]*forward[2]-right[2]*forward[1],
+  right[2]*forward[0]-right[0]*forward[2],
+  right[0]*forward[1]-right[1]*forward[0]
+ ]);
+ const toCenter:Vec3=[-cameraPosition[0],-cameraPosition[1],-cameraPosition[2]];
+ const x=dot(toCenter,right),y=dot(toCenter,up),z=dot(toCenter,forward);
+ if(z+radius<=0)return false;
+ const halfVertical=verticalFovRadians*.5;
+ const halfHorizontal=Math.atan(Math.tan(halfVertical)*(viewportWidthPx/viewportHeightPx));
+ const horizontalAllowance=radius*Math.sqrt(1+Math.tan(halfHorizontal)**2);
+ const verticalAllowance=radius*Math.sqrt(1+Math.tan(halfVertical)**2);
+ if(Math.abs(x)-z*Math.tan(halfHorizontal)>horizontalAllowance)return false;
+ if(Math.abs(y)-z*Math.tan(halfVertical)>verticalAllowance)return false;
+ return true;
+}
+
 interface CachedTileGeometry { readonly center: Vec3; readonly angularRadius: number; readonly sagittaFactor: number; }
 const tileGeometryCache = new Map<string, CachedTileGeometry>();
 function tileGeometry(tile:GeoTile):CachedTileGeometry {

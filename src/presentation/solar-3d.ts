@@ -27,13 +27,32 @@ function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAng
  const relativeVelocity=state&&parentState?[state.velocity.x-parentState.velocity.x,state.velocity.y-parentState.velocity.y,state.velocity.z-parentState.velocity.z]:null;
  const mapVector=v=>[v[0],v[2],v[1]];
  if(body.tidalLock&&relativePosition&&relativeVelocity){
-  const orbitNormal=norm(mapVector(cross(relativePosition,relativeVelocity)));
-  const towardParent=norm(mapVector([parentState.position.x-state.position.x,parentState.position.y-state.position.y,parentState.position.z-state.position.z]));
-  const right=norm(cross(orbitNormal,towardParent));
-  if(Math.hypot(...right)>0.5){
-   const up=norm(cross(towardParent,right));
-   return [right[0]*radius,up[0]*radius,towardParent[0]*radius,0,right[1]*radius,up[1]*radius,towardParent[1]*radius,0,right[2]*radius,up[2]*radius,towardParent[2]*radius,0,p[0],p[1],p[2],1];
+  let lockedSpinAxis;
+  if(body.poleRightAscensionRad!==null&&body.poleRightAscensionRad!==undefined&&body.poleDeclinationRad!==null&&body.poleDeclinationRad!==undefined){
+   const epsilon=23.4392911*Math.PI/180,ra=body.poleRightAscensionRad,dec=body.poleDeclinationRad;
+   const equatorial=[Math.cos(dec)*Math.cos(ra),Math.cos(dec)*Math.sin(ra),Math.sin(dec)];
+   const ecliptic=[equatorial[0],Math.cos(epsilon)*equatorial[1]+Math.sin(epsilon)*equatorial[2],-Math.sin(epsilon)*equatorial[1]+Math.cos(epsilon)*equatorial[2]];
+   lockedSpinAxis=norm(mapVector(ecliptic));
+  }else{
+   const orbitNormal=norm(mapVector(cross(relativePosition,relativeVelocity)));
+   const orbitX=norm(mapVector(relativePosition)),orbitY=norm(cross(orbitNormal,orbitX)),tilt=body.axialTiltRad??0;
+   lockedSpinAxis=norm(orbitNormal.map((value,index)=>value*Math.cos(tilt)+orbitY[index]*Math.sin(tilt)));
   }
+  const towardParent=norm(mapVector([parentState.position.x-state.position.x,parentState.position.y-state.position.y,parentState.position.z-state.position.z]));
+  let forward=towardParent.map((value,index)=>value-lockedSpinAxis[index]*dot(towardParent,lockedSpinAxis));
+  if(Math.hypot(...forward)<1e-7){
+   const reference=[1,0,0],projection=dot(reference,lockedSpinAxis);
+   forward=reference.map((value,index)=>value-lockedSpinAxis[index]*projection);
+  }
+  forward=norm(forward);
+  const right=norm(cross(lockedSpinAxis,forward));
+  forward=norm(cross(right,lockedSpinAxis));
+  const angle=body.primeMeridianRad??0,ca=Math.cos(angle),sa=Math.sin(angle);
+  const rotatedRight=right.map((value,index)=>value*ca-forward[index]*sa);
+  const rotatedForward=right.map((value,index)=>value*sa+forward[index]*ca);
+  return [rotatedRight[0]*radius,lockedSpinAxis[0]*radius,rotatedForward[0]*radius,0,
+   rotatedRight[1]*radius,lockedSpinAxis[1]*radius,rotatedForward[1]*radius,0,
+   rotatedRight[2]*radius,lockedSpinAxis[2]*radius,rotatedForward[2]*radius,0,p[0],p[1],p[2],1];
  }
  let spinAxis,forward;
  if(body.poleRightAscensionRad!==null&&body.poleRightAscensionRad!==undefined&&body.poleDeclinationRad!==null&&body.poleDeclinationRad!==undefined){

@@ -165,3 +165,20 @@ test('icy moons produce composition- and age-dependent albedo and relief fields'
  assert.notDeepEqual(europa.height,callisto.height);
  assert.ok(enceladus.height.some(value=>Math.abs(value)>0));
 });
+
+
+test('temperature and atmospheric pressure influence polar frost and surface weathering',()=>{
+ const body={id:'environment-probe',massKg:1e22,meanRadiusM:1e6,surfaceSeed:17,rotationPeriodSeconds:null,surface:{temperatureK:100,pressurePa:0,waterFraction:0,iceFraction:1,ironFraction:.2,silicateFraction:.6,volatileFraction:0,sulfurFraction:.01,tectonicActivity:.05,volcanicActivity:0,erosion:.1,impactAge:.8}} as never;
+ const base=createGeologicalProfile(body);
+ const cold={...base,kind:'rocky' as const,temperatureK:100,iceFraction:1,waterFraction:0,pressurePa:0};
+ const hot={...cold,temperatureK:420};
+ const faces=baseGeoTiles();
+ const coldPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile,resolution:8,gutter:1,profile:cold}));
+ const hotPages=faces.map(tile=>generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile,resolution:8,gutter:1,profile:hot}));
+ assert.ok(coldPages.some((page,index)=>!page.albedo.every((value,i)=>value===hotPages[index].albedo[i])));
+ const vacuum={...cold,temperatureK:420,iceFraction:0,pressurePa:0};
+ const denseAtmosphere={...vacuum,pressurePa:1e7};
+ const vacuumPage=generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tileId(0),resolution:8,gutter:1,profile:vacuum});
+ const densePage=generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tileId(0),resolution:8,gutter:1,profile:denseAtmosphere});
+ assert.notDeepEqual(vacuumPage.roughness,densePage.roughness);
+});

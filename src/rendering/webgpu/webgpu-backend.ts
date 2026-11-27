@@ -1174,8 +1174,8 @@ export class WebGPUBackend {
     if(slot&&this.timestampQuerySet&&queryCount>0){
       encoder.resolveQuerySet(this.timestampQuerySet,0,queryCount,slot.resolve,0);
       encoder.copyBufferToBuffer(slot.resolve,0,slot.readback,0,queryCount*8);slot.busy=true;
-      this.device.queue.submit([encoder.finish()]);this.readTimestampResults(slot,queryCount);
-    }else this.device.queue.submit([encoder.finish()]);
+      this.device.queue.submit([encoder.finish()]);this.geodesicSystem?.afterSubmit();this.readTimestampResults(slot,queryCount);
+    }else { this.device.queue.submit([encoder.finish()]);this.geodesicSystem?.afterSubmit(); }
     metrics.backendEncodeMs=performance.now()-frameStarted;this.frameMetrics=metrics;this.activeTimestampSlot=null;
   }
 

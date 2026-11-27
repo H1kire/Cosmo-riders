@@ -54,3 +54,21 @@ test('WebGPU LOD crossfade separates source color, blended child color and final
  assert.ok(system.includes("transitionRole: 'depth'"));
  assert.ok(system.indexOf("transitionRole: 'blend'")<system.indexOf("transitionRole: 'depth'"));
 });
+
+
+test('geodesic WGSL uses an explicit scalar integer conversion for texture bounds', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('let pageSizeI = i32(pageSize);'));
+  assert.ok(source.includes('vec2<i32>(pageSizeI)'));
+  assert.ok(!source.includes('vec2<i32>(pageSize)'));
+});
+
+test('geodesic renderer initialization errors are retained and do not trigger a per-frame retry loop', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('private rendererInitializationError: string | null = null;'));
+  assert.ok(source.includes('!this.rendererInitializationError'));
+  assert.ok(source.includes('this.rendererInitializationError = error instanceof Error ? error.message : String(error);'));
+  assert.ok(source.includes('rendererInitializationError: this.rendererInitializationError'));
+});

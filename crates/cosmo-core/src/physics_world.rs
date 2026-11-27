@@ -287,3 +287,25 @@ mod laplace_reference_frame_tests {
   assert!(transformed.position.z.abs()>0.1);
  }
 }
+
+#[cfg(test)]
+mod osculating_orbit_path_tests {
+ use super::*;
+ #[test]
+ fn orbit_path_starts_at_the_current_relative_state_after_n_body_advance() {
+  let mut world=PhysicsWorld::new(Options::default()).unwrap();
+  let sun:BodyDefinition=serde_json::from_str(r#"{"id":"sun","name":"Sun","massKg":1.98847e30,"meanRadiusM":696340000.0,"position":[0.0,0.0,0.0],"velocity":[0.0,0.0,0.0]}"#).unwrap();
+  let earth:BodyDefinition=serde_json::from_str(r#"{"id":"earth","name":"Earth","massKg":5.9722e24,"meanRadiusM":6371000.0,"parentId":"sun","position":[0.0,0.0,0.0],"velocity":[0.0,0.0,0.0],"orbitalElements":{"semiMajorAxisM":149597870700.0,"eccentricity":0.01671022,"inclination":0.0000008726646259971648,"longitudeAscendingNode":-0.196535243881543,"argumentOfPeriapsis":1.7801227481269,"meanAnomaly":6.2398917899086}}"#).unwrap();
+  world.add_body(sun).unwrap();
+  world.add_body(earth).unwrap();
+  world.initialize_ephemerides().unwrap();
+  world.enable_n_body().unwrap();
+  world.advance(3600.0).unwrap();
+  let path=world.orbit_path("earth",128).unwrap();
+  let body=world.body_state("earth").unwrap();
+  let parent=world.body_state("sun").unwrap();
+  let relative=body.p().sub(parent.p());
+  let first=Vec3::new(path[0],path[1],path[2]);
+  assert!((first.sub(relative)).norm()/relative.norm()<1e-8);
+ }
+}

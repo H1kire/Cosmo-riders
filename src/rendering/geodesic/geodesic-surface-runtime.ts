@@ -37,6 +37,7 @@ export class GeodesicSurfaceRuntime {
  private topologyVersion=0;
  private fullRebuilds=0;
  private lastStats:GeodesicTopologyStats={updatedTiles:0,changedLinks:0,checkedEdges:0,recomputedMasks:0,fullRebuilds:0,updateMs:0};
+ private lastDesiredSignature:string|null=null;
 
  constructor(planetId:string,options:GeodesicRuntimeOptions={}){
   if(!planetId.trim())throw new TypeError('Planet id must not be empty.');
@@ -69,7 +70,7 @@ export class GeodesicSurfaceRuntime {
   const parent=this.active.get(tileKey);if(!parent||parent.id.level>=this.options.maxDepth||this.active.size+3>this.options.maxTiles)return false;
   const children=childrenOf(parent);
   if(children.some(child=>this.active.has(child.id.key)))throw new Error('Split would create duplicate active leaves.');
-  this.active.delete(tileKey);this.visible.delete(tileKey);this.priorities.delete(tileKey);
+  this.active.delete(tileKey);this.visible.delete(tileKey);this.priorities.delete(tileKey);this.lastDesiredSignature=null;
   for(const child of children)this.active.set(child.id.key,child);
   this.balanceAndRebuild();
   return true;
@@ -91,6 +92,7 @@ export class GeodesicSurfaceRuntime {
   if(validation.links.some(link=>Math.abs(link.tile.id.level-link.neighbor.id.level)>1))return false;
   for(const key of childKeys){this.active.delete(key);this.visible.delete(key);this.priorities.delete(key);}
   this.active.set(parentTile.id.key,parentTile);
+  this.lastDesiredSignature=null;
   this.rebuildTopology();
   return true;
  }
@@ -104,19 +106,30 @@ export class GeodesicSurfaceRuntime {
   this.assertAntichain(next);
   if(!Number.isInteger(maxTiles)||maxTiles<20||maxTiles>this.options.maxTiles)throw new RangeError('Reconcile tile budget must be in [20, configured maxTiles].');
   if(next.size>maxTiles)throw new RangeError('Desired leaf set exceeds the configured tile budget.');
+  // Однакове дерево не потребує повторного балансування та квадратичного пошуку сусідів кожен кадр.
+  const desiredSignature=maxTiles+'|'+[...next.keys()].sort().join(',');
+  const requestedVisible=visibleKeys??new Set(next.keys());
+  if(desiredSignature===this.lastDesiredSignature){
+   this.visible=new Set([...this.active.values()]
+    .filter(tile=>isVisibleLeafOrDescendant(tile,requestedVisible))
+    .map(tile=>tile.id.key));
+   this.visibilityConfigured=true;
+   return;
+  }
   const balanced=balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles});
   if(balanced.violations>0)throw new Error('Desired leaf set cannot satisfy the 2:1 balance within configured limits.');
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
   // Балансувальні листки поза видимим піддеревом зберігаються для топології, але не надсилаються на GPU.
-  const requestedVisible=visibleKeys??new Set(next.keys());
   this.visible=new Set(balanced.tiles
    .filter(tile=>isVisibleLeafOrDescendant(tile,requestedVisible))
    .map(tile=>tile.id.key));
   this.visibilityConfigured=true;
+  this.lastDesiredSignature=desiredSignature;
   this.rebuildTopology();
  }
 
  private balanceAndRebuild():void{
+  this.lastDesiredSignature=null;
   const balanced=balanceGeodesicTiles([...this.active.values()],{maxDepth:this.options.maxDepth,maxTiles:this.options.maxTiles});
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
   this.rebuildTopology();

@@ -613,3 +613,35 @@ test('WebGPU geodesic tiles smoothly reveal height displacement and mapped norma
  assert.ok(system.includes('/ 280'));
  assert.ok(system.includes('meshMorphStartedAt.delete(key)'));
 });
+
+
+test('WebGPU LOD transitions retain the previous complete cover until every target page and mesh is ready',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('interface TopologyTransition'));
+ assert.ok(source.includes('readonly source: readonly GeodesicTileState[]'));
+ assert.ok(source.includes('const sourceStates = topology.transition?.source ?? []'));
+ assert.ok(source.includes('const retainedTiles = [...unionByKey.values()]'));
+ assert.ok(source.includes('runtime.setVisibleTiles(retainedTiles)'));
+ assert.ok(source.includes('const targetReady = targetItems.length > 0 && targetItems.every'));
+ assert.ok(source.includes('if (topology.transition && targetReady)'));
+ assert.ok(source.includes('const sourceReady = sourceItems.length > 0 && sourceItems.every'));
+ assert.ok(source.includes('this.drawTileStates(pass, sourceItems'));
+ assert.ok(source.includes('runtime.setVisibleTiles(targetTiles)'));
+ assert.ok(source.includes('const transitionBudget = this.pages.capacity - sourceCount'));
+});
+
+test('WebGPU LOD transition keeps source mesh variants and releases them only after target activation',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [system,runtime,cache]=await Promise.all([
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-surface-runtime.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-surface-page-cache.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(system.includes('runtime.retainMeshes(retainedMeshKeys)'));
+ assert.ok(system.includes('this.desiredMeshes.set(body.id, desired)'));
+ assert.ok(system.includes('for (const key of this.renderer.meshKeysForBody(id)) if (!desired.has(key))'));
+ assert.ok(runtime.includes('this.pages.pin(pageKey)'));
+ assert.ok(runtime.includes('getPageLayer(tileKey: string)'));
+ assert.ok(cache.includes('All WebGPU surface page layers are pinned by visible tiles.'));
+});

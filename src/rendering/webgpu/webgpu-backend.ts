@@ -601,7 +601,6 @@ export class WebGPUBackend {
   private geodesicSettingsKey = '';
   private msaaSamples: 1 | 4 = 1;
   private msaaColorTexture: any = null;
-  private msaaColorTexture: any = null;
   private timestampQuerySet: any = null;
   private timestampReadbacks: Array<{ resolve:any; readback:any; busy:boolean }> = [];
   private activeTimestampSlot: { resolve:any; readback:any; busy:boolean } | null = null;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSphereGeometry } from '../src/rendering/webgpu/webgpu-backend.ts';
-import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
+import { resolveMsaaSamples, resolveRenderScale, resolveUploadsPerFrame, createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
 import { summarizeFrameTimes } from '../src/rendering/webgpu/webgpu-backend.ts';
 
 test('WebGPU sphere source creates indexed unit-sphere geometry', () => {

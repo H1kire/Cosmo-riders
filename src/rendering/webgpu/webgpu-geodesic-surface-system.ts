@@ -183,16 +183,11 @@ export class WebGPUGeodesicSurfaceSystem {
     }
 
     const signature = selection.tiles.map(tile => tile.id.key).sort().join(',');
-    if (signature !== topology.visibleSignature) {
+    if (signature !== topology.visibleSignature && !topology.transition) {
       try {
-        if (!topology.transition) {
-          const source = topology.runtime.getTileStates().filter(state => state.visible);
-          if (source.length > 0 && source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity) {
-            topology.transition = { source, targetSignature: signature, blendStartedAt: null };
-          }
-        } else if (topology.transition.targetSignature !== signature) {
-          topology.transition.targetSignature = signature;
-          topology.transition.blendStartedAt = null;
+        const source = topology.runtime.getTileStates().filter(state => state.visible);
+        if (source.length > 0 && source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity) {
+          topology.transition = { source, targetSignature: signature, blendStartedAt: null };
         }
         topology.runtime.reconcile(
           selection.tiles,
@@ -206,6 +201,8 @@ export class WebGPUGeodesicSurfaceSystem {
         // Зберігаємо останню коректну збалансовану сітку, якщо кадр вичерпав бюджет сторінок.
       }
     }
+    // Поки поточний LOD crossfade не завершений, не замінюємо його цільовий набір новим.
+    // Це не дозволяє руху камери нескінченно скидати blendStartedAt і закріплювати обидва набори сторінок.
 
     const states = topology.runtime.getTileStates().filter(state => state.visible);
     const sourceStates = topology.transition?.source ?? [];

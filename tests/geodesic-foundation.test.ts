@@ -699,3 +699,25 @@ test('WebGPU geodesic LOD performs a real pixel alpha crossfade after every targ
  assert.ok(system.includes('if (!targetReady) return true'));
  assert.ok(system.includes('if (blend >= 1)'));
 });
+
+
+test('reconciliation keeps balance-only leaves out of the visible draw set',()=>{
+ const roots=baseGeoTiles(),root=roots[0],adjacent=roots[ICOSAHEDRON_ADJACENCY[0].edges[0].face];
+ const adjacentChildren=childrenOf(adjacent);
+ const touching=findTileNeighbors([root,...adjacentChildren]).links.find(link=>link.tile.id.key===root.id.key)!.neighbor;
+ const uneven=[...roots.filter(tile=>tile.id.key!==adjacent.id.key),...adjacentChildren.filter(tile=>tile.id.key!==touching.id.key),...childrenOf(touching)];
+ const runtime=new GeodesicSurfaceRuntime('visible-cover',{maxDepth:8,maxTiles:2048,stitchResolution:8});
+ runtime.reconcile(uneven,new Set([root.id.key]),2048);
+ const states=runtime.getTileStates();
+ const visible=states.filter(state=>state.visible);
+ assert.ok(states.length>uneven.length,'balancing should refine coarse neighbors');
+ assert.ok(visible.length>0,'visible root must remain covered by balanced descendants');
+ assert.ok(visible.every(state=>state.tile.id.face===root.id.face),'balance-only leaves from other faces must not be rendered');
+ assert.ok(visible.length<states.length,'topology-only leaves must not enter the GPU draw set');
+});
+
+test('reconciliation defaults to showing the requested cover when no visibility set is supplied',()=>{
+ const roots=baseGeoTiles(),runtime=new GeodesicSurfaceRuntime('default-visible',{maxTiles:128,stitchResolution:8});
+ runtime.reconcile(roots);
+ assert.equal(runtime.getTileStates().filter(state=>state.visible).length,20);
+});

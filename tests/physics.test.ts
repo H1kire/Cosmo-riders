@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AU,DAY,G,CelestialBody,PhysicsWorld,add,dot,gravitationalAcceleration,gravitationalParameter,magnitude,orbitalElementsToState,orbitalPeriod,propagateKepler,sphereOfInfluence,stateToOrbitalElements,vector3,createSolarSystemWorld,SOLAR_SYSTEM_DATA,SOLAR_SYSTEM_REFERENCE,executeIdealizedBurn,hohmannTransfer,engineThrustAtPressure,thrustToWeightRatio} from '../src/physics/index.ts';
+import {AU,DAY,G,CelestialBody,PhysicsWorld,add,dot,gravitationalAcceleration,gravitationalParameter,magnitude,orbitalElementsToState,orbitalPeriod,propagateKepler,sphereOfInfluence,stateToOrbitalElements,vector3,createSolarSystemWorld,createSolarSystemBodyCatalog,SOLAR_SYSTEM_DATA,SOLAR_SYSTEM_REFERENCE,executeIdealizedBurn,hohmannTransfer,engineThrustAtPressure,thrustToWeightRatio} from '../src/physics/index.ts';
 import {formatScientific} from '../src/presentation/math-format.ts';
 import {rotateStateToParentEquator} from '../src/physics/orbital-frame.ts';
 const earthMass=5.9722e24,earthMu=gravitationalParameter(earthMass);
@@ -290,4 +290,16 @@ test('JS ephemeris transforms Laplace-plane satellite states into the shared ecl
  assert.ok(Math.abs(magnitude(transformed.position)-1)<1e-12);
  assert.ok(Math.abs(magnitude(transformed.velocity)-1)<1e-12);
  assert.ok(Math.abs(transformed.velocity.z)>0.1);
+});
+
+
+test('WASM body catalogue preserves explicit Laplace-plane pole metadata',()=>{
+ const catalogue=createSolarSystemBodyCatalog();
+ const iapetus=catalogue.find(body=>body.id==='iapetus')!,phoebe=catalogue.find(body=>body.id==='phoebe')!;
+ assert.equal(iapetus.orbitalReferenceFrame,'laplace');
+ assert.equal(phoebe.orbitalReferenceFrame,'laplace');
+ assert.ok(Math.abs(Number(iapetus.orbitalPlanePoleRightAscensionRad)-288.7*Math.PI/180)<1e-12);
+ assert.ok(Math.abs(Number(iapetus.orbitalPlanePoleDeclinationRad)-78.9*Math.PI/180)<1e-12);
+ assert.ok(Math.abs(Number(phoebe.orbitalPlanePoleRightAscensionRad)-276*Math.PI/180)<1e-12);
+ assert.ok(Math.abs(Number(phoebe.orbitalPlanePoleDeclinationRad)-67.5*Math.PI/180)<1e-12);
 });

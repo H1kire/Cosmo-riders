@@ -130,7 +130,7 @@ impl PhysicsWorld{
   if !elements.semi_major_axis.is_finite()||elements.semi_major_axis<=0.0||elements.eccentricity>=1.0{
    return Err("Current osculating orbit is not a bound ellipse.".into())
   }
-  let half_nu=elements.true_anomaly*.5;
+  let half_nu=elements.true_anomaly*0.5;
   let eccentric_anomaly=2.0*((1.0-elements.eccentricity).sqrt()*half_nu.sin())
    .atan2((1.0+elements.eccentricity).sqrt()*half_nu.cos());
   let mean_anomaly=eccentric_anomaly-elements.eccentricity*eccentric_anomaly.sin();

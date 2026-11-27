@@ -202,7 +202,7 @@ export class Solar3DView{
   const webgpuReady=await this.initializeWebGPUBackend();
   if(!webgpuReady)throw new Error('Cosmo-riders требует WebGPU: '+(this.backendFallbackReason??'инициализация WebGPU не удалась.'));
   this.exposureCompensation=this.graphics.exposure;this.lastExposureUpdateMs=0;this.lastFrameDurationMs=0;this.averageFrameDurationMs=0;this.frameIntervalSamples=[];this.lastFrameStartedAt=0;
-  this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitElementRefs=new Map();
+  this.orbitSegmentCounts=new Map();this.orbitVisibilityStates=new Map();this.orbitSourceRefs=new Map();
   this.orbitCache=new Map();this.stellarSourceDefinitions=new Map();this.projected=[];this.labelNodes=new Map();
   await this.yieldToBrowser();this.markInitializationStage('webgpu-device-ready');
   this.graphicsChangeHandler=(event:Event)=>{
@@ -451,10 +451,12 @@ export class Solar3DView{
   const targetSegments=Math.ceil(Math.max(128,Math.min(1024,128+projected*.8+elements.eccentricity*320))/32)*32;
   let segments=this.orbitSegmentCounts.get(body.id)??128;
   if(targetSegments>segments*1.2||targetSegments<segments*.55){segments=targetSegments;this.orbitSegmentCounts.set(body.id,segments);}
+  if(typeof world.ensureOrbitPath==='function')void world.ensureOrbitPath(body.id,segments).catch(error=>{this.orbitPathErrors??=new Map();this.orbitPathErrors.set(body.id,error instanceof Error?error.message:String(error));});
+  const source=world.orbitPaths?.get(body.id);
+  if(!source||source.length<6)return;
   let path=this.orbitCache.get(body.id);
-  const elementsChanged=this.orbitElementRefs.get(body.id)!==elements;
-  if(!path||path.length!==(segments+1)*3||elementsChanged){
-   let source=world.orbitPaths?.get(body.id);if(!source){if(typeof world.ensureOrbitPath==='function')void world.ensureOrbitPath(body.id,segments).catch(error=>{this.orbitPathErrors??=new Map();this.orbitPathErrors.set(body.id,error instanceof Error?error.message:String(error));});return;}if(source.length<6)return;
+  const sourceChanged=this.orbitSourceRefs.get(body.id)!==source;
+  if(!path||path.length!==(segments+1)*3||sourceChanged){
    const sourceSegments=source.length/3-1;path=new Float32Array((segments+1)*3);
    for(let i=0;i<=segments;i++){
     const sourcePosition=i*sourceSegments/segments,lower=Math.floor(sourcePosition),upper=Math.min(sourceSegments,lower+1),blend=sourcePosition-lower;
@@ -463,7 +465,7 @@ export class Solar3DView{
     path[o+1]=(source[a+2]+(source[b+2]-source[a+2])*blend)/AU;
     path[o+2]=(source[a+1]+(source[b+1]-source[a+1])*blend)/AU;
    }
-   this.orbitCache.set(body.id,path);this.orbitElementRefs.set(body.id,elements);
+   this.orbitCache.set(body.id,path);this.orbitSourceRefs.set(body.id,source);
   }
   const model=[1,0,0,0,0,1,0,0,0,0,1,0,(parentState.position.x-renderOrigin.x)/AU,(parentState.position.z-renderOrigin.z)/AU,(parentState.position.y-renderOrigin.y)/AU,1];
   this.webgpuOrbits.push({id:body.id,points:path,model,color:body.id==='earth'?[.32,.58,.9]:[.18,.28,.42],opacity:.62*opacity});
@@ -602,7 +604,7 @@ export class Solar3DView{
   this.disposed=true;this.surfaceProfileCache.clear();this.longTaskObserver?.disconnect();
   window.removeEventListener('graphics-settings-change',this.graphicsChangeHandler);
   if(this.webgpuLossHandler)window.removeEventListener('graphics-backend-lost',this.webgpuLossHandler);
-  this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitElementRefs?.clear();
+  this.orbitSegmentCounts?.clear();this.orbitVisibilityStates?.clear();this.orbitSourceRefs?.clear();
   this.webgpuBackend?.dispose();this.webgpuBackend=null;this.webgpuCanvas=null;
   this.labels?.remove();this.labelNodes?.clear();this.orbitCache?.clear();this.stellarSourceDefinitions?.clear();
  }

@@ -106,7 +106,8 @@ export class GeodesicSurfaceRuntime {
   const balanced=balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles:this.options.maxTiles});
   if(balanced.violations>0)throw new Error('Desired leaf set cannot satisfy the 2:1 balance within configured limits.');
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
-  this.visible=new Set([...visibleKeys].filter(key=>this.active.has(key)));
+  // Балансувальні листки також потрібні для закриття швів на межі видимої області.
+  this.visible=new Set(this.active.keys());
   this.visibilityConfigured=true;
   this.rebuildTopology();
  }

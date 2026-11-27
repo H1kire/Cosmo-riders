@@ -89,6 +89,18 @@ export class WebGPUGeodesicSurfaceRenderer {
 
   hasMesh(tileKey: string): boolean { return this.meshes.has(tileKey); }
 
+  meshKeysForBody(bodyId: string): string[] {
+    const prefix = bodyId + '|';
+    return [...this.meshes.keys()].filter(key => key.startsWith(prefix));
+  }
+
+  releaseMesh(tileKey: string): void {
+    const mesh = this.meshes.get(tileKey);
+    if (!mesh) return;
+    mesh.positions.destroy?.(); mesh.normals.destroy?.(); mesh.uv.destroy?.(); mesh.indices.destroy?.(); mesh.uniform.destroy?.();
+    this.meshes.delete(tileKey);
+  }
+
   draw(pass: any, tileKey: string, draw: WebGPUGeodesicDraw): boolean {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
     const mesh = this.meshes.get(tileKey);
@@ -143,7 +155,8 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   let layer = i32(u.params.y);
   let resolution = max(u.pageInfo.x, 1.0);
   let pageSize = max(u.pageInfo.y, 1.0);
-  let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(u.params.w);
+  let gutter = floor(max(pageSize - resolution, 0.0) * 0.5);
+  let core = floor(input.uv * max(resolution - 1.0, 0.0)) + vec2<f32>(gutter);
   let heightCoord = clamp(vec2<i32>(core), vec2<i32>(0), vec2<i32>(pageSize) - vec2<i32>(1));
   let h = textureLoad(heightTex, heightCoord, layer, 0).r;
   let radiusRatio = 1.0 + (h * u.params.z) / max(u.params.x, 1.0);

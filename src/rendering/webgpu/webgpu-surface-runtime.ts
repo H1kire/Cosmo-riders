@@ -27,6 +27,7 @@ export class WebGPUSurfaceRuntime {
   private readonly inFlight = new Map<string, Promise<number | undefined>>();
   private readonly meshInFlight = new Map<string, Promise<GeodesicTileMesh>>();
   private readonly meshes = new Map<string, GeodesicTileMesh>();
+  private retainedMeshKeys: Set<string> | null = null;
   private disposed = false;
   private readonly ownsManager: boolean;
   private readonly ownsPages: boolean;
@@ -104,11 +105,15 @@ export class WebGPUSurfaceRuntime {
   }
 
   /** Генерує відсутні сторінки через існуючий WorkerPool та завантажує п'ять каналів у WebGPU. */
-  async uploadVisibleTiles(priority: (tile: GeoTile) => number = () => 0): Promise<void> {
+  async uploadVisibleTiles(priority: (tile: GeoTile) => number = () => 0, maxNewRequests = this.manager.workerPool.maxPendingTasks): Promise<void> {
     if (this.disposed) throw new Error('WebGPU surface runtime is disposed.');
     if (!this.pages.ready) throw new Error('WebGPU surface page arrays are not initialized.');
     const tasks: Promise<number | undefined>[] = [];
-    for (const [tileKey, tile] of this.visible) {
+    const availableRequests = Math.max(0, this.manager.workerPool.maxPendingTasks - this.manager.pendingCount);
+    const requestBudget = Math.min(maxNewRequests, availableRequests);
+    let started = 0;
+    const ordered = [...this.visible.entries()].sort((a, b) => priority(b[1]) - priority(a[1]));
+    for (const [tileKey, tile] of ordered) {
       const request = this.requestFor(tile);
       const pageKey = surfaceTileKey(request);
       const resident = this.pages.getLayer(pageKey);
@@ -117,7 +122,9 @@ export class WebGPUSurfaceRuntime {
         continue;
       }
       let pending = this.inFlight.get(pageKey);
+      if (!pending && started >= requestBudget) continue;
       if (!pending) {
+        started++;
         this.manager.markUploadPending(pageKey);
         pending = this.manager.request(request, priority(tile)).then(surface => {
           if (this.disposed || !this.visible.has(tileKey)) return undefined;
@@ -142,12 +149,17 @@ export class WebGPUSurfaceRuntime {
     let pending = this.meshInFlight.get(key);
     if (!pending) {
       pending = this.manager.requestMesh(tile, resolution, radiusM, priority, undefined, coarseEdgeMask).then(mesh => {
-        if (!this.disposed) this.meshes.set(key, mesh);
+        if (!this.disposed && (this.retainedMeshKeys === null || this.retainedMeshKeys.has(key))) this.meshes.set(key, mesh);
         return mesh;
       }).finally(() => this.meshInFlight.delete(key));
       this.meshInFlight.set(key, pending);
     }
     return pending;
+  }
+
+  retainMeshes(keys: ReadonlySet<string>): void {
+    this.retainedMeshKeys = new Set(keys);
+    for (const key of this.meshes.keys()) if (!this.retainedMeshKeys.has(key)) this.meshes.delete(key);
   }
 
   getPageLayer(tileKey: string): number | undefined {

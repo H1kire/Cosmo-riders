@@ -44,6 +44,10 @@ export interface WebGPURingDraw { id: string; model: ArrayLike<number>; }
 export interface WebGPUFrame {
   viewProjection: ArrayLike<number>;
   cameraPosition: ArrayLike<number>;
+  cameraForward?: ArrayLike<number>;
+  verticalFovRadians?: number;
+  viewportWidthPx?: number;
+  viewportHeightPx?: number;
   timeSeconds: number;
   bodies: readonly WebGPUBodyDraw[];
   orbits: readonly WebGPUOrbitDraw[];
@@ -649,7 +653,7 @@ export class WebGPUBackend {
     const matrix = new Float32Array(92);
     for (const body of frame.bodies) {
       const geodesicReady = body.surfaceProfile && this.geodesicSystem
-        ? this.geodesicSystem.drawBody(pass, body, body.surfaceProfile, frame.viewProjection, frame.cameraPosition, frame.sunPosition)
+        ? this.geodesicSystem.drawBody(pass, body, body.surfaceProfile, frame.viewProjection, frame.cameraPosition, frame.sunPosition, frame.cameraForward ?? [0, 0, -1], frame.verticalFovRadians ?? Math.PI / 3, frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height)
         : false;
       if (geodesicReady) continue;
       pass.setPipeline(this.pipeline);

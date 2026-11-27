@@ -88,3 +88,17 @@ test('WebGPU runtime rejects duplicate visible geodesic tiles', () => {
   assert.throws(() => runtime.setVisibleTiles([baseGeoTiles()[0], baseGeoTiles()[0]]), /duplicate/);
   runtime.dispose();
 });
+
+
+test('visible page scheduling does not exceed the available worker queue slots',async()=>{
+ const device=fakeDevice();
+ const manager:any=new FakeManager();
+ manager.pendingCount=2;
+ manager.workerPool={maxPendingTasks:2};
+ const runtime=new WebGPUSurfaceRuntime(device,'queue-budget',profile,{resolution:8,gutter:2},manager as any);
+ for(let i=0;i<5;i++)runtime.pages.initializeStep();
+ runtime.setVisibleTiles(baseGeoTiles().slice(0,3));
+ await runtime.uploadVisibleTiles();
+ assert.equal(manager.requests.length,0);
+ runtime.dispose();
+});

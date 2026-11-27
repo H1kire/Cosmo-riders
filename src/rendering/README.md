@@ -48,7 +48,8 @@ WebGPUBackend
       → per-body GeodesicSurfaceRuntime (20 icosahedron root faces,
         Quadtree selection, 2:1 balancing and stitch masks)
       → shared VirtualSurfaceManager / SurfaceWorkerPool
-          → generateSurfaceTile() in geodesic/surface-tile.ts
+          → surface-tile-worker.ts → WASM generate_surface_tile()
+              → crates/cosmo-core/src/surface.rs::generate_tile()
       → shared WebGPUSurfacePageCache (five texture-array channels)
       → WebGPUGeodesicSurfaceRenderer (WGSL, indexed patch meshes,
         physical Height displacement, PBR material and analytical shadows)

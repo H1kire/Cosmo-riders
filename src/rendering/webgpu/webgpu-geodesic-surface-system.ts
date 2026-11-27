@@ -265,6 +265,8 @@ export class WebGPUGeodesicSurfaceSystem {
     return true;
   }
 
+  afterSubmit(): void { this.renderer?.afterSubmit(); }
+
   endFrame(): void {
     for (const [id, runtime] of this.runtimes) if (!this.active.has(id)) runtime.setVisibleTiles([]);
     if (!this.renderer) return;

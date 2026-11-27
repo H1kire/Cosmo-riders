@@ -22,7 +22,7 @@ The eight planets use the JPL Solar System Dynamics *Approximate Positions of th
 - Earth: mass 5.9722e24 kg; mean radius 6371008.4 m.
 - Moon: mass 7.342e22 kg; mean radius 1737400 m.
 - Earth heliocentric values in the table are retained from the original fixture for test stability.
-- Moon geocentric rounded elements: a=384400000 m, e=0.0549, i=5.145 deg, Ω=125.08 deg, ω=318.15 deg, M=115.365 deg. These are educational mean values; lunar perturbations and rapid element variation are not modeled.
+- Moon geocentric mean elements at J2000.0: a=384400000 m, e=0.0554, i=5.16 deg, Ω=125.08 deg, ω=318.15 deg, M=135.27 deg. These values match the JPL Planetary Satellite Mean Elements table (DE405/LE405, 2000-01-01.5 TDB). They are mean elements, not a date-specific osculating state; solar perturbations and the 18.6-year nodal / 5.997-year apsidal cycles are not integrated.
 
 ## Sources
 - NASA/JPL Solar System Dynamics, *Approximate Positions of the Planets*: https://ssd.jpl.nasa.gov/planets/approx_pos.html — planetary secular elements, conventions and validity interval.

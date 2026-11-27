@@ -1,6 +1,6 @@
 import { VirtualSurfaceManager } from '../geodesic/virtual-surface-manager.ts';
 import type { GeoTile } from '../geodesic/icosphere.ts';
-import type { SurfaceProfile, SurfaceTileRequest } from '../geodesic/surface-tile.ts';
+import { surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../geodesic/surface-tile.ts';
 import { WebGPUSurfacePageCache } from './webgpu-surface-page-cache.ts';
 
 export interface WebGPUSurfaceRuntimeOptions {
@@ -74,8 +74,9 @@ export class WebGPUSurfaceRuntime {
       if (next.has(tile.id.key)) throw new Error('Visible geodesic tile list contains duplicate keys.');
       next.set(tile.id.key, tile);
     }
+    const nextPageKeys = new Set([...next.values()].map(tile => this.requestFor(tile)).map(surfaceTileKey));
     for (const key of this.pinned) {
-      if (!next.has(key)) {
+      if (!nextPageKeys.has(key)) {
         this.pages.unpin(key);
         this.pinned.delete(key);
         this.manager.markVisible(key, false);
@@ -84,9 +85,10 @@ export class WebGPUSurfaceRuntime {
     this.visible.clear();
     for (const [key, tile] of next) {
       this.visible.set(key, tile);
-      this.manager.markVisible(key, true);
-      if (this.pages.getLayer(key) !== undefined && !this.pinned.has(key) && this.pages.pin(key)) {
-        this.pinned.add(key);
+      const pageKey = surfaceTileKey(this.requestFor(tile));
+      this.manager.markVisible(pageKey, true);
+      if (this.pages.getLayer(pageKey) !== undefined && !this.pinned.has(pageKey) && this.pages.pin(pageKey)) {
+        this.pinned.add(pageKey);
       }
     }
   }
@@ -96,31 +98,25 @@ export class WebGPUSurfaceRuntime {
     if (this.disposed) throw new Error('WebGPU surface runtime is disposed.');
     if (!this.pages.ready) throw new Error('WebGPU surface page arrays are not initialized.');
     const tasks: Promise<number | undefined>[] = [];
-    for (const [key, tile] of this.visible) {
-      const resident = this.pages.getLayer(key);
+    for (const [tileKey, tile] of this.visible) {
+      const request = this.requestFor(tile);
+      const pageKey = surfaceTileKey(request);
+      const resident = this.pages.getLayer(pageKey);
       if (resident !== undefined) {
-        if (!this.pinned.has(key) && this.pages.pin(key)) this.pinned.add(key);
+        if (!this.pinned.has(pageKey) && this.pages.pin(pageKey)) this.pinned.add(pageKey);
         continue;
       }
-      let pending = this.inFlight.get(key);
+      let pending = this.inFlight.get(pageKey);
       if (!pending) {
-        const request: SurfaceTileRequest = {
-          planetId: this.planetId,
-          seed: this.seed,
-          tile: tile.id,
-          resolution: this.resolution,
-          gutter: this.gutter,
-          profile: this.profile
-        };
-        this.manager.markUploadPending(key);
+        this.manager.markUploadPending(pageKey);
         pending = this.manager.request(request, priority(tile)).then(surface => {
-          if (this.disposed || !this.visible.has(key)) return undefined;
+          if (this.disposed || !this.visible.has(tileKey)) return undefined;
           const layer = this.pages.upload(surface);
-          this.manager.markGpuReady(key);
-          if (this.pages.pin(key)) this.pinned.add(key);
+          this.manager.markGpuReady(pageKey);
+          if (this.pages.pin(pageKey)) this.pinned.add(pageKey);
           return layer;
-        }).finally(() => this.inFlight.delete(key));
-        this.inFlight.set(key, pending);
+        }).finally(() => this.inFlight.delete(pageKey));
+        this.inFlight.set(pageKey, pending);
       }
       tasks.push(pending);
     }
@@ -128,7 +124,19 @@ export class WebGPUSurfaceRuntime {
   }
 
   getPageLayer(tileKey: string): number | undefined {
-    return this.pages.getLayer(tileKey);
+    const tile = this.visible.get(tileKey);
+    return tile ? this.pages.getLayer(surfaceTileKey(this.requestFor(tile))) : undefined;
+  }
+
+  private requestFor(tile: GeoTile): SurfaceTileRequest {
+    return {
+      planetId: this.planetId,
+      seed: this.seed,
+      tile: tile.id,
+      resolution: this.resolution,
+      gutter: this.gutter,
+      profile: this.profile
+    };
   }
 
   dispose(): void {

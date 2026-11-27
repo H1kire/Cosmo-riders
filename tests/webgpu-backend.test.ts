@@ -52,6 +52,9 @@ test('Solar3DView submits real body transforms and orbit paths to the native Web
   assert.match(solar, /waterFraction:body\.surface\?\.waterFraction/);
   assert.match(backend, /depth24plus/);
   assert.match(backend, /const levels: Array<\[number, number\]> = \[\[10, 14\], \[22, 30\], \[44, 60\], \[128, 192\]\]/);
+  assert.match(backend, /const usesGeodesicSurface = Boolean\(body\.surfaceProfile/);
+  assert.match(backend, /if \(usesGeodesicSurface\) \{/);
+  assert.match(backend, /Тверда планета не переходить на спрощену сферу/);
   assert.match(backend, /body\.lod/);
   assert.match(solar, /lod:level/);
   assert.match(backend, /device\.lost/);

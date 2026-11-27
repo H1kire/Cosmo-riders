@@ -652,10 +652,18 @@ export class WebGPUBackend {
     pass.setPipeline(this.pipeline);
     const matrix = new Float32Array(92);
     for (const body of frame.bodies) {
-      const geodesicReady = body.surfaceProfile && this.geodesicSystem
-        ? this.geodesicSystem.drawBody(pass, body, body.surfaceProfile, frame.viewProjection, frame.cameraPosition, frame.sunPosition, frame.cameraForward ?? [0, 0, -1], frame.verticalFovRadians ?? Math.PI / 3, frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height)
-        : false;
-      if (geodesicReady) continue;
+      const usesGeodesicSurface = Boolean(body.surfaceProfile &&
+        body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant');
+      if (usesGeodesicSurface) {
+        this.geodesicSystem?.drawBody(
+          pass, body, body.surfaceProfile!, frame.viewProjection, frame.cameraPosition,
+          frame.sunPosition, frame.cameraForward ?? [0, 0, -1],
+          frame.verticalFovRadians ?? Math.PI / 3,
+          frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height
+        );
+        // Тверда планета не переходить на спрощену сферу, поки геодезичні сторінки завантажуються.
+        continue;
+      }
       pass.setPipeline(this.pipeline);
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;

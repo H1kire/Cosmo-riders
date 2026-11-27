@@ -21,7 +21,7 @@ test('atmospheric scattering helpers remain finite and physically bounded',()=>{
 });
 test('graphics presets expose the expected quality tiers',()=>{
  assert.equal(createGraphicsSettings('low').bloom,false);
- assert.equal(createGraphicsSettings('ultra').shadowMapSize,2048);
+ assert.equal(createGraphicsSettings('ultra').shadowOccluders,8);
  assert.equal(createGraphicsSettings('high').hdr,true);
 });
 test('adaptive quality steps down under sustained frame-time pressure',()=>{

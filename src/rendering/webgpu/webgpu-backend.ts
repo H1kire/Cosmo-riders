@@ -481,7 +481,7 @@ fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
   let coverage = clamp(body.material.y, 0.02, 0.98);
   let opacity = clamp(body.material.z, 0.0, 1.0);
   let erosion = clamp(body.color.a, 0.0, 1.0);
-  let banding = clamp(body.lighting.z, 0.0, 1.0);
+  let banding = clamp(body.lightAndEmission.w, 0.0, 1.0);
   let lightDirection = normalize(body.sunPosition.xyz - center);
   let cosine = clamp(dot(-viewRay, lightDirection), -1.0, 1.0);
   let forwardPhase = miePhase(cosine, 0.58);
@@ -503,8 +503,8 @@ fn cloudVolume(worldPosition: vec3<f32>) -> vec4<f32> {
     let selfShadow = exp(-sunDensity * 1.65);
     let planetShadow = surfaceShadowVisibility(samplePosition);
     let directLight = max(dot(radialDirection, sunDirection), 0.0);
-    let eclipse = clamp(body.lighting.x, 0.0, 1.0);
-    let illumination = 0.24 + 0.76 * directLight * selfShadow * planetShadow * eclipse;
+    let solarIrradiance = max(body.lighting.x, 0.0);
+    let illumination = solarIrradiance * (0.24 + 0.76 * directLight * selfShadow * planetShadow);
     let stepOptical = density * opacity * stepLength / max(thickness, 0.000001) * 1.85;
     let transmittance = exp(-opticalDepth);
     let silverLining = 0.24 + forwardPhase * 1.9;
@@ -1153,12 +1153,12 @@ export class WebGPUBackend {
       base.set([frame.sunPosition[0], frame.sunPosition[1], frame.sunPosition[2], body.shadowsEnabled === false ? 0 : 1], 56);
       base.set(body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, 60);
       base.set(body.ringShadow ? [body.ringShadow.innerRadiusAU, body.ringShadow.outerRadiusAU, body.ringShadow.opacity, 1] : [0, 0, 0, 0], 92);
-      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], lighting?: readonly [number, number, number, number], cloudErosion = 0) => {
+      const drawShell = (resourceId: string, scale: number, color: readonly [number, number, number], params: readonly [number, number, number, number], surfaceParams: readonly [number, number, number, number] = [body.ironFraction ?? 0, body.tectonicActivity ?? 0, body.volcanicActivity ?? 0, body.erosion ?? 0], lighting?: readonly [number, number, number, number], cloudErosion = 0, cloudBanding = 0) => {
         const resources = this.resourcesFor(resourceId);
         const shell = new Float32Array(base);
         for (const index of [0, 1, 2, 4, 5, 6, 8, 9, 10]) shell[index] *= scale;
         shell.set([color[0], color[1], color[2], cloudErosion], 32);
-        shell.set([body.gasGiant?.type ?? 0, body.gasGiant?.bandStrength ?? 0, body.gasGiant?.stormStrength ?? 0, 1], 36);
+        shell.set([body.gasGiant?.type ?? 0, body.gasGiant?.bandStrength ?? 0, body.gasGiant?.stormStrength ?? 0, cloudBanding], 36);
         shell.set(params, 40);
         shell.set(surfaceParams, 44);
         if (lighting) shell.set(lighting, 52);
@@ -1180,8 +1180,8 @@ export class WebGPUBackend {
         drawShell(body.id + ':cloud:' + cloudIndex, 1 + Math.max(0.0001, cloud.altitudeRatio), [0.82, 0.88, 0.96],
           [10, cloud.coverage, cloud.opacity, Math.max(1, cloud.scale)],
           [cloud.wind[0], cloud.wind[1], cloud.altitudeRatio, cloud.thicknessRatio],
-          [solarIrradiance, 1, cloud.banding, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
-          cloud.erosion);
+          [solarIrradiance, 1, frame.sunRadius ?? 0, Math.max(1, Math.min(6, Math.min(frame.cloudDetail ?? 3, cloud.detail)))],
+          cloud.erosion, cloud.banding);
       }
     }
     const ringConfigs: Record<string, { inner: number; outer: number; color: readonly [number, number, number]; opacity: number }> = {

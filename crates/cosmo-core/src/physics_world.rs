@@ -270,7 +270,7 @@ mod laplace_reference_frame_tests {
  fn laplace_orbit_uses_its_own_pole_instead_of_the_parent_spin_axis() {
   let body:BodyDefinition=serde_json::from_str(r#"{"id":"iapetus","name":"Iapetus","massKg":1.0,"meanRadiusM":1.0,"orbitalReferenceFrame":"laplace","orbitalPlanePoleRightAscensionRad":1.5707963267948966,"orbitalPlanePoleDeclinationRad":0.0}"#).unwrap();
   let parent:BodyDefinition=serde_json::from_str(r#"{"id":"saturn","name":"Saturn","massKg":1.0,"meanRadiusM":1.0,"poleRightAscensionRad":0.0,"poleDeclinationRad":1.5707963267948966}"#).unwrap();
-  let state=PropagatedState{position:Vec3::new(1.0,0.0,0.0),velocity:Vec3::new(0.0,1.0,0.0),iterations:0};
+  let state=PropagatedState{position:Vec3::new(0.0,1.0,0.0),velocity:Vec3::new(1.0,0.0,0.0),iterations:0};
   let transformed=parent_equator(state,&body,&parent);
   let obliquity=23.4392911_f64.to_radians();
   let laplace_pole=Vec3::new(0.0,obliquity.cos(),-obliquity.sin());

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateEclipse } from '../src/rendering/lighting/eclipse-system.ts';
 import { solarIrradianceForDisplay } from '../src/rendering/lighting/lighting-system.ts';
+import { bodyModelMatrix } from '../src/presentation/solar-3d.ts';
 import { rayleighPhase, miePhase, exponentialDensity, transmittance } from '../src/rendering/atmosphere/scattering.ts';
 import { createGraphicsSettings } from '../src/rendering/quality/quality-settings.ts';
 import { AdaptiveQuality } from '../src/rendering/quality/adaptive-quality.ts';
@@ -248,4 +249,20 @@ test('sphere mesh LOD uses the active internal render scale',async()=>{
  const source=await readFile(new URL('../src/presentation/solar-3d.ts',import.meta.url),'utf8');
  assert.ok(source.includes('radius*(h*this.graphics.renderScale/2)'));
  assert.ok(!source.includes('radius*(h/2)'));
+});
+
+
+test('tidal body orientation preserves its IAU spin pole and prime-meridian phase',()=>{
+ const epsilon=23.4392911*Math.PI/180;
+ const body={tidalLock:true,poleRightAscensionRad:Math.PI/2,poleDeclinationRad:0,axialTiltRad:0,primeMeridianRad:0};
+ const state={position:{x:1,y:0,z:0},velocity:{x:0,y:1,z:0}};
+ const parent={position:{x:0,y:0,z:0},velocity:{x:0,y:0,z:0}};
+ const matrix=bodyModelMatrix(body,1,[0,0,0],0,state,parent,0);
+ const spinAxis=[matrix[1],matrix[5],matrix[9]],forward=[matrix[2],matrix[6],matrix[10]];
+ const expected=[0,-Math.sin(epsilon),Math.cos(epsilon)];
+ assert.ok(Math.hypot(...spinAxis.map((value,index)=>value-expected[index]))<1e-12);
+ const phased=bodyModelMatrix({...body,primeMeridianRad:Math.PI/2},1,[0,0,0],0,state,parent,0);
+ const phasedAxis=[phased[1],phased[5],phased[9]],phasedForward=[phased[2],phased[6],phased[10]];
+ assert.ok(Math.hypot(...phasedAxis.map((value,index)=>value-expected[index]))<1e-12);
+ assert.ok(Math.abs(forward.reduce((sum,value,index)=>sum+value*phasedForward[index],0))<1e-12);
 });

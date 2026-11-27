@@ -571,6 +571,8 @@ test('WebGPU geodesic startup reserves the twenty-face root cover before selecti
  const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
  assert.ok(source.includes('const transitionBudget = Math.max(20, this.pages.capacity - sourceCount)'));
  assert.ok(source.includes('maxTiles: transitionBudget'));
+ assert.ok(source.includes('if (!topology.transition && this.pages.capacity < 40)'));
+ assert.ok(source.includes('selection = { tiles: baseGeoTiles(), stats: selection.stats }'));
  assert.ok(source.includes('visibleSignature: roots.map(tile => tile.id.key).sort().join(\',\')'));
  assert.ok(source.includes('(sourceKeys.has(tile.id.key) ? 1_000_000 : 0)'));
  assert.ok(source.includes('sourceKeys.has(tile.id.key) ? 10_000 : 10 + tile.id.level'));

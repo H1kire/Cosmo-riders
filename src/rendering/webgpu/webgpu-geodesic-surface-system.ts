@@ -122,6 +122,11 @@ export class WebGPUGeodesicSurfaceSystem {
       previousSplitKeys: topology.splitKeys
     });
 
+    if (!topology.transition && this.pages.capacity < 40) {
+      // Якщо немає місця одночасно для кореневого та цільового наборів, залишаємо всі 20 граней без LOD-перемикання.
+      selection = { tiles: baseGeoTiles(), stats: selection.stats };
+    }
+
     const signature = selection.tiles.map(tile => tile.id.key).sort().join(',');
     if (signature !== topology.visibleSignature) {
       try {

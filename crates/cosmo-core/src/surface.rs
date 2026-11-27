@@ -110,24 +110,45 @@ pub fn generate_tile(face:u32,path:&str,resolution:u32,gutter:u32,p:&SurfaceProf
  let tile=resolve_tile(face,path)?;let width=resolution+2*gutter;let count=(width*width) as usize;
  let mut out=TileOutput{albedo:Vec::with_capacity(count*4),normal:Vec::with_capacity(count*3),height:Vec::with_capacity(count),roughness:Vec::with_capacity(count),material:Vec::with_capacity(count)};
  let plate_set=if p.kind=="gas-giant"||p.kind=="ice-giant"{Vec::new()}else{plates(p.seed as u32,p)};
- let step=1.0/(resolution as f64*2.0_f64.powi(tile.level as i32));
  let(negative_limit,positive_limit)=height_limits(p);
  // Процедурна висота масштабується до фізичного діапазону конкретного небесного тіла.
  let height_fraction=|v:f64|clamp(v*(if v<0.0{negative_limit}else{positive_limit})/p.mean_radius_m,-negative_limit/p.mean_radius_m,positive_limit/p.mean_radius_m);
+ let mut directions=Vec::with_capacity(count);
+ let mut displaced_positions=Vec::with_capacity(count);
+ let mut samples=Vec::with_capacity(count);
+
+ // Перший прохід: один дорогий геологічний семпл на texel.
  for row in -(gutter as i32)..(resolution as i32+gutter as i32){for col in -(gutter as i32)..(resolution as i32+gutter as i32){
   let px=(col as f64+0.5)/resolution as f64;let py=(row as f64+0.5)/resolution as f64;
   let q=px.signum()*px.abs().sqrt();let u=q*(1.0-py);let v=q*py;
   let d=barycentric_direction(tile.triangle,u,v)?;let s=sample(d,p,&plate_set,tile.level);
-  let height_at=|direction:Vec3|->f64{if p.kind=="gas-giant"||p.kind=="ice-giant"{0.0}else{geology(direction,p,&plate_set,tile.level).height}};
-  let reference=if d.y.abs()<0.85{Vec3::new(0.0,1.0,0.0)}else{Vec3::new(1.0,0.0,0.0)};
-  let tu=normalize(reference.cross(d));let tv=normalize(d.cross(tu));
-  let pu=normalize(d.add(tu.scale(step)));let mu=normalize(d.sub(tu.scale(step)));let pv=normalize(d.add(tv.scale(step)));let mv=normalize(d.sub(tv.scale(step)));
-  let su=(height_fraction(height_at(pu))-height_fraction(height_at(mu)))/(2.0*step);
-  let sv=(height_fraction(height_at(pv))-height_fraction(height_at(mv)))/(2.0*step);
-  let normal=normalize(d.sub(tu.scale(su)).sub(tv.scale(sv)));
+  let height_m=height_fraction(s.height)*p.mean_radius_m;
+  let radius_scale=1.0+height_m/p.mean_radius_m;
+  directions.push(d);
+  displaced_positions.push(d.scale(radius_scale));
+  samples.push(s);
+  out.height.push(height_m as f32);
+ }}
+
+ // Другий прохід: нормаль із похідних готової зміщеної геометрії.
+ // Не повторюємо fbm/пошук тектонічних плит чотири рази для кожного texel.
+ let width=width as usize;
+ for row in 0..width{for col in 0..width{
+  let left=row*width+col.saturating_sub(1);
+  let right=row*width+(col+1).min(width-1);
+  let up=row.saturating_sub(1)*width+col;
+  let down=(row+1).min(width-1)*width+col;
+  let dx=displaced_positions[right].sub(displaced_positions[left]);
+  let dy=displaced_positions[down].sub(displaced_positions[up]);
+  let direction=directions[row*width+col];
+  let mut normal=dx.cross(dy);
+  if normal.dot(direction)<0.0{normal=normal.scale(-1.0);}
+  normal=if normal.norm2()<1e-24{direction}else{normalize(normal)};
+  let s=samples[row*width+col];
   set_u8(&mut out.albedo,&[s.color[0],s.color[1],s.color[2],1.0]);
   set_u8(&mut out.normal,&[normal.x*0.5+0.5,normal.y*0.5+0.5,normal.z*0.5+0.5]);
-  out.height.push((height_fraction(s.height)*p.mean_radius_m) as f32);out.roughness.push((clamp(s.rough,0.0,1.0)*255.0).round() as u8);out.material.push(s.material);
+  out.roughness.push((clamp(s.rough,0.0,1.0)*255.0).round() as u8);
+  out.material.push(s.material);
  }}
  Ok(out)
 }

@@ -98,7 +98,10 @@ export class WebGPUGeodesicSurfaceSystem {
     const layers = visible.map(tile => ({ tile, layer: runtime.getPageLayer(tile.id.key), key: body.id + '|' + tile.id.key }));
     if (layers.some(item => item.layer === undefined || !renderer.hasMesh(item.key))) return false;
     for (const item of layers) {
-      renderer.draw(pass, item.key, { viewProjection, model, radiusM: profile.meanRadiusM, pageLayer: item.layer!, lightDirection });
+      renderer.draw(pass, item.key, {
+        viewProjection, model, radiusM: profile.meanRadiusM, pageLayer: item.layer!, lightDirection,
+        cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])]
+      });
     }
     return true;
   }

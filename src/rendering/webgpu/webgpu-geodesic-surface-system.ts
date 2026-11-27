@@ -32,6 +32,14 @@ interface PlanetTopology {
   splitKeys: Set<string>;
   visibleSignature: string | null;
   lastStats: GeodesicLodStats | null;
+  lastSelection: { readonly tiles: readonly GeoTile[]; readonly stats: GeodesicLodStats } | null;
+  lastSelectionCamera: Vec3 | null;
+  lastSelectionForward: Vec3 | null;
+  lastSelectionAt: number;
+  lastSelectionFov: number;
+  lastSelectionWidth: number;
+  lastSelectionHeight: number;
+  lastSelectionBudget: number;
   transition: TopologyTransition | null;
 }
 const MAX_PAGE_LAYERS = 256;
@@ -127,19 +135,47 @@ export class WebGPUGeodesicSurfaceSystem {
     const sourceCount = topology.transition?.source.length ??
       topology.runtime.getTileStates().filter(state => state.visible).length;
     const transitionBudget = Math.max(20, this.pages.capacity - sourceCount);
-    let selection = selectGeodesicLod({
-      positionM: localCamera,
-      forward: localForward,
-      verticalFovRadians,
-      viewportWidthPx,
-      viewportHeightPx
-    }, {
-      planetRadiusM: profile.meanRadiusM,
-      targetErrorPx: this.settings.meshResolution >= 64 ? 1.5 : 2.5,
-      maxDepth: 12,
-      maxTiles: transitionBudget,
-      previousSplitKeys: topology.splitKeys
-    });
+    const selectionTime = clockNow();
+    const previousCamera = topology.lastSelectionCamera;
+    const previousForward = topology.lastSelectionForward;
+    const cameraDistance = Math.hypot(...localCamera);
+    const movementLimit = Math.max(profile.meanRadiusM * 0.0015, cameraDistance * 0.00025);
+    const moved = !previousCamera || Math.hypot(
+      localCamera[0] - previousCamera[0],
+      localCamera[1] - previousCamera[1],
+      localCamera[2] - previousCamera[2]
+    ) > movementLimit;
+    const rotated = !previousForward || dot(localForward, previousForward) < 0.99998;
+    const selectionStale = selectionTime - topology.lastSelectionAt >= 120;
+    const selectionChanged = moved || rotated || selectionStale ||
+      topology.lastSelectionFov !== verticalFovRadians ||
+      topology.lastSelectionWidth !== viewportWidthPx ||
+      topology.lastSelectionHeight !== viewportHeightPx ||
+      topology.lastSelectionBudget !== transitionBudget;
+    let selection = topology.lastSelection;
+    if (!selection || selectionChanged) {
+      selection = selectGeodesicLod({
+        positionM: localCamera,
+        forward: localForward,
+        verticalFovRadians,
+        viewportWidthPx,
+        viewportHeightPx
+      }, {
+        planetRadiusM: profile.meanRadiusM,
+        targetErrorPx: this.settings.meshResolution >= 64 ? 1.5 : 2.5,
+        maxDepth: 12,
+        maxTiles: transitionBudget,
+        previousSplitKeys: topology.splitKeys
+      });
+      topology.lastSelection = selection;
+      topology.lastSelectionCamera = [...localCamera];
+      topology.lastSelectionForward = [...localForward];
+      topology.lastSelectionAt = selectionTime;
+      topology.lastSelectionFov = verticalFovRadians;
+      topology.lastSelectionWidth = viewportWidthPx;
+      topology.lastSelectionHeight = viewportHeightPx;
+      topology.lastSelectionBudget = transitionBudget;
+    }
 
     if (!topology.transition && this.pages.capacity < 40) {
       // Якщо немає місця одночасно для кореневого та цільового наборів, залишаємо всі 20 граней без LOD-перемикання.
@@ -353,6 +389,14 @@ export class WebGPUGeodesicSurfaceSystem {
         // Початковий стан відповідає повному набору двадцяти базових граней.
         visibleSignature: roots.map(tile => tile.id.key).sort().join(','),
         lastStats: null,
+        lastSelection: null,
+        lastSelectionCamera: null,
+        lastSelectionForward: null,
+        lastSelectionAt: 0,
+        lastSelectionFov: 0,
+        lastSelectionWidth: 0,
+        lastSelectionHeight: 0,
+        lastSelectionBudget: 0,
         transition: null
       };
       this.topologies.set(id, topology);

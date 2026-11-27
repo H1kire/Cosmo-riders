@@ -98,7 +98,7 @@ export function calculateCameraClipPlanes(cameraRadiusAU:number,focusRadiusAU:nu
  if(radius<=0)return[Math.max(1e-10,cameraRadius*.01),100];
  const clearance=Math.max(0,cameraRadius-radius);
  const near=Math.max(1e-12,Math.min(cameraRadius*.01,clearance>0?clearance*.1:cameraRadius*.001));
- const far=Math.max(radius*256,cameraRadius*8,near*256);
+ const far=100;
  return[near,far];
 }
 

@@ -24,7 +24,8 @@ pub struct BodyDefinition{
  #[serde(default)]pub prime_meridian_rad:f64,#[serde(default)]pub rotation_epoch_seconds:f64,
  #[serde(default)]pub tidal_lock:bool,#[serde(default)]pub equatorial_radius_m:Option<f64>,#[serde(default)]pub j2:f64,
  #[serde(default)]pub solar_day_seconds:Option<f64>,#[serde(default)]pub atmosphere_composition:Vec<String>,
- #[serde(default)]pub has_rings:bool,#[serde(default="frame")]pub orbital_reference_frame:String
+ #[serde(default)]pub has_rings:bool,#[serde(default="frame")]pub orbital_reference_frame:String,
+ #[serde(default)]pub orbital_plane_pole_right_ascension_rad:Option<f64>,#[serde(default)]pub orbital_plane_pole_declination_rad:Option<f64>
 }
 fn one()->i8{1} fn frame()->String{"ecliptic".into()}
 #[derive(Clone,Copy,Debug,Deserialize)]
@@ -78,9 +79,13 @@ fn gravity_from_bodies(bodies:&[GravityBody],position:Vec3)->Result<Vec3,String>
 struct Vessel{id:String,primary:String,p:Vec3,vel:Vec3,r:Vec3,v:Vec3,mass:f64,engines:Vec<Engine>,last_thrust_n:f64,last_mass_flow_kg_s:f64,last_acceleration_m_s2:f64,last:Option<PrimarySwitch>,history:Vec<PrimarySwitch>}
 impl Vessel{fn snapshot(&self)->VesselState{VesselState{id:self.id.clone(),primary_body_id:self.primary.clone(),position:arr(self.p),velocity:arr(self.vel),relative_position:arr(self.r),relative_velocity:arr(self.v),mass_kg:self.mass,last_primary_switch:self.last.clone(),primary_body_history:self.history.clone()}}}
 fn parent_equator(s:PropagatedState,b:&BodyDefinition,p:&BodyDefinition)->PropagatedState{
- if b.orbital_reference_frame!="parent-equator"{return s}
- let(Some(ra),Some(dec))=(p.pole_right_ascension_rad,p.pole_declination_rad)else{return s};
- let e=23.4392911_f64.to_radians();let pole=Vec3::new(dec.cos()*ra.cos(),e.cos()*dec.cos()*ra.sin()+e.sin()*dec.sin(),-e.sin()*dec.cos()*ra.sin()+e.cos()*dec.sin());
+ let (ra,dec)=match b.orbital_reference_frame.as_str(){
+  "parent-equator"=>(p.pole_right_ascension_rad,p.pole_declination_rad),
+  "laplace"=>(b.orbital_plane_pole_right_ascension_rad,b.orbital_plane_pole_declination_rad),
+  _=>return s
+ };
+ let(Some(ra),Some(dec))=(ra,dec)else{return s};
+ let e=23.4392911_f64.to_radians();let pole=Vec3::new(dec.cos()*ra.cos(),e.cos()*dec.cos()*ra.sin()+e.sin()*dec.sin(),-e.sin()*dec.cos()*ra.sin()+e.cos()*dec.sin()).normalized().unwrap_or(Vec3::new(0.0,0.0,1.0));
  let x=Vec3::new(1.0-pole.x*pole.x,-pole.y*pole.x,-pole.z*pole.x).normalized().unwrap_or(Vec3::new(1.0,0.0,0.0));let y=pole.cross(x).normalized().unwrap_or(Vec3::new(0.0,1.0,0.0));
  let f=|q:Vec3|x.scale(q.x).add(y.scale(q.y)).add(pole.scale(q.z));PropagatedState{position:f(s.position),velocity:f(s.velocity),iterations:s.iterations}
 }

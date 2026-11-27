@@ -69,7 +69,6 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameDrawCalls=0;
   private frameTriangles=0;
   private frameSubmittedVertices=0;
-  private frameSurfaceUploads=0;
   private uploadsRemainingThisFrame=0;
   private readonly frameVisibleTiles=new Set<string>();
 
@@ -92,7 +91,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   beginFrame(): void {
-    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.frameSurfaceUploads=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
+    this.active.clear();this.desiredMeshes.clear();this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
   }
 
   drawBody(
@@ -235,7 +234,6 @@ export class WebGPUGeodesicSurfaceSystem {
         this.uploadsRemainingThisFrame
       );
       this.uploadsRemainingThisFrame = Math.max(0, this.uploadsRemainingThisFrame - started);
-      this.frameSurfaceUploads += started;
     }
 
     const renderer = this.renderer;
@@ -343,7 +341,7 @@ export class WebGPUGeodesicSurfaceSystem {
   }
 
   getFrameDiagnostics() {
-    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls, geodesicTriangles: this.frameTriangles, geodesicSubmittedVertices: this.frameSubmittedVertices, surfaceUploadsPerFrame: this.frameSurfaceUploads };
+    return { surfaceBodyCount: this.active.size, visibleGeodesicTiles: this.frameVisibleTiles.size, geodesicDrawCalls: this.frameDrawCalls, geodesicTriangles: this.frameTriangles, geodesicSubmittedVertices: this.frameSubmittedVertices };
   }
 
   getCacheDiagnostics() {

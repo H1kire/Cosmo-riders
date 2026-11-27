@@ -1,5 +1,5 @@
 import { AU } from '../physics/constants.ts';
-import { LightingSystem, planetaryDisplayGain } from '../rendering/lighting/lighting-system.ts';
+import { LightingSystem } from '../rendering/lighting/lighting-system.ts';
 import { AtmosphereSystem } from '../rendering/atmosphere/atmosphere-system.ts';
 import { CloudSystem, type CloudLayer } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
@@ -405,7 +405,6 @@ export class Solar3DView{
   this.systemBodyById=new Map(bodies.map(body=>[body.id,body]));
   if(!this.effectsConfigured){this.configurePlanetEffects();this.effectsConfigured=true;}
   const focus=this.focusId?world.bodies.get(this.focusId):null,focusState=focus?states.get(focus.id):null;
-  const focusSunDistance=focusState?Math.hypot(focusState.position.x-sun.x,focusState.position.y-sun.y,focusState.position.z-sun.z)/AU:1;
   // Экспозиция кадра не зависит от фокуса; ослабление света учитывается отдельно на поверхности.
   this.exposureCompensation=this.graphics.exposure;
   this.lastExposureUpdateMs=frameStarted;

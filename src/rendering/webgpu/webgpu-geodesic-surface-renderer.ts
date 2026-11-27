@@ -25,6 +25,7 @@ export interface WebGPUGeodesicDraw {
 export class WebGPUGeodesicSurfaceRenderer {
   private readonly pipeline: any;
   private readonly sourcePipeline: any;
+  private readonly crossfadePipeline: any;
   private readonly depthPipeline: any;
   private readonly layout: any;
   private readonly sampler: any;
@@ -34,6 +35,7 @@ export class WebGPUGeodesicSurfaceRenderer {
   private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, sourcePipeline: any, crossfadePipeline: any, depthPipeline: any, layout: any, sampler: any) {
     this.pipeline = pipeline;
     this.sourcePipeline = sourcePipeline;
+    this.crossfadePipeline = crossfadePipeline;
     this.depthPipeline = depthPipeline;
     this.layout = layout;
     this.sampler = sampler;

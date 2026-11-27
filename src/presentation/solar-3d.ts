@@ -496,7 +496,7 @@ export class Solar3DView{
    const state=states.get(body.id);if(!state)continue;
    const p=mapper(body,state.position);if(!p)continue;
    const radius=body.meanRadiusM/AU,viewDistance=Math.hypot(p[0]-eye[0],p[1]-eye[1],p[2]-eye[2]);
-   const px=radius*(h/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
+   const px=radius*(h*this.graphics.renderScale/2)/(Math.tan(Math.PI/6)*Math.max(radius,viewDistance));
    const projectedScreen=this.project(vp,p,w/dpr,h/dpr);
    const level=selectMeshLod(px,this.graphics.maxMeshLod);
    

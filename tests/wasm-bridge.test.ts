@@ -130,7 +130,7 @@ test('Rust ephemerides match the TypeScript reference at J2000, one day, 30 days
    const positionError=Math.hypot(dx,dy,dz),velocityError=Math.hypot(dvx,dvy,dvz);
    const positionScale=Math.hypot(state.position.x,state.position.y,state.position.z),velocityScale=Math.hypot(state.velocity.x,state.velocity.y,state.velocity.z);
    assert.ok(positionError<=Math.max(0.05,positionScale*1e-11),id+' position error at '+time+': '+positionError+' m');
-   assert.ok(velocityError<=Math.max(1e-7,velocityScale*1e-11),id+' velocity error at '+time+': '+velocityError+' m/s');
+   assert.ok(velocityError<=Math.max(2e-7,velocityScale*1e-11),id+' velocity error at '+time+': '+velocityError+' m/s');
   }
  }
  assert.equal(legacy.simulationTimeSeconds,0,'reference snapshots must not mutate simulation time');

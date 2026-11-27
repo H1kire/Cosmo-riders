@@ -66,9 +66,10 @@ test('WebGPU page LRU never evicts pinned visible pages', () => {
   assert.equal(cache.getLayer('a'), 0);
   assert.equal(cache.getLayer('b'), undefined);
   cache.unpin('a');
-  assert.equal(cache.upload(tile('d')), 0);
-  assert.equal(cache.getLayer('a'), undefined);
-  assert.equal(cache.getLayer('d'), 0);
+  assert.equal(cache.upload(tile('d')), 1);
+  assert.equal(cache.getLayer('a'), 0);
+  assert.equal(cache.getLayer('c'), undefined);
+  assert.equal(cache.getLayer('d'), 1);
 });
 
 test('WebGPU page cache rejects mismatched channel dimensions', () => {

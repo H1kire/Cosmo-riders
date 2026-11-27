@@ -5,7 +5,7 @@ import { CloudSystem } from '../rendering/atmosphere/cloud-system.ts';
 import { createGraphicsSettings, type GraphicsSettings } from '../rendering/quality/quality-settings.ts';
 import { selectMeshLod, planetaryOrbitOpacity, planetaryLabelOpacity, projectedOrbitRadius } from '../rendering/quality/render-lod.ts';
 import { calculateEclipse } from '../rendering/lighting/eclipse-system.ts';
-import { surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
+import { createGeologicalProfile, surfaceSeedForId } from '../rendering/geodesic/surface-profile.ts';
 import { WebGPUBackend, type WebGPUBodyDraw } from '../rendering/webgpu/webgpu-backend.ts';
 
 const COLORS={sun:[1,.68,.24],mercury:[.48,.49,.5],venus:[.82,.62,.36],earth:[.2,.43,.82],moon:[.62,.65,.69],mars:[.72,.29,.2],io:[.82,.68,.24],titan:[.7,.43,.2],jupiter:[.7,.48,.31],saturn:[.76,.68,.48],uranus:[.35,.72,.76],neptune:[.22,.34,.76]};
@@ -381,7 +381,7 @@ export class Solar3DView{
    const parentState=body.parentId?states.get(body.parentId):null;
    const rotationAngle=world.renderRotationAngles?.get(body.id)??world.rotationAngles?.get(body.id)??0;
    const model=bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle);
-   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level};
+   const webgpuBody:WebGPUBodyDraw={id:body.id,model,position:p,color:(COLORS[body.id]??(body.parentId?[.5,.6,.8]:[1,.72,.42])) as [number,number,number],star:!body.parentId,kind:body.id==='mars'?7:body.id==='moon'?8:(KINDS[body.id]??2),seed:body.surfaceSeed??surfaceSeedForId(body.id),waterFraction:body.surface?.waterFraction??0,iceFraction:body.surface?.iceFraction??0,ironFraction:body.surface?.ironFraction??0,tectonicActivity:body.surface?.tectonicActivity??0,volcanicActivity:body.surface?.volcanicActivity??0,erosion:body.surface?.erosion??0,detail:Math.min(TEXTURE_DETAIL_CAPS[this.graphics.textureQuality]??1,Math.max(0,Math.min(1.5,Math.log2(Math.max(1,px)/18)/4))),lod:level,surfaceProfile:createGeologicalProfile(body)};
    webgpuBodies.push({id:body.id,model,...webgpuBody});
    const webgpuDraw=webgpuBodies[webgpuBodies.length-1];
    const isStar=!body.parentId;
@@ -443,7 +443,7 @@ export class Solar3DView{
    }
    sunVisible=visibility>.02;
   }
-  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
+  if(this.webgpuBackend?.state==='ready'){this.webgpuBackend.render({viewProjection:vp,bodies:webgpuBodies,orbits:this.webgpuOrbits,rings:this.webgpuRings,sunPosition:sunRenderPosition,sunRadius:696340000/AU,cameraPosition:eye,timeSeconds,sunUv:sunScreen?[sunScreen.x/(w/dpr),1-sunScreen.y/(h/dpr)]:[0.5,0.5],sunVisible,geodesicSettings:this.graphics.geodesic,postProcessing:{bloom:this.graphics.bloom,bloomThreshold:this.graphics.bloomThreshold,bloomStrength:this.graphics.bloomStrength,bloomIterations:this.graphics.bloomIterations,exposure:this.graphics.exposure,hdr:this.graphics.hdr,toneMapping:this.graphics.hdr?'aces':'reinhard',glare:this.graphics.glare,glareStrength:this.graphics.glareStrength,lensFlare:this.graphics.lensFlare,lensFlareStrength:this.graphics.lensFlareStrength}});this.canvas.style.visibility='visible';this.activeBackend='WebGPU';}else{this.canvas.style.visibility='hidden';this.activeBackend='WebGPU unavailable';}
   this.lastRenderTime=timeSeconds;
   this.lastFrameDurationMs=performance.now()-frameStarted;
   this.averageFrameDurationMs=this.averageFrameDurationMs?this.averageFrameDurationMs*.9+this.lastFrameDurationMs*.1:this.lastFrameDurationMs;

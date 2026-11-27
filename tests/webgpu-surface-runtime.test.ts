@@ -76,9 +76,9 @@ test('WebGPU runtime unpins pages when geodesic visibility changes', async () =>
   const root = baseGeoTiles()[0], child = childrenOf(root)[0];
   runtime.setVisibleTiles([root]);
   await runtime.uploadVisibleTiles();
-  assert.equal(runtime.pages.isPinned(root.id.key), true);
+  assert.equal(runtime.pages.pinnedPages, 1);
   runtime.setVisibleTiles([child]);
-  assert.equal(runtime.pages.isPinned(root.id.key), false);
+  assert.equal(runtime.pages.pinnedPages, 0);
   assert.equal(runtime.visibleTileCount, 1);
   runtime.dispose();
 });

@@ -28,13 +28,16 @@ export class WebGPUSurfaceRuntime {
   private readonly meshInFlight = new Map<string, Promise<GeodesicTileMesh>>();
   private readonly meshes = new Map<string, GeodesicTileMesh>();
   private disposed = false;
+  private readonly ownsManager: boolean;
+  private readonly ownsPages: boolean;
 
   constructor(
     device: any,
     planetId: string,
     profile: SurfaceProfile,
     options: WebGPUSurfaceRuntimeOptions = {},
-    manager?: VirtualSurfaceManager
+    manager?: VirtualSurfaceManager,
+    sharedPages?: WebGPUSurfacePageCache
   ) {
     if (!planetId.trim()) throw new TypeError('Planet id must not be empty.');
     this.planetId = planetId;
@@ -48,8 +51,10 @@ export class WebGPUSurfaceRuntime {
     if (!Number.isInteger(this.gutter) || this.gutter < 0 || this.gutter > 16) {
       throw new RangeError('Surface tile gutter must be in [0, 16].');
     }
+    this.ownsManager = !manager;
+    this.ownsPages = !sharedPages;
     this.manager = manager ?? new VirtualSurfaceManager({ cpuBudgetBytes: options.cpuBudgetBytes, workerCount: options.workerCount });
-    this.pages = new WebGPUSurfacePageCache(
+    this.pages = sharedPages ?? new WebGPUSurfacePageCache(
       device,
       this.resolution,
       this.gutter,
@@ -167,8 +172,8 @@ export class WebGPUSurfaceRuntime {
     for (const key of this.pinned) this.pages.unpin(key);
     this.pinned.clear();
     this.visible.clear();
-    this.pages.dispose();
-    this.manager.dispose();
+    if (this.ownsPages) this.pages.dispose();
+    if (this.ownsManager) this.manager.dispose();
     this.inFlight.clear();
     this.meshInFlight.clear();
     this.meshes.clear();

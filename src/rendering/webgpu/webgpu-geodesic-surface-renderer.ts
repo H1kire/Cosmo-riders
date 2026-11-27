@@ -10,6 +10,7 @@ export interface WebGPUGeodesicDraw {
   readonly pageLayer: number;
   readonly heightScale?: number;
   readonly albedoTint?: readonly [number, number, number];
+  readonly lightDirection?: readonly [number, number, number];
 }
 
 /** WebGPU-only indexed geodesic tile pipeline using all five generated surface channels. */
@@ -32,7 +33,7 @@ export class WebGPUGeodesicSurfaceRenderer {
     const errors = info.messages.filter((item: any) => item.type === 'error');
     if (errors.length) throw new Error('Geodesic WGSL compilation failed: ' + errors.map((item: any) => item.message).join('; '));
     const layout = device.createBindGroupLayout({ entries: [
-      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 144 } },
+      { binding: 0, visibility: 1, buffer: { type: 'uniform', minBindingSize: 160 } },
       { binding: 1, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 2, visibility: 2, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: 1, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
@@ -55,24 +56,26 @@ export class WebGPUGeodesicSurfaceRenderer {
     return new WebGPUGeodesicSurfaceRenderer(device, pages, pipeline, layout, sampler);
   }
 
-  uploadMesh(mesh: GeodesicTileMesh): void {
+  uploadMesh(mesh: GeodesicTileMesh, meshKey = mesh.tileKey): void {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
-    const previous = this.meshes.get(mesh.tileKey);
+    const previous = this.meshes.get(meshKey);
     if (previous) return;
     const make = (data: ArrayBufferView, usage: number) => {
-      const buffer = this.device.createBuffer({ label: 'Geodesic tile ' + mesh.tileKey, size: Math.max(4, (data.byteLength + 3) & ~3), usage: usage | USAGE.COPY_DST });
+      const buffer = this.device.createBuffer({ label: 'Geodesic tile ' + meshKey, size: Math.max(4, (data.byteLength + 3) & ~3), usage: usage | USAGE.COPY_DST });
       this.device.queue.writeBuffer(buffer, 0, data);
       return buffer;
     };
-    this.meshes.set(mesh.tileKey, {
+    this.meshes.set(meshKey, {
       positions: make(mesh.directions, USAGE.VERTEX),
       normals: make(mesh.normals, USAGE.VERTEX),
       uv: make(mesh.textureCoordinates, USAGE.VERTEX),
       indices: make(mesh.indices, USAGE.INDEX),
-      uniform: this.device.createBuffer({ label: 'Geodesic tile uniforms ' + mesh.tileKey, size: 144, usage: USAGE.UNIFORM | USAGE.COPY_DST }),
+      uniform: this.device.createBuffer({ label: 'Geodesic tile uniforms ' + meshKey, size: 160, usage: USAGE.UNIFORM | USAGE.COPY_DST }),
       indexCount: mesh.indices.length
     });
   }
+
+  hasMesh(tileKey: string): boolean { return this.meshes.has(tileKey); }
 
   draw(pass: any, tileKey: string, draw: WebGPUGeodesicDraw): boolean {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
@@ -99,10 +102,11 @@ export class WebGPUGeodesicSurfaceRenderer {
   }
 
   private uniformFor(buffer: any, draw: WebGPUGeodesicDraw): any {
-    const data = new Float32Array(36);
+    const data = new Float32Array(40);
     data.set(Array.from(draw.model).slice(0, 16), 0);
     data.set(Array.from(draw.viewProjection).slice(0, 16), 16);
     data.set([draw.radiusM, draw.pageLayer, draw.heightScale ?? 1, 0], 32);
+    data.set([...(draw.lightDirection ?? [0.42, 0.76, 0.38]), 0], 36);
     this.device.queue.writeBuffer(buffer, 0, data);
     return buffer;
   }
@@ -118,13 +122,13 @@ export class WebGPUGeodesicSurfaceRenderer {
 }
 
 const WGSL = `
-struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, };
+struct U { model: mat4x4<f32>, vp: mat4x4<f32>, params: vec4<f32>, lightDirection: vec4<f32>, };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var albedoTex: texture_2d_array<f32>;
 @group(0) @binding(2) var normalTex: texture_2d_array<f32>;
 @group(0) @binding(3) var heightTex: texture_2d_array<f32>;
 @group(0) @binding(4) var roughTex: texture_2d_array<f32>;
-@group(0) @binding(5) var materialTex: texture_2d_array<u32>;
+@group(0) @binding(5) var materialTex: texture_2d_array<f32>;
 @group(0) @binding(6) var surfaceSampler: sampler;
 struct VIn { @location(0) direction: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>, };
 struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) worldNormal: vec3<f32>, @location(2) @interpolate(flat) layer: i32, };
@@ -147,13 +151,17 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   let layer = input.layer;
   let base = textureSample(albedoTex, surfaceSampler, input.uv, layer).rgb;
   let encodedNormal = textureSample(normalTex, surfaceSampler, input.uv, layer).xyz * 2.0 - vec3<f32>(1.0);
-  let mapNormal = normalize(input.worldNormal + encodedNormal * 0.35);
+  let mapNormal = normalize((u.model * vec4<f32>(encodedNormal, 0.0)).xyz);
   let roughness = textureSample(roughTex, surfaceSampler, input.uv, layer).r;
   let material = textureSample(materialTex, surfaceSampler, input.uv, layer).r;
-  let light = normalize(vec3<f32>(0.42, 0.76, 0.38));
+  let light = normalize(u.lightDirection.xyz);
   let ndl = max(dot(mapNormal, light), 0.0);
-  let diffuse = base * (0.075 + ndl * (0.88 - roughness * 0.18));
-  let materialTint = select(1.0, 0.92, material > 0.015 && material < 0.02);
-  return vec4<f32>(diffuse * materialTint, 1.0);
+  let viewDirection = normalize(-input.worldNormal);
+  let halfDirection = normalize(light + viewDirection);
+  let exponent = mix(96.0, 5.0, roughness);
+  let specular = pow(max(dot(mapNormal, halfDirection), 0.0), exponent) * (1.0 - roughness) * 0.16;
+  let materialTint = select(1.0, 0.96, material > 0.5 && material < 1.5);
+  let diffuse = base * (0.045 + ndl * (0.92 - roughness * 0.12));
+  return vec4<f32>(diffuse * materialTint + vec3<f32>(specular), 1.0);
 }
 `;

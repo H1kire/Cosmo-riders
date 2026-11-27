@@ -37,9 +37,10 @@ export class VirtualSurfaceManager {
   }
   if(bytes<=this.cpuBudgetBytes){this.cpu.set(tile.key,{tile,bytes,used:++this.clock});this.bytes+=bytes;}
  }
- requestMesh(tile:import('./icosphere.ts').GeoTile,resolution:number,radiusM:number,priority=0):Promise<import('./tile-mesh.ts').GeodesicTileMesh>{
+ requestMesh(tile:import('./icosphere.ts').GeoTile,resolution:number,radiusM:number,priority=0,signal?:AbortSignal,coarseEdgeMask=0):Promise<import('./tile-mesh.ts').GeodesicTileMesh>{
   if(this.disposed)return Promise.reject(new DOMException('Surface manager is disposed.','AbortError'));
-  return this.pool.requestMesh(tile,resolution,radiusM,priority,this.abortController.signal);
+  const combinedSignal=signal?AbortSignal.any([this.abortController.signal,signal]):this.abortController.signal;
+  return this.pool.requestMesh(tile,resolution,radiusM,priority,combinedSignal,coarseEdgeMask);
  }
  async request(request:SurfaceTileRequest,priority=0,signal?:AbortSignal):Promise<SurfaceTileData>{
   if(this.disposed)throw new DOMException('Surface manager is disposed.','AbortError');

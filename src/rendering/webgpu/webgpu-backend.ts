@@ -1,3 +1,6 @@
+import type { SurfaceProfile } from '../geodesic/surface-tile.ts';
+import { WebGPUGeodesicSurfaceSystem, type WebGPUGeodesicSurfaceSettings } from './webgpu-geodesic-surface-system.ts';
+
 /**
  * First native WebGPU sphere renderer.
  *
@@ -30,6 +33,7 @@ export interface WebGPUBodyDraw {
   eclipseVisibility?: number;
   shadowOccluders?: Float32Array;
   shadowsEnabled?: boolean;
+  surfaceProfile?: SurfaceProfile;
   atmosphere?: { color: readonly [number, number, number]; intensity: number; thicknessRatio: number; mie: number; anisotropy: number; };
   clouds?: readonly { altitudeRatio: number; coverage: number; opacity: number; scale: number; wind: readonly [number, number]; }[];
 }
@@ -48,6 +52,7 @@ export interface WebGPUFrame {
   sunRadius?: number;
   sunUv?: readonly [number, number];
   sunVisible?: boolean;
+  geodesicSettings?: WebGPUGeodesicSurfaceSettings;
   postProcessing?: { bloom?: boolean; bloomThreshold?: number; bloomStrength?: number; bloomIterations?: number; exposure?: number; hdr?: boolean; toneMapping?: 'reinhard' | 'aces'; glare?: boolean; glareStrength?: number; lensFlare?: boolean; lensFlareStrength?: number; };
 }
 
@@ -372,6 +377,7 @@ export class WebGPUBackend {
   private orbitBindGroupLayout: any = null;
   private disposed = false;
   private recoveryAttempted = false;
+  private geodesicSystem: WebGPUGeodesicSurfaceSystem | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -619,6 +625,11 @@ export class WebGPUBackend {
     const height = Math.max(1, Math.min(1080, Math.round(rect.height * dpr)));
     if (width !== this.canvas.width || height !== this.canvas.height) this.configure();
 
+    if (frame.geodesicSettings && frame.bodies.some(body => body.surfaceProfile && body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant')) {
+      if (!this.geodesicSystem) this.geodesicSystem = new WebGPUGeodesicSurfaceSystem(this.device, frame.geodesicSettings);
+      this.geodesicSystem.initializeStep();
+      this.geodesicSystem.beginFrame();
+    }
     const encoder = this.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
@@ -637,6 +648,11 @@ export class WebGPUBackend {
     pass.setPipeline(this.pipeline);
     const matrix = new Float32Array(92);
     for (const body of frame.bodies) {
+      const geodesicReady = body.surfaceProfile && this.geodesicSystem
+        ? this.geodesicSystem.drawBody(pass, body, body.surfaceProfile, frame.viewProjection, frame.cameraPosition, frame.sunPosition)
+        : false;
+      if (geodesicReady) continue;
+      pass.setPipeline(this.pipeline);
       const resources = this.resourcesFor(body.id);
       const mesh = this.meshResources.get(Math.max(0, Math.min(3, Math.floor(body.lod)))) ?? this.meshResources.get(2)!;
       pass.setVertexBuffer(0, mesh.positions); pass.setVertexBuffer(1, mesh.normals); pass.setIndexBuffer(mesh.indices, 'uint16');
@@ -658,6 +674,7 @@ export class WebGPUBackend {
       pass.setBindGroup(0, resources.bindGroup);
       pass.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
     }
+    this.geodesicSystem?.endFrame();
     pass.setPipeline(this.effectPipeline);
     for (const body of frame.bodies) {
       if (!body.atmosphere && !body.clouds?.length) continue;
@@ -764,6 +781,7 @@ export class WebGPUBackend {
   }
 
   private disposeGpuResources(): void {
+    this.geodesicSystem?.dispose(); this.geodesicSystem = null;
     for (const resources of this.bodyResources.values()) resources.uniform.destroy();
     this.bodyResources.clear();
     for (const resources of this.orbitResources.values()) { resources.vertex.destroy(); resources.uniform.destroy(); }

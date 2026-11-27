@@ -48,6 +48,26 @@ export function horizonCapUpperBound(center:Vec3,cameraDirection:Vec3,angularRad
  return Math.cos(theta-alpha);
 }
 
+/** Conservative frustum test for a sphere centered at the local origin. */
+export function isSpherePotentiallyVisibleInFrustum(
+ cameraPositionM:Vec3,cameraForward:Vec3,radiusM:number,
+ verticalFovRadians:number,viewportWidthPx:number,viewportHeightPx:number
+):boolean{
+ if(!Number.isFinite(radiusM)||radiusM<=0)throw new RangeError('Sphere radius must be positive metres.');
+ if(!Number.isFinite(verticalFovRadians)||verticalFovRadians<=0||verticalFovRadians>=Math.PI)throw new RangeError('Vertical field of view must be between zero and pi.');
+ if(!Number.isFinite(viewportWidthPx)||viewportWidthPx<=0||!Number.isFinite(viewportHeightPx)||viewportHeightPx<=0)throw new RangeError('Viewport dimensions must be positive.');
+ const distance=Math.hypot(...cameraPositionM);
+ if(!Number.isFinite(distance)||distance<=radiusM)return true;
+ const directionToCenter:Vec3=normalize([-cameraPositionM[0],-cameraPositionM[1],-cameraPositionM[2]]);
+ const forward=normalize(cameraForward);
+ const halfVertical=verticalFovRadians*.5;
+ const aspect=viewportWidthPx/viewportHeightPx;
+ const halfHorizontal=Math.atan(Math.tan(halfVertical)*aspect);
+ const angularRadius=Math.asin(Math.max(0,Math.min(1,radiusM/distance)));
+ const halfAngle=Math.min(Math.PI,Math.max(halfVertical,halfHorizontal)+angularRadius);
+ return dot(directionToCenter,forward)>=Math.cos(halfAngle);
+}
+
 /** A cap is culled only when even its most camera-facing point is below the geometric horizon. */
 export function isTilePotentiallyVisibleFromHorizon(center:Vec3,angularRadius:number,cameraPositionM:Vec3,radiusM:number):boolean{
  if(!Number.isFinite(radiusM)||radiusM<=0)throw new RangeError('Planet radius must be positive metres.');

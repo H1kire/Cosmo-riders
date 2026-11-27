@@ -2,7 +2,7 @@ export interface LoadingStage { id:string; label:string; description:string; wei
 const STAGES:readonly LoadingStage[]=[
  {id:'bootstrap',label:'Application bootstrap',description:'Проверка оболочки и подготовка загрузчика',weight:5},
  {id:'application',label:'Загрузка приложения',description:'Импорт модулей физики и визуализации',weight:5},
- {id:'webgl',label:'WebGL-контекст',description:'Создание графического контекста и базовых программ',weight:15},
+ {id:'webgpu',label:'WebGPU-устройство',description:'Создание нативного WebGPU device и графических ресурсов',weight:15},
  {id:'solar-system',label:'Солнечная система',description:'Подготовка физических тел и начального состояния',weight:20},
  {id:'renderer',label:'Рендерер сцены',description:'Подготовка камеры, освещения и графических систем',weight:15},
  {id:'surface',label:'Поверхность Земли',description:'Генерация геодезических мешей и процедурных страниц в Worker',weight:20},
@@ -66,7 +66,7 @@ export class LoadingScreen {
   if(this.errorPanel){this.errorPanel.hidden=false;this.errorPanel.textContent='Не удалось запустить Cosmo-riders: '+message;}
   if(this.retry)this.retry.hidden=false;
   if(this.title)this.title.textContent='Ошибка загрузки';
-  if(this.description)this.description.textContent='Проверьте поддержку WebGL2 и перезагрузите страницу';
+  if(this.description)this.description.textContent='Проверьте поддержку WebGPU в браузере и перезагрузите страницу';
   this.root?.classList.remove('is-indeterminate');
  }
 }

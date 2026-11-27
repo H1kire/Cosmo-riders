@@ -174,7 +174,9 @@ export function createSolarSystemBodyCatalog(): readonly Record<string, unknown>
         solarDaySeconds: body.solarDaySeconds ?? null,
         atmosphereComposition: body.atmosphereComposition ?? [],
         hasRings: body.hasRings ?? false,
-        orbitalReferenceFrame: body.orbitalReferenceFrame ?? 'ecliptic'
+        orbitalReferenceFrame: body.orbitalReferenceFrame ?? 'ecliptic',
+        orbitalPlanePoleRightAscensionRad: body.orbitalPlanePoleRightAscensionRad ?? null,
+        orbitalPlanePoleDeclinationRad: body.orbitalPlanePoleDeclinationRad ?? null
       };
     });
 }

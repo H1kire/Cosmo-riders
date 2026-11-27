@@ -39,14 +39,16 @@ fn plates(seed:u32,p:&SurfaceProfile)->Vec<Plate>{
  for i in 0..count{let y=1.0-2.0*(i as f64+0.5)/count as f64;let angle=i as f64*2.399963229728653+hash(i as i32,3,7,seed)*0.7;let r=(1.0-y*y).sqrt();
  out.push(Plate{direction:Vec3::new(angle.cos()*r,y,angle.sin()*r),elevation:(hash(i as i32,19,13,seed)-0.5)*0.12});}out
 }
-fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->Sample{
+fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate],lod_level:u32)->Sample{
  let seed=p.seed as u32;let macro_n=fbm(d.scale(3.1),seed,5);let regional=fbm(d.scale(11.0),seed.wrapping_add(31),4);
  let mut nearest=2.0;let mut second=2.0;let mut first=None;
  for plate in plate_set{let q=1.0-d.dot(plate.direction);if q<nearest{second=nearest;nearest=q;first=Some(*plate);}else if q<second{second=q;}}
  let boundary=1.0-smooth(0.006,0.055,second-nearest);let plate=first.unwrap_or(Plate{direction:d,elevation:0.0});
  let tectonic=boundary*p.tectonic_activity;let volcanic=fbm(d.scale(19.0),seed.wrapping_add(71),4)*p.volcanic_activity;
  let latitude=d.y.abs();let frost=smooth(0.68,0.96,latitude)*p.ice_fraction;let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
- let mut height:f64;let mut color:[f64;3];let mut rough:f64;let mut material:u8;
+ // Мікродеталі додаються поступово з підвищенням геодезичного рівня деталізації.
+ let micro=fbm(d.scale(24.0),seed.wrapping_add(401),lod_level.saturating_add(1).clamp(1,6));
+ let mut height:f64;let mut color:[f64;3];let mut rough:f64;let material:u8;
  if p.kind=="oceanic"||p.water_fraction>0.45{
   let continental=smooth(-0.08,0.13,macro_n-0.48+plate.elevation+tectonic*0.09);let trench=boundary*boundary*p.tectonic_activity*0.11;let mountains=boundary.powf(0.7)*p.tectonic_activity*0.16;
   height=(macro_n-0.5)*0.18+(regional-0.5)*0.065+mountains-trench+volcanic*0.035;
@@ -63,19 +65,24 @@ fn geology(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->Sample{
   let crater=1.0-smooth(0.18,0.42,fbm(d.scale(9.0),seed.wrapping_add(223),4));height=(macro_n-0.5)*0.13+mountains*p.tectonic_activity*0.16-crater*p.age*0.075+volcanic*0.035;
   let oxide=clamp(p.iron_fraction*0.75+detail*0.2,0.0,1.0);color=[0.22+oxide*0.35+regional*0.08,0.19+oxide*0.12+detail*0.05,0.16+detail*0.04];rough=0.82;material=1;
  }
- if p.kind=="desert"{let dune=fbm(Vec3::new(d.x*55.0,d.y*13.0,d.z*55.0),seed.wrapping_add(241),3);height+=(dune-0.5)*0.055;color=[0.48+dune*0.2,0.27+dune*0.13,0.12+dune*0.07];rough=0.94;material=6;}
+ if p.kind=="desert"{let dune=fbm(Vec3::new(d.x*55.0,d.y*13.0,d.z*55.0),seed.wrapping_add(241),3);height+=(dune-0.5)*0.055;color=[0.48+dune*0.2,0.27+dune*0.13,0.12+dune*0.07];rough=0.94;}
  if p.kind!="gas-giant"&&p.kind!="ice-giant"&&frost>0.08{color=[color[0]+(0.84-color[0])*frost,color[1]+(0.9-color[1])*frost,color[2]+(0.96-color[2])*frost];height*=1.0-frost*0.3;rough=rough*(1.0-frost)+0.32*frost;material=4;}
- height*=clamp(1.0-p.erosion*0.55,0.2,1.2)*clamp((9.81/p.gravity_m_s2.max(0.15)).sqrt(),0.45,1.7);height+=(detail-0.5)*0.006;
+ height*=clamp(1.0-p.erosion*0.55,0.2,1.2)*clamp((9.81/p.gravity_m_s2.max(0.15)).sqrt(),0.45,1.7);
+ height+=(micro-0.5)*0.003;
+ let micro_tone=(micro-0.5)*0.055;
+ color=color.map(|value|clamp(value*(1.0+micro_tone),0.0,1.0));
+ rough=clamp(rough+(micro-0.5)*0.045,0.0,1.0);
+ height+=(detail-0.5)*0.006;
  Sample{color,height,rough,material}
 }
-fn ocean_height(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->f64{
- let seed=p.seed as u32;let macro_n=fbm(d.scale(3.1),seed,5);let regional=fbm(d.scale(11.0),seed.wrapping_add(31),4);
- let mut nearest=2.0;let mut second=2.0;
- for plate in plate_set{let q=1.0-d.dot(plate.direction);if q<nearest{second=nearest;nearest=q;}else if q<second{second=q;}}
- let boundary=1.0-smooth(0.006,0.055,second-nearest);let volcanic=fbm(d.scale(19.0),seed.wrapping_add(71),4)*p.volcanic_activity;let detail=fbm(d.scale(47.0),seed.wrapping_add(97),3);
- let mut height=(macro_n-0.5)*0.18+(regional-0.5)*0.065+boundary.powf(0.7)*p.tectonic_activity*0.16-boundary*boundary*p.tectonic_activity*0.11+volcanic*0.035;
- let frost=smooth(0.68,0.96,d.y.abs())*p.ice_fraction;if frost>0.08{height*=1.0-frost*0.3;}
- height*=clamp(1.0-p.erosion*0.55,0.2,1.2)*clamp((9.81/p.gravity_m_s2.max(0.15)).sqrt(),0.45,1.7);height+(detail-0.5)*0.006
+fn height_limits(p:&SurfaceProfile)->(f64,f64){
+ match p.body_id.to_lowercase().as_str(){
+  "earth"=>(11000.0,9000.0),"mars"=>(22000.0,22000.0),"moon"=>(11000.0,11000.0),
+  "mercury"=>(10000.0,10000.0),"venus"=>(12000.0,12000.0),"io"=>(17000.0,17000.0),
+  "europa"=>(3000.0,3000.0),"ganymede"=>(10000.0,10000.0),"callisto"=>(10000.0,10000.0),
+  "titan"=>(5000.0,5000.0),"triton"=>(2000.0,2000.0),"phobos"=>(5000.0,5000.0),"deimos"=>(3000.0,3000.0),
+  _=>{let generic=(p.mean_radius_m*0.003).max(10.0).min(50000.0);(generic,generic)}
+ }
 }
 fn atmosphere(d:Vec3,p:&SurfaceProfile)->Sample{
  let latitude=d.y;let seed=p.seed as u32;let flow=fbm(Vec3::new(d.x*5.0,d.y*17.0,d.z*5.0),seed.wrapping_add(301),5);
@@ -92,8 +99,8 @@ fn atmosphere(d:Vec3,p:&SurfaceProfile)->Sample{
  let rough=match p.body_id.as_str(){"saturn"=>0.76,"jupiter"=>0.72,"uranus"=>0.7,_=>0.68};
  Sample{color,height:0.0,rough,material:10}
 }
-fn sample(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate])->Sample{
- if p.kind=="gas-giant"||p.kind=="ice-giant"{atmosphere(d,p)}else{geology(d,p,plate_set)}
+fn sample(d:Vec3,p:&SurfaceProfile,plate_set:&[Plate],lod_level:u32)->Sample{
+ if p.kind=="gas-giant"||p.kind=="ice-giant"{atmosphere(d,p)}else{geology(d,p,plate_set,lod_level)}
 }
 fn set_u8(dst:&mut Vec<u8>,values:&[f64]){for v in values{dst.push((clamp(*v,0.0,1.0)*255.0).round() as u8);}}
 pub fn generate_tile(face:u32,path:&str,resolution:u32,gutter:u32,p:&SurfaceProfile)->Result<TileOutput,String>{
@@ -104,12 +111,14 @@ pub fn generate_tile(face:u32,path:&str,resolution:u32,gutter:u32,p:&SurfaceProf
  let mut out=TileOutput{albedo:Vec::with_capacity(count*4),normal:Vec::with_capacity(count*3),height:Vec::with_capacity(count),roughness:Vec::with_capacity(count),material:Vec::with_capacity(count)};
  let plate_set=if p.kind=="gas-giant"||p.kind=="ice-giant"{Vec::new()}else{plates(p.seed as u32,p)};
  let step=1.0/(resolution as f64*2.0_f64.powi(tile.level as i32));
- let height_fraction=|v:f64|if p.body_id=="earth"{clamp(v,-11000.0/p.mean_radius_m,9000.0/p.mean_radius_m)}else{v};
+ let(negative_limit,positive_limit)=height_limits(p);
+ // Процедурна висота масштабується до фізичного діапазону конкретного небесного тіла.
+ let height_fraction=|v:f64|clamp(v*(if v<0.0{negative_limit}else{positive_limit})/p.mean_radius_m,-negative_limit/p.mean_radius_m,positive_limit/p.mean_radius_m);
  for row in -(gutter as i32)..(resolution as i32+gutter as i32){for col in -(gutter as i32)..(resolution as i32+gutter as i32){
   let px=(col as f64+0.5)/resolution as f64;let py=(row as f64+0.5)/resolution as f64;
   let q=px.signum()*px.abs().sqrt();let u=q*(1.0-py);let v=q*py;
-  let d=barycentric_direction(tile.triangle,u,v)?;let s=sample(d,p,&plate_set);
-  let height_at=|direction:Vec3|->f64{if p.kind=="gas-giant"||p.kind=="ice-giant"{0.0}else if p.kind=="oceanic"||p.water_fraction>0.45{ocean_height(direction,p,&plate_set)}else{geology(direction,p,&plate_set).height}};
+  let d=barycentric_direction(tile.triangle,u,v)?;let s=sample(d,p,&plate_set,tile.level);
+  let height_at=|direction:Vec3|->f64{if p.kind=="gas-giant"||p.kind=="ice-giant"{0.0}else{geology(direction,p,&plate_set,tile.level).height}};
   let reference=if d.y.abs()<0.85{Vec3::new(0.0,1.0,0.0)}else{Vec3::new(1.0,0.0,0.0)};
   let tu=normalize(reference.cross(d));let tv=normalize(d.cross(tu));
   let pu=normalize(d.add(tu.scale(step)));let mu=normalize(d.sub(tu.scale(step)));let pv=normalize(d.add(tv.scale(step)));let mv=normalize(d.sub(tv.scale(step)));

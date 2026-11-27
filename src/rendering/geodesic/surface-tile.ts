@@ -111,7 +111,7 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
   color=[.22+oxide*.35+regional*.08+hydration*.035,.19+oxide*.12+detail*.05+hydration*.045,.16+detail*.04+hydration*.055];rough=clamp(.82-atmosphericWeathering*.18);material=1;
  }
  if(p.kind==='desert'){const dune=fbm([d[0]*55,d[1]*13,d[2]*55],seed+241,3);height+=(dune-.5)*.055;color=[.48+dune*.2,.27+dune*.13,.12+dune*.07];rough=.94;material=6;}
- if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.02){color=color.map((v,i)=>v+(i===0?.84:i===1?.9:.96-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
+ if(p.kind!=='gas-giant'&&p.kind!=='ice-giant'&&frost>.02){color=color.map((v,i)=>v+((i===0?.84:i===1?.9:.96)-v)*frost) as [number,number,number];height*=1-frost*.3;rough=rough*(1-frost)+.32*frost;material=4;}
  height*=clamp(1-p.erosion*.55,.2,1.2)*clamp(1-atmosphericWeathering*.12,.75,1)*clamp(Math.sqrt(9.81/Math.max(.15,p.gravityMS2)),.45,1.7);
  // Мікрорельєф має фізичний масштаб і не перевищує частку допустимого перепаду висот.
  height+=(micro-.5)*.003;
@@ -217,7 +217,7 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  }
  return{key:surfaceTileKey(request),resolution,gutter,albedo,normal,height,roughness,materialId,generationMs:Math.max(0,performanceNow()-started)};
 }
-function normalize3(v:Vec3):[number,number,number]{const length=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/length,v[1]/length,v[2]/length];}
+function normalize3(v:Vec3):[number,number,number]{const length=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])||1;return[v[0]/length,v[1]/length,v[2]/length];}
 function cross3(a:Vec3,b:Vec3):[number,number,number]{return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
 
 function performanceNow():number{return typeof performance!=='undefined'?performance.now():Date.now();}

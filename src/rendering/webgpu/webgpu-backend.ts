@@ -1179,6 +1179,8 @@ export class WebGPUBackend {
     metrics.backendEncodeMs=performance.now()-frameStarted;this.frameMetrics=metrics;this.activeTimestampSlot=null;
   }
 
+  private isBackendReady(): boolean { return this.state === 'ready'; }
+
   async recover(): Promise<boolean> {
     if (this.disposed) return false;
     if (this.recoveryPromise) return this.recoveryPromise;
@@ -1198,7 +1200,7 @@ export class WebGPUBackend {
       this.adapter = null;
       try {
         await this.initialize();
-        return !this.disposed && this.state === 'ready';
+        return !this.disposed && this.isBackendReady();
       } catch {
         return false;
       } finally {

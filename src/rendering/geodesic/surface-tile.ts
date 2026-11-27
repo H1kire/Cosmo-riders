@@ -93,7 +93,7 @@ function geologicalSample(d:Vec3,p:SurfaceProfile,plateSet:Plate[],lodLevel:numb
   color=color.map((value,index)=>value*(1-rock*.38)+(index===0?.075:index===1?.085:.095)*rock) as [number,number,number];
   const fractureShade=clamp(fracture*p.tectonicActivity*.42);
   color=color.map(value=>value*(1-fractureShade*.3)+.035*fractureShade) as [number,number,number];
-  color=color.map((value,index)=>value+(index===0?.72:index===1?.82:.94-value)*clamp(cryovolcanic*.16)) as [number,number,number];
+  color=color.map((value,index)=>value+((index===0?.72:index===1?.82:.94)-value)*clamp(cryovolcanic*.16)) as [number,number,number];
   rough=clamp(.24+(1-ice)*.58+p.age*.08);material=4;
  }else if(p.kind==='volcanic'){
   const lava=smooth(.62,.86,fbm([d[0]*13,d[1]*13,d[2]*13],seed+181,5)+volcanic*.4);

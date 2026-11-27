@@ -4,6 +4,7 @@ import { ICOSAHEDRON_FACES,barycentricDirection,baseGeoTiles,childrenOf,resolveG
 import { generateSurfaceTile,surfaceTileKey } from '../src/rendering/geodesic/surface-tile.ts';
 import { isSpherePotentiallyVisibleInFrustum } from '../src/rendering/geodesic/quadtree-selector.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
+import { createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
 
 const earth={id:'earth',massKg:5.9722e24,meanRadiusM:6371008.4,surfaceSeed:101,surface:{temperatureK:288,pressurePa:101325,waterFraction:.71,iceFraction:.025,ironFraction:.32,tectonicActivity:.8,volcanicActivity:.32,erosion:.78,impactAge:.18},rotationPeriodSeconds:86164};
@@ -43,6 +44,22 @@ test('geological profile is stable and uses measured body properties',()=>{
  const jupiter=createGeologicalProfile({id:'jupiter',massKg:1.8982e27,meanRadiusM:69911000,surfaceSeed:42,surface:{temperatureK:165,pressurePa:1e5},rotationPeriodSeconds:35730} as never);
  assert.equal(jupiter.kind,'gas-giant');
 });
+test('all 50 catalogued bodies resolve to explicit geological or atmospheric profiles',()=>{
+ const world=createSolarSystemWorld();
+ assert.equal(world.bodies.size,50);
+ const icy=['mimas','enceladus','tethys','dione','rhea','hyperion','iapetus','phoebe','janus','epimetheus','helene','atlas','prometheus','pandora','pan','miranda','ariel','umbriel','titania','oberon','naiad','thalassa','despina','galatea','larissa','proteus','nereid'];
+ for(const body of world.bodies.values()){
+  const profile=createGeologicalProfile(body);
+  assert.notEqual(profile.kind,'unknown',body.id+' has no resolved surface class');
+  for(const value of [profile.temperatureK,profile.pressurePa,profile.gravityMS2,profile.waterFraction,profile.iceFraction,profile.ironFraction,profile.silicateFraction,profile.volatileFraction,profile.sulfurFraction,profile.tectonicActivity,profile.volcanicActivity,profile.erosion,profile.age]){
+   assert.ok(Number.isFinite(value),body.id+' has a non-finite profile parameter');
+  }
+ }
+ for(const id of icy)assert.equal(createGeologicalProfile(world.bodies.get(id)!).kind,'icy',id+' must use an icy geology profile');
+ for(const id of ['jupiter','saturn'])assert.equal(createGeologicalProfile(world.bodies.get(id)!).kind,'gas-giant');
+ for(const id of ['uranus','neptune'])assert.equal(createGeologicalProfile(world.bodies.get(id)!).kind,'ice-giant');
+});
+
 test('geodesic surface tiles are deterministic square virtual-texture pages',()=>{
  const request={planetId:'earth',seed:profile.seed,tile:tileId(0,'2'),resolution:16,gutter:2,profile};
  const a=generateSurfaceTile(request),b=generateSurfaceTile(request),size=20*20;

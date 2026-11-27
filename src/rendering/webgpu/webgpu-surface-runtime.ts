@@ -1,5 +1,6 @@
 import { VirtualSurfaceManager } from '../geodesic/virtual-surface-manager.ts';
 import type { GeoTile } from '../geodesic/icosphere.ts';
+import type { GeodesicTileMesh } from '../geodesic/tile-mesh.ts';
 import { surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../geodesic/surface-tile.ts';
 import { WebGPUSurfacePageCache } from './webgpu-surface-page-cache.ts';
 
@@ -24,6 +25,8 @@ export class WebGPUSurfaceRuntime {
   private readonly visible = new Map<string, GeoTile>();
   private readonly pinned = new Set<string>();
   private readonly inFlight = new Map<string, Promise<number | undefined>>();
+  private readonly meshInFlight = new Map<string, Promise<GeodesicTileMesh>>();
+  private readonly meshes = new Map<string, GeodesicTileMesh>();
   private disposed = false;
 
   constructor(
@@ -59,6 +62,8 @@ export class WebGPUSurfaceRuntime {
   get visibleTileCount(): number { return this.visible.size; }
   get pendingUploads(): number { return this.inFlight.size; }
   get residentPages(): number { return this.pages.residentPages; }
+  get residentMeshes(): number { return this.meshes.size; }
+  get pendingMeshes(): number { return this.meshInFlight.size; }
 
   /** Викликати по одному разу за кадр до завершення п'ятиетапного виділення GPU-масивів. */
   initializeStep(): boolean {
@@ -123,6 +128,23 @@ export class WebGPUSurfaceRuntime {
     await Promise.all(tasks);
   }
 
+  /** Отримує індексований трикутний меш з того самого обмеженого Worker Pool. */
+  async requestTileMesh(tile: GeoTile, radiusM: number, resolution = 32, coarseEdgeMask = 0, priority = 0): Promise<GeodesicTileMesh> {
+    if (this.disposed) throw new Error('WebGPU surface runtime is disposed.');
+    const key = tile.id.key + ':' + resolution + ':' + radiusM + ':' + coarseEdgeMask;
+    const cached = this.meshes.get(key);
+    if (cached) return cached;
+    let pending = this.meshInFlight.get(key);
+    if (!pending) {
+      pending = this.manager.requestMesh(tile, resolution, radiusM, priority, undefined, coarseEdgeMask).then(mesh => {
+        if (!this.disposed) this.meshes.set(key, mesh);
+        return mesh;
+      }).finally(() => this.meshInFlight.delete(key));
+      this.meshInFlight.set(key, pending);
+    }
+    return pending;
+  }
+
   getPageLayer(tileKey: string): number | undefined {
     const tile = this.visible.get(tileKey);
     return tile ? this.pages.getLayer(surfaceTileKey(this.requestFor(tile))) : undefined;
@@ -148,5 +170,7 @@ export class WebGPUSurfaceRuntime {
     this.pages.dispose();
     this.manager.dispose();
     this.inFlight.clear();
+    this.meshInFlight.clear();
+    this.meshes.clear();
   }
 }

@@ -134,8 +134,8 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) uv: vec2<f32>, @l
   let heightSize = vec2<i32>(textureDimensions(heightTex));
   let heightCoord = clamp(vec2<i32>(input.uv * vec2<f32>(heightSize)), vec2<i32>(0), heightSize - vec2<i32>(1));
   let h = textureLoad(heightTex, heightCoord, layer, 0).r;
-  let radius = u.params.x + h * u.params.z;
-  let local = input.direction * radius;
+  let radiusRatio = 1.0 + (h * u.params.z) / max(u.params.x, 1.0);
+  let local = input.direction * radiusRatio;
   let world = u.model * vec4<f32>(local, 1.0);
   out.clip = u.vp * world;
   out.uv = input.uv;

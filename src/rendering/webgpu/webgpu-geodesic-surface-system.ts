@@ -213,7 +213,7 @@ export class WebGPUGeodesicSurfaceSystem {
       if (!sourceReady) return false;
 
       // Батьківська сітка спершу повністю заповнює кадр і записує коректну глибину.
-      this.drawTileStates(pass, sourceItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition);
+      this.drawTileStates(pass, sourceItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, { transitionRole: 'source' });
       if (!targetReady) return true;
 
       const transition = topology.transition;
@@ -222,6 +222,13 @@ export class WebGPUGeodesicSurfaceSystem {
       // Фрагментний alpha blending виконує попіксельне змішування кольорів дочірніх і батьківських сторінок.
       this.drawTileStates(pass, targetItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, {
         transitionAlpha: blend,
+        transitionRole: 'blend',
+        forceMorph: true
+      });
+      // Фіксуємо глибину дочірньої геометрії лише після її кольорового змішування.
+      this.drawTileStates(pass, targetItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, {
+        transitionAlpha: 1,
+        transitionRole: 'depth',
         forceMorph: true
       });
       if (blend >= 1) {
@@ -263,7 +270,7 @@ export class WebGPUGeodesicSurfaceSystem {
     radiusM: number,
     lightDirection: readonly [number, number, number],
     cameraPosition: ArrayLike<number>,
-    options: { readonly transitionAlpha?: number; readonly forceMorph?: boolean } = {}
+    options: { readonly transitionAlpha?: number; readonly forceMorph?: boolean; readonly transitionRole?: 'source' | 'blend' | 'depth' } = {}
   ): void {
     for (const item of items) {
       if (item.layer === undefined) continue;
@@ -272,7 +279,8 @@ export class WebGPUGeodesicSurfaceSystem {
         cameraPosition: [Number(cameraPosition[0]), Number(cameraPosition[1]), Number(cameraPosition[2])],
         pageResolution: this.settings.pageResolution, gutter: 2,
         morph: options.forceMorph ? 1 : Math.min(1, Math.max(0, (clockNow() - (this.meshMorphStartedAt.get(item.key) ?? clockNow())) / 280)),
-        transitionAlpha: options.transitionAlpha
+        transitionAlpha: options.transitionAlpha,
+        transitionRole: options.transitionRole
       });
     }
   }

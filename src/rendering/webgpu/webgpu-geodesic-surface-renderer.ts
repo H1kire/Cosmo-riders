@@ -17,18 +17,24 @@ export interface WebGPUGeodesicDraw {
   readonly morph?: number;
   /** Частка дочірнього кольору під час піксельного переходу LOD. */
   readonly transitionAlpha?: number;
+  /** Роль проходу під час переходу між рівнями деталізації. */
+  readonly transitionRole?: 'source' | 'blend' | 'depth';
 }
 
 /** WebGPU-only indexed geodesic tile pipeline using all five generated surface channels. */
 export class WebGPUGeodesicSurfaceRenderer {
   private readonly pipeline: any;
+  private readonly sourcePipeline: any;
+  private readonly depthPipeline: any;
   private readonly layout: any;
   private readonly sampler: any;
   private readonly meshes = new Map<string, GpuMesh>();
   private disposed = false;
 
-  private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, private readonly crossfadePipeline: any, layout: any, sampler: any) {
+  private constructor(private readonly device: any, private readonly pages: WebGPUSurfacePageCache, pipeline: any, sourcePipeline: any, crossfadePipeline: any, depthPipeline: any, layout: any, sampler: any) {
     this.pipeline = pipeline;
+    this.sourcePipeline = sourcePipeline;
+    this.depthPipeline = depthPipeline;
     this.layout = layout;
     this.sampler = sampler;
   }
@@ -60,7 +66,15 @@ export class WebGPUGeodesicSurfaceRenderer {
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less-equal' }
     });
-    // Дочірні тайли змішуються поверх повністю намальованого батьківського покриття.
+    // Батьківський шар задає колір, але не блокує дочірній рельєф за глибиною.
+    const sourcePipeline = await device.createRenderPipelineAsync({
+      layout: pipelineLayout,
+      vertex,
+      fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
+    });
+    // Дочірній шар змішується з батьківським, перевіряючи глибину лише відносно інших об'єктів сцени.
     const crossfadePipeline = await device.createRenderPipelineAsync({
       layout: pipelineLayout,
       vertex,
@@ -74,8 +88,16 @@ export class WebGPUGeodesicSurfaceRenderer {
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' }
     });
+    // Після змішування окремо записуємо глибину цільової поверхні без повторного малювання кольору.
+    const depthPipeline = await device.createRenderPipelineAsync({
+      layout: pipelineLayout,
+      vertex,
+      fragment: { module: shader, entryPoint: 'fs', targets: [{ format: 'rgba16float', writeMask: 0 }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less-equal' }
+    });
     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'nearest', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
-    return new WebGPUGeodesicSurfaceRenderer(device, pages, pipeline, crossfadePipeline, layout, sampler);
+    return new WebGPUGeodesicSurfaceRenderer(device, pages, pipeline, sourcePipeline, crossfadePipeline, depthPipeline, layout, sampler);
   }
 
   uploadMesh(mesh: GeodesicTileMesh, meshKey = mesh.tileKey): void {
@@ -124,9 +146,10 @@ export class WebGPUGeodesicSurfaceRenderer {
     if (this.disposed) throw new Error('Geodesic renderer is disposed.');
     const mesh = this.meshes.get(tileKey);
     if (!mesh || !this.pages.ready || !Number.isInteger(draw.pageLayer) || draw.pageLayer < 0) return false;
-    const uniform = this.uniformFor(mesh.uniform, draw);
+    this.uniformFor(mesh.uniform, draw);
     const transitionAlpha = Math.max(0, Math.min(1, draw.transitionAlpha ?? 1));
-    pass.setPipeline(transitionAlpha < 1 ? this.crossfadePipeline : this.pipeline);
+    const role = draw.transitionRole;
+    pass.setPipeline(role === 'source' ? this.sourcePipeline : role === 'depth' ? this.depthPipeline : role === 'blend' || transitionAlpha < 1 ? this.crossfadePipeline : this.pipeline);
     pass.setBindGroup(0, mesh.bindGroup);
     pass.setVertexBuffer(0, mesh.positions);
     pass.setVertexBuffer(1, mesh.normals);

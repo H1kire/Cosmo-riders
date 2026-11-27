@@ -35,3 +35,22 @@ test('geodesic renderer creates indexed GPU buffers and submits page-backed draw
   assert.equal(buffers.length, 5);
   renderer.dispose();
 });
+
+
+test('WebGPU LOD crossfade separates source color, blended child color and final child depth',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [renderer,system]=await Promise.all([
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(renderer.includes("readonly transitionRole?: 'source' | 'blend' | 'depth'"));
+ assert.ok(renderer.includes('depthWriteEnabled: false, depthCompare: \'less-equal\''));
+ assert.ok(renderer.includes("writeMask: 0"));
+ assert.ok(renderer.includes('depthWriteEnabled: true, depthCompare: \'less-equal\''));
+ assert.ok(renderer.includes("role === 'source' ? this.sourcePipeline"));
+ assert.ok(renderer.includes("role === 'depth' ? this.depthPipeline"));
+ assert.ok(system.includes("transitionRole: 'source'"));
+ assert.ok(system.includes("transitionRole: 'blend'"));
+ assert.ok(system.includes("transitionRole: 'depth'"));
+ assert.ok(system.indexOf("transitionRole: 'blend'")<system.indexOf("transitionRole: 'depth'"));
+});

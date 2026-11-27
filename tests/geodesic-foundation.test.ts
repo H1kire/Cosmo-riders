@@ -645,3 +645,20 @@ test('WebGPU LOD transition keeps source mesh variants and releases them only af
  assert.ok(runtime.includes('getPageLayer(tileKey: string)'));
  assert.ok(cache.includes('All WebGPU surface page layers are pinned by visible tiles.'));
 });
+
+
+test('geodesic topology reconciliation enforces a per-transition tile budget including balancing',()=>{
+ const runtime=new GeodesicSurfaceRuntime('transition-budget',{maxTiles:128,stitchResolution:8});
+ const roots=baseGeoTiles();
+ assert.doesNotThrow(()=>runtime.reconcile(roots,new Set(roots.map(tile=>tile.id.key)),20));
+ const root=roots[0],refined=[...roots.filter(tile=>tile.id.key!==root.id.key),...childrenOf(root)];
+ assert.throws(()=>runtime.reconcile(refined,new Set(refined.map(tile=>tile.id.key)),20),/configured tile budget/);
+ assert.doesNotThrow(()=>runtime.reconcile(refined,new Set(refined.map(tile=>tile.id.key)),128));
+});
+
+test('geodesic topology accepts a temporary reconciliation budget without changing its persistent planet limit',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/geodesic/geodesic-surface-runtime.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('maxTiles=this.options.maxTiles'));
+ assert.ok(source.includes('balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles})'));
+});

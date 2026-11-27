@@ -141,7 +141,11 @@ export class WebGPUGeodesicSurfaceSystem {
         } else {
           topology.transition.targetSignature = signature;
         }
-        topology.runtime.reconcile(selection.tiles, new Set(selection.tiles.map(tile => tile.id.key)));
+        topology.runtime.reconcile(
+          selection.tiles,
+          new Set(selection.tiles.map(tile => tile.id.key)),
+          topology.transition ? this.pages.capacity - topology.transition.source.length : this.pages.capacity
+        );
         topology.visibleSignature = signature;
         topology.lastStats = selection.stats;
         topology.splitKeys = collectSplitKeys(topology.runtime.activeTiles);

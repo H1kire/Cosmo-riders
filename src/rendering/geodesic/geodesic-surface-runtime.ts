@@ -95,15 +95,16 @@ export class GeodesicSurfaceRuntime {
   return true;
  }
  /** Reconcile a complete desired leaf cover. Parents are replaced atomically by descendants and vice versa. */
- reconcile(desired:readonly GeoTile[],visibleKeys:ReadonlySet<string>=new Set()):void{
+ reconcile(desired:readonly GeoTile[],visibleKeys:ReadonlySet<string>=new Set(),maxTiles=this.options.maxTiles):void{
   const next=new Map<string,GeoTile>();
   for(const tile of desired){
    if(next.has(tile.id.key))throw new Error('Desired leaf set contains duplicate tiles.');
    next.set(tile.id.key,tile);
   }
   this.assertAntichain(next);
-  if(next.size>this.options.maxTiles)throw new RangeError('Desired leaf set exceeds the configured tile budget.');
-  const balanced=balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles:this.options.maxTiles});
+  if(!Number.isInteger(maxTiles)||maxTiles<20||maxTiles>this.options.maxTiles)throw new RangeError('Reconcile tile budget must be in [20, configured maxTiles].');
+  if(next.size>maxTiles)throw new RangeError('Desired leaf set exceeds the configured tile budget.');
+  const balanced=balanceGeodesicTiles([...next.values()],{maxDepth:this.options.maxDepth,maxTiles});
   if(balanced.violations>0)throw new Error('Desired leaf set cannot satisfy the 2:1 balance within configured limits.');
   this.active=new Map(balanced.tiles.map(tile=>[tile.id.key,tile]));
   // Балансувальні листки також потрібні для закриття швів на межі видимої області.

@@ -86,5 +86,5 @@ export class PhysicsWorldClient{
  propulsionState(vesselId:string):Promise<PropulsionSnapshot>{return this.bridge.propulsionState(vesselId) as unknown as Promise<PropulsionSnapshot>;}
  async applyBurn(id:string,direction:readonly [number,number,number],dv:number,engine:{vacuumThrustN:number;seaLevelThrustN:number;ispSeconds:number},dryMassKg:number){const result=await this.bridge.applyBurn(id,direction,dv,engine,dryMassKg);await this.refresh(await this.bridge.snapshot());return result;}
  async applyManeuver(id:string,direction:readonly [number,number,number],dv:number):Promise<void>{await this.bridge.applyManeuver(id,direction,dv);await this.refresh(await this.bridge.snapshot());}
- async dispose():Promise<void>{if(this.disposed)return;this.disposed=true;this.orbitPathRequests.clear();this.orbitPaths.clear();await this.bridge.dispose();}
+ async dispose():Promise<void>{if(this.disposed)return;this.disposed=true;this.orbitPathRequests.clear();this.orbitPaths.clear();this.orbitPathTimes.clear();await this.bridge.dispose();}
 }

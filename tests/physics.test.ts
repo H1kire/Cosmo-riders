@@ -183,3 +183,38 @@ test('regular moons use parent-facing synchronous orientation and orbital-period
  assert.equal(world.bodies.get('hyperion')!.tidalLock,false);
  assert.equal(world.bodies.get('hyperion')!.rotationPeriodSeconds,null);
 });
+
+test('all 49 satellite and planetary orbits remain inside their J2000 Keplerian apsis bounds',()=>{
+ const world=createSolarSystemWorld();
+ const snapshots=[-365.25*DAY,0,365.25*DAY,10*365.25*DAY];
+ const orbiting=[...world.bodies.values()].filter(body=>body.parentId!==null);
+ assert.equal(orbiting.length,49);
+ for(const body of orbiting){
+  const parent=world.bodies.get(body.parentId!);
+  const initial=world.bodyInitialRelativeStates.get(body.id);
+  assert.ok(parent&&initial,'missing parent-relative state for '+body.id);
+  const elements=stateToOrbitalElements(initial.position,initial.velocity,body.mu+parent.mu);
+  const configured=body.orbitalElements!;
+  assert.ok(Math.abs(elements.semiMajorAxis-configured.semiMajorAxisM)/configured.semiMajorAxisM<1e-8,'semi-major axis mismatch for '+body.id);
+  assert.ok(Math.abs(elements.eccentricity-configured.eccentricity)<1e-8,'eccentricity mismatch for '+body.id);
+  const periapsis=configured.semiMajorAxisM*(1-configured.eccentricity);
+  const apoapsis=configured.semiMajorAxisM*(1+configured.eccentricity);
+  for(const time of snapshots){
+   const states=world.getBodyStatesAt(time);
+   const state=states.get(body.id)!,parentState=states.get(parent.id)!;
+   const relative=vector3(state.position.x-parentState.position.x,state.position.y-parentState.position.y,state.position.z-parentState.position.z);
+   const radius=magnitude(relative);
+   assert.ok(Number.isFinite(radius)&&radius>=periapsis*(1-1e-8)&&radius<=apoapsis*(1+1e-8),body.id+' escaped its apsis bounds at '+time+' s');
+  }
+ }
+});
+
+test('J2000 Moon mean elements match the JPL planetary satellite table',()=>{
+ const moon=SOLAR_SYSTEM_DATA.moon.elements;
+ assert.equal(moon.semiMajorAxisM,384400000);
+ assert.ok(Math.abs(moon.eccentricity-0.0554)<1e-12);
+ assert.ok(Math.abs(moon.inclination*180/Math.PI-5.16)<1e-10);
+ assert.ok(Math.abs(moon.longitudeAscendingNode*180/Math.PI-125.08)<1e-10);
+ assert.ok(Math.abs(moon.argumentOfPeriapsis*180/Math.PI-318.15)<1e-10);
+ assert.ok(Math.abs(moon.meanAnomaly*180/Math.PI-135.27)<1e-10);
+});

@@ -54,12 +54,19 @@ test('gas giants generate zonal atmospheric materials without solid relief',()=>
 });
 
 
-test('surface normals use the same LOD height field as the stored height channel',async()=>{
+test('surface normals derive from the same displaced height samples without resampling geology',async()=>{
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/rendering/geodesic/surface-tile.ts',import.meta.url),'utf8');
- assert.ok(source.includes('const sampleHeight=(direction:Vec3)=>sampleDirection(direction,tile.level).height'));
  assert.ok(source.includes('const sample=sampleDirection(direction,tile.level)'));
+ assert.ok(source.includes('displacedPositions'));
+ assert.ok(source.includes('Нормаль отримується з похідних уже зміщеної геометрії'));
+ assert.ok(!source.includes('const sampleHeight='));
  assert.ok(!source.includes('oceanicHeightSample'));
+ const tile=generateSurfaceTile({planetId:'earth',seed:profile.seed,tile:tileId(0,'1'),resolution:16,gutter:2,profile});
+ for(let index=0;index<tile.normal.length;index+=3){
+  const nx=tile.normal[index]/127.5-1,ny=tile.normal[index+1]/127.5-1,nz=tile.normal[index+2]/127.5-1;
+  assert.ok(Math.abs(Math.hypot(nx,ny,nz)-1)<.02,'surface normal must remain normalized');
+ }
 });
 
 test('surface relief stays inside body-specific physical elevation limits',()=>{

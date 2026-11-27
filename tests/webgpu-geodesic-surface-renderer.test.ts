@@ -147,3 +147,11 @@ test('surface upload diagnostics count completed GPU page uploads rather than qu
  assert.ok(!backend.includes('geoStats.surfaceUploadsPerFrame'));
  assert.ok(!system.includes('frameSurfaceUploads'));
 });
+
+
+test('geodesic screen-space LOD uses the actual internal render target dimensions',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
+ assert.ok(source.includes('frame.verticalFovRadians ?? Math.PI / 3,\n          width, height,'));
+ assert.ok(!source.includes('frame.viewportWidthPx ?? width, frame.viewportHeightPx ?? height,'));
+});

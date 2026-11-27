@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId, tileDirectionVertexCount, ICOSAHEDRON_ADJACENCY, ICOSAHEDRON_FACE_INDICES } from '../src/rendering/geodesic/icosphere.ts';
+import { baseGeoTiles, buildTileDirections, childrenOf, resolveGeoTile, tileId, tileDirectionVertexCount, ICOSAHEDRON_ADJACENCY, ICOSAHEDRON_FACE_INDICES, type Vec3 } from '../src/rendering/geodesic/icosphere.ts';
 import { generateSurfaceTile, squareToTriangleBarycentric, triangleToSquareUv, surfaceTileKey, type SurfaceProfile, type SurfaceTileRequest } from '../src/rendering/geodesic/surface-tile.ts';
 import { SurfaceTileWorkerPool } from '../src/rendering/geodesic/surface-worker-pool.ts';
 import { findTileNeighbors } from '../src/rendering/geodesic/tile-neighbors.ts';

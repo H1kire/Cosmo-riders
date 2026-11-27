@@ -11,3 +11,19 @@ test('solar display irradiance preserves inverse-square falloff with bounded dis
  assert.equal(solarIrradianceForDisplay(0),1);
  assert.ok(planetaryDisplayGain(30.1)<=64);
 });
+
+test('the active WebGPU surface, atmosphere, cloud and ring paths consume shared solar irradiance',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const [backend,atmosphere,geodesic]=await Promise.all([
+  readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/atmosphere-scattering.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8')
+ ]);
+ assert.ok(backend.includes('solarIrradianceForDisplay(sunDistanceAU)'));
+ assert.ok(backend.includes('solarIrradianceForDisplay(ringSunDistanceAU)'));
+ assert.ok(backend.includes('max(body.lighting.x, 0.0)'));
+ assert.ok(backend.includes('max(ring.color.w,0.0)'));
+ assert.ok(atmosphere.includes('solarIrradiance = max(body.lighting.x, 0.0)'));
+ assert.ok(geodesic.includes('Math.max(0, draw.lightIntensity ?? 1)'));
+ assert.ok(geodesic.includes('* max(u.cameraPosition.w, 0.0)'));
+});

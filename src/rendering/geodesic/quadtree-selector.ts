@@ -63,8 +63,10 @@ export function isSpherePotentiallyVisibleInFrustum(
  const halfVertical=verticalFovRadians*.5;
  const aspect=viewportWidthPx/viewportHeightPx;
  const halfHorizontal=Math.atan(Math.tan(halfVertical)*aspect);
+ // Кут до кута прямокутного frustum більший за кожен окремий півкут; конус охоплює й діагональні краї.
+ const frustumCornerAngle=Math.acos(Math.max(-1,Math.min(1,Math.cos(halfVertical)*Math.cos(halfHorizontal))));
  const angularRadius=Math.asin(Math.max(0,Math.min(1,radiusM/distance)));
- const halfAngle=Math.min(Math.PI,Math.max(halfVertical,halfHorizontal)+angularRadius);
+ const halfAngle=Math.min(Math.PI,frustumCornerAngle+angularRadius);
  return dot(directionToCenter,forward)>=Math.cos(halfAngle);
 }
 

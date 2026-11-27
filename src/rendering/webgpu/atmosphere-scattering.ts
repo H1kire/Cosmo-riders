@@ -60,16 +60,16 @@ fn atmosphereScattering(worldPosition: vec3<f32>, worldNormal: vec3<f32>) -> vec
   let viewRay = normalize(worldPosition - body.cameraPosition.xyz);
 
   // Малюємо лише ближню оболонку: задня половина не повинна подвоювати яскравість.
-  if (dot(normalize(worldNormal), viewRay) > 0.001) { discard; }
+  if (dot(normalize(worldNormal), viewRay) > 0.001) { return vec4<f32>(0.0); }
 
   let outerInterval = raySphereInterval(cameraOffset, viewRay, outerRadius);
-  if (outerInterval.y <= 0.0) { discard; }
+  if (outerInterval.y <= 0.0) { return vec4<f32>(0.0); }
   let startDistance = max(0.0, outerInterval.x);
   let groundInterval = raySphereInterval(cameraOffset, viewRay, planetRadius);
   var endDistance = outerInterval.y;
   if (groundInterval.x > startDistance) { endDistance = min(endDistance, groundInterval.x); }
   let pathLength = max(0.0, endDistance - startDistance);
-  if (pathLength <= 0.0000001) { discard; }
+  if (pathLength <= 0.0000001) { return vec4<f32>(0.0); }
 
   let rayleighScale = planetRadius * clamp(body.surfaceParams.y, 0.000001, 0.25);
   let mieScale = planetRadius * clamp(body.surfaceParams.z, 0.000001, 0.25);

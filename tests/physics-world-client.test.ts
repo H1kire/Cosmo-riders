@@ -50,9 +50,10 @@ test('PhysicsWorldClient preserves parent-relative path origins for all 49 catal
  });
  client=new PhysicsWorldClient(catalog,bridge);
  for(const entry of catalog){
-  const body=new CelestialBody(entry as never);
+  const state=world.getBodyState(entry.id);
+  const body=new CelestialBody({...entry,position:state.position,velocity:state.velocity} as never);
   client.bodies.set(body.id,body);
-  client.bodyStates.set(body.id,world.getBodyState(body.id));
+  client.bodyStates.set(body.id,state);
  }
  try{
   let checked=0;

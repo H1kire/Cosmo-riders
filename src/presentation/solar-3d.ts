@@ -203,19 +203,23 @@ export class Solar3DView{
   };
  }
  configurePlanetEffects(){
-  const profiles:[string,number,[number,number,number],number,number][]=[
-   ['earth',110000,[.22,.48,1.0],.62,1.0],
-   ['titan',400000,[.72,.43,.18],.96,1.25],
-   ['venus',250000,[1.0,.58,.28],.92,1.1],
-   ['mars',100000,[1.0,.34,.19],.34,.72],
-   ['jupiter',1200000,[.82,.62,.43],.48,.58],
-   ['saturn',900000,[.91,.73,.49],.52,.52],
-   ['uranus',500000,[.42,.82,.88],.36,.48],
-   ['neptune',500000,[.28,.48,1.0],.44,.55]
-  ];
-  for(const [id,height,color,mie,intensity] of profiles){
-   const body=this.systemBodyById?.get(id);
-   if(body)this.atmosphereSystem.setProfile({bodyId:id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:height,rayleigh:color, mie,rayleighScaleHeightM:height*.12,mieScaleHeightM:height*.08,mieAnisotropy:.76,intensity});
+  const profiles=[
+   {id:'earth',height:110000,color:[.22,.48,1.0],mie:.62,intensity:1.0,rayleighScaleHeightM:8400,mieScaleHeightM:1200,mieAnisotropy:.76},
+   {id:'titan',height:400000,color:[.72,.43,.18],mie:.96,intensity:1.25,rayleighScaleHeightM:20000,mieScaleHeightM:9000,mieAnisotropy:.68},
+   {id:'venus',height:250000,color:[1.0,.58,.28],mie:.92,intensity:1.1,rayleighScaleHeightM:15900,mieScaleHeightM:6500,mieAnisotropy:.82},
+   {id:'mars',height:100000,color:[1.0,.34,.19],mie:.34,intensity:.72,rayleighScaleHeightM:10800,mieScaleHeightM:3200,mieAnisotropy:.68},
+   {id:'jupiter',height:1200000,color:[.82,.62,.43],mie:.48,intensity:.58,rayleighScaleHeightM:27000,mieScaleHeightM:10000,mieAnisotropy:.76},
+   {id:'saturn',height:900000,color:[.91,.73,.49],mie:.52,intensity:.52,rayleighScaleHeightM:45000,mieScaleHeightM:16000,mieAnisotropy:.76},
+   {id:'uranus',height:500000,color:[.42,.82,.88],mie:.36,intensity:.48,rayleighScaleHeightM:22000,mieScaleHeightM:8000,mieAnisotropy:.74},
+   {id:'neptune',height:500000,color:[.28,.48,1.0],mie:.44,intensity:.55,rayleighScaleHeightM:20000,mieScaleHeightM:8000,mieAnisotropy:.76}
+  ] as const;
+  for(const profile of profiles){
+   const body=this.systemBodyById?.get(profile.id);
+   if(body)this.atmosphereSystem.setProfile({
+    bodyId:profile.id,groundRadiusM:body.meanRadiusM,atmosphereHeightM:profile.height,rayleigh:profile.color,
+    mie:profile.mie,rayleighScaleHeightM:profile.rayleighScaleHeightM,mieScaleHeightM:profile.mieScaleHeightM,
+    mieAnisotropy:profile.mieAnisotropy,intensity:profile.intensity
+   });
   }
   const cloudProfiles:Record<string,CloudLayer[]> = {
    earth:[

@@ -39,9 +39,11 @@ const planet = (id: string, name: string, massKg: number, meanRadiusM: number, a
   }
 });
 
-/** JPL mean satellite elements, epoch J2000.0.
- * GM values are converted to mass; radii are mean radii. Orbits are
- * two-body mean-element approximations, not Horizons numerical ephemerides.
+/** JPL mean satellite elements, principally epoch 2000-01-01.5 TDB.
+ * Nereid uses the JPL NEP105 2020-01-01.0 ecliptic solution; its mean anomaly
+ * is back-propagated to the simulation's J2000 epoch using the published
+ * 360.133039-day period. GM values are converted to mass; radii are mean radii.
+ * These are mean-element two-body approximations, not Horizons numerical ephemerides.
  */
 const satellite = (
   id: string, name: string, parentId: string, gmKm3S2: number, radiusKm: number,

@@ -78,3 +78,26 @@ test('WebGPU page cache rejects mismatched channel dimensions', () => {
   for (let index = 0; index < 5; index++) cache.initializeStep();
   assert.throws(() => cache.upload({ ...tile('bad'), normal: new Uint8Array(3) }), /channel lengths/);
 });
+
+test('WebGPU page cache invalidates an evicted page after a partial GPU upload failure', () => {
+  const device = fakeDevice();
+  const cache = new WebGPUSurfacePageCache(device, 2, 0, 1024 * 1024, 1);
+  for (let index = 0; index < 5; index++) cache.initializeStep();
+  cache.upload(tile('old-page'));
+
+  const writeTexture = device.queue.writeTexture;
+  let attempts = 0;
+  device.queue.writeTexture = (...args: any[]) => {
+    attempts++;
+    if (attempts === 3) throw new Error('simulated texture upload failure');
+    writeTexture(...args);
+  };
+  assert.throws(() => cache.upload(tile('failed-page')), /simulated texture upload failure/);
+  assert.equal(cache.getLayer('old-page'), undefined);
+  assert.equal(cache.getLayer('failed-page'), undefined);
+  assert.equal(cache.residentPages, 0);
+
+  device.queue.writeTexture = writeTexture;
+  assert.equal(cache.upload(tile('replacement-page')), 0);
+  assert.equal(cache.getLayer('replacement-page'), 0);
+});

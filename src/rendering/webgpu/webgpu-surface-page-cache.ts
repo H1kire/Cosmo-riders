@@ -133,7 +133,15 @@ export class WebGPUSurfacePageCache {
         );
       }
     } catch (error) {
-      if (isNew) this.slots[layer].used = 0;
+      if (isNew) {
+        const slot = this.slots[layer];
+        if (slot.key) {
+          this.pages.delete(slot.key);
+          this.pins.delete(slot.key);
+        }
+        slot.key = null;
+        slot.used = 0;
+      }
       throw error;
     }
 

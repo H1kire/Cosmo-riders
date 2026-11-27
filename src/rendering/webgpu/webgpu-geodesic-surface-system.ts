@@ -41,6 +41,7 @@ interface PlanetTopology {
   lastSelectionWidth: number;
   lastSelectionHeight: number;
   lastSelectionBudget: number;
+  lastSelectionErrorPx: number;
   transition: TopologyTransition | null;
 }
 const MAX_PAGE_LAYERS = 256;
@@ -165,7 +166,8 @@ export class WebGPUGeodesicSurfaceSystem {
       topology.lastSelectionFov !== verticalFovRadians ||
       topology.lastSelectionWidth !== viewportWidthPx ||
       topology.lastSelectionHeight !== viewportHeightPx ||
-      topology.lastSelectionBudget !== transitionBudget;
+      topology.lastSelectionBudget !== transitionBudget ||
+      topology.lastSelectionErrorPx !== targetErrorPx;
     let selection = topology.lastSelection;
     if (!selection || selectionChanged) {
       selection = selectGeodesicLod({
@@ -189,6 +191,7 @@ export class WebGPUGeodesicSurfaceSystem {
       topology.lastSelectionWidth = viewportWidthPx;
       topology.lastSelectionHeight = viewportHeightPx;
       topology.lastSelectionBudget = transitionBudget;
+      topology.lastSelectionErrorPx = targetErrorPx;
     }
 
     if (!topology.transition && this.pages.capacity < 40) {
@@ -426,6 +429,7 @@ export class WebGPUGeodesicSurfaceSystem {
         lastSelectionWidth: 0,
         lastSelectionHeight: 0,
         lastSelectionBudget: 0,
+        lastSelectionErrorPx: 0,
         transition: null
       };
       this.topologies.set(id, topology);

@@ -188,3 +188,14 @@ test('per-frame geodesic LOD selection budgets against the shared cache after hi
   assert.ok(source.includes('nextTransition ? availablePageBudget - source.length : availablePageBudget'));
   assert.ok(!source.includes('source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity'));
 });
+
+
+test('shared geodesic cache reserves in-flight target pages before scheduling lower-priority bodies', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('private frameReservedPageCount=0'));
+  assert.ok(source.includes('this.frameReservedPageCount=0'));
+  assert.ok(source.includes('Math.max(this.pages.pinnedPages, this.frameReservedPageCount)'));
+  assert.ok(source.includes('this.frameReservedPageCount += retainedTiles.length'));
+  assert.ok(source.includes('Резервуємо також ще не завантажені сторінки'));
+});

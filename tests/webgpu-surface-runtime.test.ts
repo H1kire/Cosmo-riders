@@ -115,3 +115,18 @@ test('visible page scheduling does not exceed the available worker queue slots',
  assert.equal(manager.requests.length,0);
  runtime.dispose();
 });
+
+
+test('page-key serialization is memoized per immutable geodesic tile identity', () => {
+  const runtime = new WebGPUSurfaceRuntime(
+    fakeDevice(), 'page-key-cache', profile, { resolution: 8, gutter: 0 }, new FakeManager() as any
+  );
+  const first = baseGeoTiles()[0];
+  const equivalent = baseGeoTiles()[0];
+  const keyA = (runtime as any).pageKeyFor(first);
+  const keyB = (runtime as any).pageKeyFor(equivalent);
+  assert.equal(keyA, keyB);
+  assert.equal((runtime as any).pageKeyCache.size, 1);
+  runtime.dispose();
+  assert.equal((runtime as any).pageKeyCache.size, 0);
+});

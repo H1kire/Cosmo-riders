@@ -1091,19 +1091,24 @@ export class WebGPUBackend {
       };
       return projectedPriority(b) - projectedPriority(a);
     });
-    for (const body of orderedBodies) {
-      const bodyRadius = modelRadius(body.model);
-      if (!isRenderSphereVisible(body.position, bodyRadius, frame)) continue;
+    const visibleBodies = orderedBodies.filter(body =>
+      isRenderSphereVisible(body.position, modelRadius(body.model), frame)
+    );
+    let remainingSurfaceBodies = visibleBodies.filter(body =>
+      Boolean(body.surfaceProfile && body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant')
+    ).length;
+    for (const body of visibleBodies) {
       const usesGeodesicSurface = Boolean(body.surfaceProfile &&
         body.surfaceProfile.kind !== 'gas-giant' && body.surfaceProfile.kind !== 'ice-giant');
       if (usesGeodesicSurface) {
+        remainingSurfaceBodies = Math.max(0, remainingSurfaceBodies - 1);
         this.geodesicSystem?.drawBody(
           pass, body, body.surfaceProfile!, frame.viewProjection, frame.cameraPosition,
           frame.sunPosition, frame.cameraForward ?? [0, 0, -1],
           frame.verticalFovRadians ?? Math.PI / 3,
           width, height,
           body.shadowOccluders ?? ZERO_SHADOW_OCCLUDERS, frame.sunRadius ?? 0, body.shadowsEnabled !== false,
-          frame.geodesicTargetErrorPx
+          frame.geodesicTargetErrorPx, remainingSurfaceBodies
         );
         // Тверда планета не переходить на спрощену сферу, поки геодезичні сторінки завантажуються.
         continue;

@@ -146,10 +146,13 @@ export class WebGPUGeodesicSurfaceSystem {
     const runtime = this.runtimeFor(body.id, profile);
     const topology = this.topologyFor(body.id);
     this.active.add(body.id);
-    // Резервуємо місце для повного попереднього покриття, навіть якщо бюджет GPU дорівнює лише 20 сторінкам.
+    // Спільний GPU page cache обслуговує всі планети: бюджет цього тіла
+    // рахується після сторінок, уже закріплених більш пріоритетними тілами.
     const sourceCount = topology.transition?.source.length ??
       topology.runtime.getTileStates().filter(state => state.visible).length;
-    const transitionBudget = Math.max(20, this.pages.capacity - sourceCount);
+    const availablePageBudget = Math.max(0, this.pages.capacity - this.pages.pinnedPages);
+    if (availablePageBudget < 20) return false;
+    const transitionBudget = Math.max(20, availablePageBudget - sourceCount);
     const selectionTime = clockNow();
     const previousCamera = topology.lastSelectionCamera;
     const previousForward = topology.lastSelectionForward;
@@ -203,7 +206,7 @@ export class WebGPUGeodesicSurfaceSystem {
     if (signature !== topology.visibleSignature && !topology.transition) {
       const source = topology.runtime.getTileStates().filter(state => state.visible);
       const canCrossfade = source.length > 0 &&
-        source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity;
+        source.length + Math.max(20, selection.tiles.length) <= availablePageBudget;
       const nextTransition: TopologyTransition | null = canCrossfade
         ? { source, targetSignature: signature, blendStartedAt: null }
         : null;
@@ -213,7 +216,7 @@ export class WebGPUGeodesicSurfaceSystem {
         topology.runtime.reconcile(
           selection.tiles,
           new Set(selection.tiles.map(tile => tile.id.key)),
-          nextTransition ? this.pages.capacity - source.length : this.pages.capacity
+          nextTransition ? availablePageBudget - source.length : availablePageBudget
         );
         topology.transition = nextTransition;
         topology.visibleSignature = signature;

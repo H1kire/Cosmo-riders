@@ -2,7 +2,7 @@
 
 Last repository audit: 2026-11-28
 Audited branch: `test`
-Audited commit: `f139116d324cccdb8487a42562829839b6d3968a`
+Audited code commit: `2b2b77f42f3cf75464675649b262f82df70a111c`
 
 ## Active renderer
 
@@ -26,6 +26,8 @@ The older WebGL2 geodesic and ring renderers, GLSL materials, and cube-map surfa
 - Linear floating-point scene target, bloom extraction/blur, exposure, Reinhard/ACES tone mapping, glare and lens-flare composition.
 - Graphics presets, render scale, MSAA negotiation and adaptive quality controls.
 - Deferred retirement of GPU meshes and render targets until submitted queue work has completed.
+- Shared surface-page budgeting reserves the 20 root-face pages required by every later visible solid body before allowing higher-priority planets to consume additional LOD pages.
+- If the current and target LOD coverages cannot coexist within the shared GPU budget, the renderer retains the current complete coverage and retries the LOD change later instead of dropping the old surface before the new pages are ready.
 
 These are implemented rendering systems and approximations; they are not claims of physically complete climate, radiative-transfer or shadow-map simulation.
 
@@ -33,9 +35,9 @@ These are implemented rendering systems and approximations; they are not claims 
 
 The current `test` head is `f139116d324cccdb8487a42562829839b6d3968a`.
 
-GitHub Actions run [46134561176](https://github.com/H1kire/Cosmo-riders/actions/runs/46134561176), started 2026-11-28 10:18:39 UTC, completed with conclusion **success**. The workflow runs the Rust computational tests, builds the WASM package, installs dependencies, executes the complete repository audit and publishes the Pages artifact.
+GitHub Actions run [46135762431](https://github.com/H1kire/Cosmo-riders/actions/runs/46135762431), completed 2026-11-28 with conclusion **success**. The workflow ran the Rust computational tests, built the WASM package, installed dependencies, executed the complete repository audit, published the Pages artifact and passed the live Pages/MIME check.
 
-This verifies the CI build/test/audit pipeline for that commit. It does not establish visual correctness on a physical browser/GPU.
+This verifies the CI build/test/audit pipeline and the live Pages/MIME smoke check for that commit. It does not establish visual correctness of the rendered scene on a physical browser/GPU.
 
 ## Remaining acceptance work — not marked complete
 

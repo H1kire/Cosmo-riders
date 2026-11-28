@@ -46,6 +46,20 @@ interface PlanetTopology {
 }
 const MAX_PAGE_LAYERS = 256;
 const METERS_PER_AU = 149597870700;
+
+/** Leaves enough shared texture-array layers for every later visible solid body to keep its 20 root faces. */
+export function resolveAvailableSurfacePageBudget(
+  capacity: number,
+  occupied: number,
+  remainingSurfaceBodies: number,
+  minimumRootPages = 20
+): number {
+  const safeCapacity = Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 0;
+  const safeOccupied = Number.isFinite(occupied) ? Math.max(0, Math.min(safeCapacity, Math.floor(occupied))) : safeCapacity;
+  const safeRemaining = Number.isFinite(remainingSurfaceBodies) ? Math.max(0, Math.floor(remainingSurfaceBodies)) : 0;
+  const safeMinimum = Number.isFinite(minimumRootPages) ? Math.max(1, Math.floor(minimumRootPages)) : 20;
+  return Math.max(0, safeCapacity - safeOccupied - safeRemaining * safeMinimum);
+}
 const LOD_CROSSFADE_MS = 420;
 const clockNow = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -115,7 +129,8 @@ export class WebGPUGeodesicSurfaceSystem {
     shadowOccluders: Float32Array = new Float32Array(32),
     sunRadius = 0,
     shadowsEnabled = true,
-    targetErrorPx = this.settings.meshResolution >= 64 ? 1.5 : 2.5
+    targetErrorPx = this.settings.meshResolution >= 64 ? 1.5 : 2.5,
+    remainingSurfaceBodies = 0
   ): boolean {
     if (this.disposed || profile.kind === 'gas-giant' || profile.kind === 'ice-giant') return false;
     this.frameShadowOccluders.set(shadowOccluders);
@@ -152,7 +167,9 @@ export class WebGPUGeodesicSurfaceSystem {
     const sourceCount = topology.transition?.source.length ??
       topology.runtime.getTileStates().filter(state => state.visible).length;
     const occupiedPageBudget = Math.max(this.pages.pinnedPages, this.frameReservedPageCount);
-    const availablePageBudget = Math.max(0, this.pages.capacity - occupiedPageBudget);
+    const availablePageBudget = resolveAvailableSurfacePageBudget(
+      this.pages.capacity, occupiedPageBudget, remainingSurfaceBodies, 20
+    );
     if (availablePageBudget < 20) return false;
     const transitionBudget = Math.max(20, availablePageBudget - sourceCount);
     const selectionTime = clockNow();

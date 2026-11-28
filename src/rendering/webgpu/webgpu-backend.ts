@@ -768,9 +768,9 @@ export class WebGPUBackend {
       format: this.format,
       alphaMode: 'opaque'
     });
-    this.depthTexture?.destroy();
+    this.retireTextures([this.depthTexture]);
     this.depthTexture = this.device.createTexture({ size: [this.sceneWidth, this.sceneHeight, 1], sampleCount: this.msaaSamples, format: 'depth24plus', usage: TEXTURE_USAGE.RENDER_ATTACHMENT });
-    this.msaaColorTexture?.destroy?.();
+    this.retireTextures([this.msaaColorTexture]);
     this.msaaColorTexture = this.msaaSamples > 1 ? this.device.createTexture({ size: [this.sceneWidth, this.sceneHeight, 1], sampleCount: this.msaaSamples, format: 'rgba16float', usage: TEXTURE_USAGE.RENDER_ATTACHMENT }) : null;
     this.createPostTargets(this.sceneWidth, this.sceneHeight);
   }
@@ -865,8 +865,23 @@ export class WebGPUBackend {
     await this.createPostPipelines();
   }
 
+  /** Відкладає destroy до завершення всіх command buffers, які могли посилатися на старі render targets. */
+  private retireTextures(textures: readonly any[]): void {
+    const pending = textures.filter(Boolean);
+    if (!pending.length) return;
+    let completion: Promise<unknown>;
+    try {
+      completion = this.device?.queue?.onSubmittedWorkDone?.() ?? Promise.resolve();
+    } catch {
+      completion = Promise.resolve();
+    }
+    void Promise.resolve(completion).catch(() => undefined).then(() => {
+      for (const texture of pending) texture.destroy?.();
+    });
+  }
+
   private createPostTargets(width:number,height:number):void {
-    for(const texture of [this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture]) texture?.destroy?.();
+    this.retireTextures([this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture]);
     const make=(w:number,h:number)=>this.device.createTexture({size:[w,h,1],format:'rgba16float',usage:TEXTURE_USAGE.RENDER_ATTACHMENT|TEXTURE_USAGE.TEXTURE_BINDING});
     this.sceneTexture=make(width,height);
     const bw=Math.max(1,Math.floor(width*0.5)),bh=Math.max(1,Math.floor(height*0.5));

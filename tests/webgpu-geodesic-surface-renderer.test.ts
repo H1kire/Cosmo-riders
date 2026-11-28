@@ -193,6 +193,8 @@ test('per-frame geodesic LOD selection budgets against the shared cache after hi
   assert.ok(source.includes('remainingSurfaceBodies = 0'));
   assert.ok(source.includes('if (availablePageBudget < 20) return false'));
   assert.ok(source.includes('source.length + Math.max(20, selection.tiles.length) <= availablePageBudget'));
+  assert.ok(source.includes('if (source.length > 0 && !canCrossfade)'));
+  assert.ok(source.includes('Поточна поверхня залишається стабільною'));
   assert.ok(source.includes('nextTransition ? availablePageBudget - source.length : availablePageBudget'));
   assert.ok(!source.includes('source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity'));
 });

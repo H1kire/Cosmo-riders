@@ -178,3 +178,19 @@ test('WebGPU lifecycle guards stale initialization and allows bounded device rec
  assert.match(backend,/previousDevice\?\.destroy\?\.\(\)/);
  assert.match(backend,/timestampGeneration\+\+/);
 });
+
+
+test('resized WebGPU render targets retire only after submitted queue work completes', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts', import.meta.url), 'utf8');
+  const retire = source.slice(source.indexOf('private retireTextures'), source.indexOf('private createPostTargets'));
+  const targets = source.slice(source.indexOf('private createPostTargets'), source.indexOf('private async createPostPipelines'));
+  const configure = source.slice(source.indexOf('private configure('), source.indexOf('private async createPipeline'));
+  assert.ok(retire.includes('onSubmittedWorkDone'));
+  assert.ok(retire.includes('Promise.resolve(completion).catch'));
+  assert.ok(retire.includes('texture.destroy?.()'));
+  assert.ok(configure.includes('this.retireTextures([this.depthTexture])'));
+  assert.ok(configure.includes('this.retireTextures([this.msaaColorTexture])'));
+  assert.ok(targets.includes('this.retireTextures([this.sceneTexture,this.brightTexture,this.pingTexture,this.pongTexture])'));
+  assert.ok(!targets.includes('texture?.destroy?.()'));
+});

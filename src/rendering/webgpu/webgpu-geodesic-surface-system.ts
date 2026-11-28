@@ -201,21 +201,26 @@ export class WebGPUGeodesicSurfaceSystem {
 
     const signature = selection.tiles.map(tile => tile.id.key).sort().join(',');
     if (signature !== topology.visibleSignature && !topology.transition) {
+      const source = topology.runtime.getTileStates().filter(state => state.visible);
+      const canCrossfade = source.length > 0 &&
+        source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity;
+      const nextTransition: TopologyTransition | null = canCrossfade
+        ? { source, targetSignature: signature, blendStartedAt: null }
+        : null;
       try {
-        const source = topology.runtime.getTileStates().filter(state => state.visible);
-        if (source.length > 0 && source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity) {
-          topology.transition = { source, targetSignature: signature, blendStartedAt: null };
-        }
+        // Спочатку атомарно приймаємо нове дерево. Незавершений transition не можна
+        // публікувати до успішної балансировки та перевірки бюджету сторінок.
         topology.runtime.reconcile(
           selection.tiles,
           new Set(selection.tiles.map(tile => tile.id.key)),
-          topology.transition ? this.pages.capacity - topology.transition.source.length : this.pages.capacity
+          nextTransition ? this.pages.capacity - source.length : this.pages.capacity
         );
+        topology.transition = nextTransition;
         topology.visibleSignature = signature;
         topology.lastStats = selection.stats;
         topology.splitKeys = collectSplitKeys(topology.runtime.activeTiles);
       } catch {
-        // Зберігаємо останню коректну збалансовану сітку, якщо кадр вичерпав бюджет сторінок.
+        // Зберігаємо останнє коректне покриття; transition залишається null.
       }
     }
     // Поки поточний LOD crossfade не завершений, не замінюємо його цільовий набір новим.

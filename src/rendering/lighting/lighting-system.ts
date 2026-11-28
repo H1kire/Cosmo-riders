@@ -11,7 +11,7 @@ export function focusedSolarExposureMultiplier(_distanceAU:number):number {
 }
 
 
-/** Нормована сонячна опроміненість: 1 на 1 AU та закон обернених квадратів. */
+/** Відображувана опроміненість: фізичний спад 1/r² із обмеженою компенсацією HDR для дальніх тіл. */
 export function solarIrradianceForDisplay(distanceAU:number):number {
  if(!Number.isFinite(distanceAU)||distanceAU<=0)return 1;
  const distance=Math.max(distanceAU,0.05);

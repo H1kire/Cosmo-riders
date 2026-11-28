@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCameraClipPlanes } from '../src/presentation/solar-3d.ts';
+import { calculateCameraClipPlanes, createPerspectiveMatrix } from '../src/presentation/solar-3d.ts';
 
 const AU=149_597_870_700;
 
@@ -25,4 +25,16 @@ test('unfocused system-map camera retains the wide solar-system far plane',()=>{
  const [near,far]=calculateCameraClipPlanes(1,0);
  assert.ok(near>0);
  assert.equal(far,100);
+});
+
+
+test('WebGPU projection maps the near and far clip planes to depth zero and one', () => {
+ const near=.001,far=100;
+ const projection=createPerspectiveMatrix(Math.PI/3,16/9,near,far);
+ const depthAt=(distance:number)=>(projection[10]*-distance+projection[14])/distance;
+ assert.ok(Math.abs(depthAt(near))<1e-12,'near plane maps to WebGPU NDC z=0');
+ assert.ok(Math.abs(depthAt(far)-1)<1e-12,'far plane maps to WebGPU NDC z=1');
+ const middle=depthAt(Math.sqrt(near*far));
+ assert.ok(middle>0&&middle<1,'interior geometry remains inside WebGPU depth range');
+ assert.throws(()=>createPerspectiveMatrix(Math.PI/3,1,0,100),/clip planes/);
 });

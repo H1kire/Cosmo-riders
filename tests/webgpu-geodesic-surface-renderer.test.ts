@@ -130,7 +130,10 @@ test('active geodesic LOD crossfade is not repeatedly retargeted by camera movem
 test('active WebGPU backend culls bodies, atmosphere/cloud shells and ring geometry by projected bounds',async()=>{
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/rendering/webgpu/webgpu-backend.ts',import.meta.url),'utf8');
- assert.ok(source.includes('if (!isRenderSphereVisible(body.position, bodyRadius, frame)) continue'));
+ assert.ok(source.includes('const visibleBodies = orderedBodies.filter(body =>'));
+  assert.ok(source.includes('isRenderSphereVisible(body.position, modelRadius(body.model), frame)'));
+  assert.ok(source.includes('let remainingSurfaceBodies = visibleBodies.filter(body =>'));
+  assert.ok(source.includes('frame.geodesicTargetErrorPx, remainingSurfaceBodies'));
  assert.ok(source.includes('bodyRadius * shellScale, frame'));
  assert.ok(source.includes('isRenderSphereVisible(ringCenter, modelRadius(ringDraw.model), frame)'));
  assert.ok(source.includes('function modelRadius(model: ArrayLike<number>)'));
@@ -185,7 +188,9 @@ test('per-frame geodesic LOD selection budgets against the shared cache after hi
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
   assert.ok(source.includes('const occupiedPageBudget = Math.max(this.pages.pinnedPages, this.frameReservedPageCount)'));
-  assert.ok(source.includes('const availablePageBudget = Math.max(0, this.pages.capacity - occupiedPageBudget)'));
+  assert.ok(source.includes('const availablePageBudget = resolveAvailableSurfacePageBudget('));
+  assert.ok(source.includes('this.pages.capacity, occupiedPageBudget, remainingSurfaceBodies, 20'));
+  assert.ok(source.includes('remainingSurfaceBodies = 0'));
   assert.ok(source.includes('if (availablePageBudget < 20) return false'));
   assert.ok(source.includes('source.length + Math.max(20, selection.tiles.length) <= availablePageBudget'));
   assert.ok(source.includes('nextTransition ? availablePageBudget - source.length : availablePageBudget'));

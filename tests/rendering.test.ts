@@ -214,11 +214,14 @@ test('cloud density fields are sampled in body-local coordinates while lighting 
 });
 
 
-test('solar irradiance follows the normalized inverse-square law at planetary distances',()=>{
+test('solar display irradiance preserves inverse-square falloff with bounded distant-body compensation',()=>{
  assert.equal(solarIrradianceForDisplay(1),1);
- assert.equal(solarIrradianceForDisplay(2),.25);
- assert.ok(Math.abs(solarIrradianceForDisplay(5.2)-1/(5.2*5.2))<1e-12);
- assert.ok(Math.abs(solarIrradianceForDisplay(30)-1/900)<1e-12);
+ assert.equal(solarIrradianceForDisplay(2),planetaryDisplayGain(2)/4);
+ assert.ok(solarIrradianceForDisplay(2)>1/4,'display compensation is separate from physical inverse-square falloff');
+ assert.ok(Math.abs(solarIrradianceForDisplay(5.2)-planetaryDisplayGain(5.2)/(5.2*5.2))<1e-12);
+ assert.ok(solarIrradianceForDisplay(5.2)<1,'Jupiter remains dimmer than a body at 1 AU');
+ assert.ok(Math.abs(solarIrradianceForDisplay(30)-64/900)<1e-12,'distant-body compensation is capped');
+ assert.ok(solarIrradianceForDisplay(30)<solarIrradianceForDisplay(5.2),'outer planets remain dimmer than Jupiter');
 });
 
 test('active cloud shader keeps solar angular radius separate from cloud banding',async()=>{

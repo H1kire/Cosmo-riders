@@ -8,6 +8,8 @@ test('solar display irradiance preserves inverse-square falloff with bounded dis
  assert.ok(solarIrradianceForDisplay(5.2)<1,'Jupiter receives less solar irradiance than Earth');
  assert.ok(solarIrradianceForDisplay(30.1)<solarIrradianceForDisplay(5.2),'Neptune receives less irradiance than Jupiter');
  assert.ok(solarIrradianceForDisplay(30.1)>0,'distant planets retain non-zero illumination');
+ assert.ok(solarIrradianceForDisplay(30.1)>1/(30.1*30.1),'the bounded display gain is applied without replacing inverse-square falloff');
+ assert.ok(solarIrradianceForDisplay(30.1)<1/Math.sqrt(30.1),'display compensation does not flatten distant illumination to the inner-planet level');
  assert.equal(solarIrradianceForDisplay(0),1);
  assert.ok(planetaryDisplayGain(30.1)<=64);
 });
@@ -20,6 +22,8 @@ test('the active WebGPU surface, atmosphere, cloud and ring paths consume shared
   readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-renderer.ts',import.meta.url),'utf8')
  ]);
  assert.ok(backend.includes('solarIrradianceForDisplay(sunDistanceAU)'));
+ const lighting=await readFile(new URL('../src/rendering/lighting/lighting-system.ts',import.meta.url),'utf8');
+ assert.ok(lighting.includes('return planetaryDisplayGain(distance)/(distance*distance)'));
  assert.ok(backend.includes('solarIrradianceForDisplay(ringSunDistanceAU)'));
  assert.ok(backend.includes('max(body.lighting.x, 0.0)'));
  assert.ok(backend.includes('max(ring.color.w,0.0)'));

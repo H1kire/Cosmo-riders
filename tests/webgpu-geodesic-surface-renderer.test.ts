@@ -199,3 +199,12 @@ test('shared geodesic cache reserves in-flight target pages before scheduling lo
   assert.ok(source.includes('this.frameReservedPageCount += retainedTiles.length'));
   assert.ok(source.includes('Резервуємо також ще не завантажені сторінки'));
 });
+
+
+test('parent LOD coverage writes depth while child meshes are still loading', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  const branch = source.slice(source.indexOf('if (!targetReady)'), source.indexOf('const transition = topology.transition'));
+  assert.ok(branch.includes("transitionRole: 'depth'"));
+  assert.ok(branch.includes('return true'));
+});

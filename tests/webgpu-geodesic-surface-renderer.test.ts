@@ -164,3 +164,16 @@ test('geodesic frame start releases stale pins before prioritized visible-page r
  assert.ok(begin.includes('for (const runtime of this.runtimes.values()) runtime.setVisibleTiles([])'));
  assert.ok(begin.indexOf('runtime.setVisibleTiles([])')<begin.indexOf('uploadsRemainingThisFrame=this.settings.uploadsPerFrame'));
 });
+
+
+test('LOD transition is published only after topology reconciliation succeeds', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  const reconcile = source.indexOf('topology.runtime.reconcile(');
+  const publish = source.indexOf('topology.transition = nextTransition', reconcile);
+  const catchBlock = source.indexOf('} catch {', reconcile);
+  assert.ok(reconcile >= 0);
+  assert.ok(publish > reconcile);
+  assert.ok(catchBlock > reconcile && catchBlock < publish);
+  assert.ok(source.includes('const nextTransition: TopologyTransition | null'));
+});

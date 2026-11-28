@@ -298,7 +298,14 @@ export class WebGPUGeodesicSurfaceSystem {
 
       // Батьківська сітка спершу повністю заповнює кадр і записує коректну глибину.
       this.drawTileStates(pass, sourceItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, { transitionRole: 'source' });
-      if (!targetReady) return true;
+      if (!targetReady) {
+        // Поки дочірні меші готуються, батьківське покриття також має записати depth,
+        // інакше наступні оболонки та тіла можуть помилково малюватися крізь планету.
+        this.drawTileStates(pass, sourceItems, renderer, viewProjection, model, profile.meanRadiusM, lightDirection, cameraPosition, {
+          transitionRole: 'depth'
+        });
+        return true;
+      }
 
       const transition = topology.transition;
       if (transition.blendStartedAt === null) transition.blendStartedAt = clockNow();

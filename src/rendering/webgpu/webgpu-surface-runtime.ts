@@ -23,6 +23,8 @@ export class WebGPUSurfaceRuntime {
   private readonly seed: number;
   private readonly planetId: string;
   private readonly visible = new Map<string, GeoTile>();
+  /** Ключ сторінки незмінний для tile ID протягом життя цього runtime/profile. */
+  private readonly pageKeyCache = new Map<string, string>();
   private readonly pinned = new Set<string>();
   private readonly inFlight = new Map<string, Promise<number | undefined>>();
   private readonly meshInFlight = new Map<string, Promise<GeodesicTileMesh>>();
@@ -85,7 +87,7 @@ export class WebGPUSurfaceRuntime {
       if (next.has(tile.id.key)) throw new Error('Visible geodesic tile list contains duplicate keys.');
       next.set(tile.id.key, tile);
     }
-    const nextPageKeys = new Set([...next.values()].map(tile => this.requestFor(tile)).map(surfaceTileKey));
+    const nextPageKeys = new Set([...next.values()].map(tile => this.pageKeyFor(tile)));
     for (const key of this.pinned) {
       if (!nextPageKeys.has(key)) {
         this.pages.unpin(key);
@@ -96,7 +98,7 @@ export class WebGPUSurfaceRuntime {
     this.visible.clear();
     for (const [key, tile] of next) {
       this.visible.set(key, tile);
-      const pageKey = surfaceTileKey(this.requestFor(tile));
+      const pageKey = this.pageKeyFor(tile);
       this.manager.markVisible(pageKey, true);
       if (this.pages.getLayer(pageKey) !== undefined && !this.pinned.has(pageKey) && this.pages.pin(pageKey)) {
         this.pinned.add(pageKey);
@@ -129,8 +131,8 @@ export class WebGPUSurfaceRuntime {
     let started = 0;
     const ordered = [...this.visible.entries()].sort((a, b) => priority(b[1]) - priority(a[1]));
     for (const [tileKey, tile] of ordered) {
+      const pageKey = this.pageKeyFor(tile);
       const request = this.requestFor(tile);
-      const pageKey = surfaceTileKey(request);
       const resident = this.pages.getLayer(pageKey);
       if (resident !== undefined) {
         if (!this.pinned.has(pageKey) && this.pages.pin(pageKey)) this.pinned.add(pageKey);
@@ -178,7 +180,17 @@ export class WebGPUSurfaceRuntime {
 
   getPageLayer(tileKey: string): number | undefined {
     const tile = this.visible.get(tileKey);
-    return tile ? this.pages.getLayer(surfaceTileKey(this.requestFor(tile))) : undefined;
+    return tile ? this.pages.getLayer(this.pageKeyFor(tile)) : undefined;
+  }
+
+  private pageKeyFor(tile: GeoTile): string {
+    const cached = this.pageKeyCache.get(tile.id.key);
+    if (cached !== undefined) return cached;
+    // Обмежуємо пам'ять кешу ключів для довгих сесій із багатьма LOD-рівнями.
+    if (this.pageKeyCache.size >= 8192) this.pageKeyCache.clear();
+    const key = surfaceTileKey(this.requestFor(tile));
+    this.pageKeyCache.set(tile.id.key, key);
+    return key;
   }
 
   private requestFor(tile: GeoTile): SurfaceTileRequest {
@@ -202,6 +214,7 @@ export class WebGPUSurfaceRuntime {
     if (this.ownsManager) this.manager.dispose();
     this.inFlight.clear();
     this.meshInFlight.clear();
+    this.pageKeyCache.clear();
     this.meshes.clear();
   }
 }

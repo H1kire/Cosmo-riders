@@ -177,3 +177,14 @@ test('LOD transition is published only after topology reconciliation succeeds', 
   assert.ok(publish > reconcile && catchBlock > publish);
   assert.ok(source.includes('const nextTransition: TopologyTransition | null'));
 });
+
+
+test('per-frame geodesic LOD selection budgets against the shared cache after higher-priority bodies', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('const availablePageBudget = Math.max(0, this.pages.capacity - this.pages.pinnedPages)'));
+  assert.ok(source.includes('if (availablePageBudget < 20) return false'));
+  assert.ok(source.includes('source.length + Math.max(20, selection.tiles.length) <= availablePageBudget'));
+  assert.ok(source.includes('nextTransition ? availablePageBudget - source.length : availablePageBudget'));
+  assert.ok(!source.includes('source.length + Math.max(20, selection.tiles.length) <= this.pages.capacity'));
+});

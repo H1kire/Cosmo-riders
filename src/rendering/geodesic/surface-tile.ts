@@ -1,4 +1,4 @@
-import { barycentricDirection, resolveGeoTile, type GeoTileId, type Vec3 } from './icosphere.ts';
+import { barycentricDirection, resolveGeoTile, type GeoTile, type GeoTileId, type Vec3 } from './icosphere.ts';
 
 export type SurfaceKind='rocky'|'oceanic'|'desert'|'icy'|'volcanic'|'gas-giant'|'ice-giant'|'unknown';
 export interface SurfaceProfile {
@@ -30,6 +30,15 @@ export function squareToTriangleBarycentric(x:number,y:number):readonly [number,
 export function triangleToSquareUv(u:number,v:number):readonly [number,number]{
  const q=u+v;
  return [q*q,q>1e-12?v/q:.5];
+}
+
+/** Сэмпл сторінки розміщується в тих самих вузлах, які vertex shader використовує для displacement. */
+export function surfacePageSampleDirection(tile:GeoTile,col:number,row:number,resolution:number):Vec3{
+ if(!Number.isInteger(col)||!Number.isInteger(row))throw new RangeError('Surface page sample coordinates must be integers.');
+ if(!Number.isInteger(resolution)||resolution<2)throw new RangeError('Surface page resolution must be at least two.');
+ const pageX=col/(resolution-1),pageY=row/(resolution-1);
+ const [u,v]=squareToTriangleBarycentric(pageX,pageY);
+ return barycentricDirection(tile.triangle,u,v);
 }
 const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 function hash(x:number,y:number,z:number,seed:number):number{
@@ -182,9 +191,7 @@ export function generateSurfaceTile(request:SurfaceTileRequest):SurfaceTileData{
  for(let row=-gutter;row<resolution+gutter;row++){
   for(let col=-gutter;col<resolution+gutter;col++){
    // Gutter продовжує глобальне сферичне поле за межі сторінки.
-   const pageX=(col+.5)/resolution,pageY=(row+.5)/resolution;
-   const [u,v]=squareToTriangleBarycentric(pageX,pageY);
-   const direction=barycentricDirection(resolved.triangle,u,v);
+   const direction=surfacePageSampleDirection(resolved,col,row,resolution);
    const sample=sampleDirection(direction,tile.level);
    const physicalHeight=heightFraction(sample.height)*profile.meanRadiusM;
    directions.set(direction,index*3);

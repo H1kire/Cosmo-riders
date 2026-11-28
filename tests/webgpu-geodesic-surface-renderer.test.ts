@@ -63,7 +63,9 @@ test('WebGPU LOD crossfade separates source color, blended child color and final
  assert.ok(system.includes("transitionRole: 'source'"));
  assert.ok(system.includes("transitionRole: 'blend'"));
  assert.ok(system.includes("transitionRole: 'depth'"));
- assert.ok(system.indexOf("transitionRole: 'blend'")<system.indexOf("transitionRole: 'depth'"));
+ const blendPass=system.indexOf("transitionRole: 'blend'");
+ const finalDepthPass=system.indexOf("transitionRole: 'depth'",blendPass);
+ assert.ok(blendPass>=0&&finalDepthPass>blendPass);
 });
 
 

@@ -147,7 +147,8 @@ pub fn generate_tile(face:u32,path:&str,resolution:u32,gutter:u32,p:&SurfaceProf
 
  // Перший прохід: один дорогий геологічний семпл на texel.
  for row in -(gutter as i32)..(resolution as i32+gutter as i32){for col in -(gutter as i32)..(resolution as i32+gutter as i32){
-  let px=(col as f64+0.5)/resolution as f64;let py=(row as f64+0.5)/resolution as f64;
+  // Вузли сторінки збігаються з UV-вузлами геодезичного mesh displacement.
+  let px=col as f64/(resolution as f64-1.0);let py=row as f64/(resolution as f64-1.0);
   let q=px.signum()*px.abs().sqrt();let u=q*(1.0-py);let v=q*py;
   let d=barycentric_direction(tile.triangle,u,v)?;let s=sample(d,p,&plate_set,tile.level);
   let height_m=height_fraction(s.height)*p.mean_radius_m;

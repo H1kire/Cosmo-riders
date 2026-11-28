@@ -74,6 +74,7 @@ export class WebGPUGeodesicSurfaceSystem {
   private frameSubmittedVertices=0;
   private uploadsRemainingThisFrame=0;
   private readonly frameVisibleTiles=new Set<string>();
+  private frameReservedPageCount=0;
 
   constructor(private readonly device: any, private readonly settings: WebGPUGeodesicSurfaceSettings, private readonly sampleCount: 1 | 4 = 1) {
     this.manager = new VirtualSurfaceManager({ cpuBudgetBytes: settings.cpuBudgetBytes, workerCount: settings.workerCount });
@@ -97,7 +98,7 @@ export class WebGPUGeodesicSurfaceSystem {
     this.active.clear();this.desiredMeshes.clear();
     // Знімаємо попередньокадрові pin-и до пріоритетного repin видимих тіл у порядку projected size.
     for (const runtime of this.runtimes.values()) runtime.setVisibleTiles([]);
-    this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();
+    this.frameDrawCalls=0;this.frameTriangles=0;this.frameSubmittedVertices=0;this.uploadsRemainingThisFrame=this.settings.uploadsPerFrame;this.frameVisibleTiles.clear();this.frameReservedPageCount=0;
   }
 
   drawBody(
@@ -150,7 +151,8 @@ export class WebGPUGeodesicSurfaceSystem {
     // рахується після сторінок, уже закріплених більш пріоритетними тілами.
     const sourceCount = topology.transition?.source.length ??
       topology.runtime.getTileStates().filter(state => state.visible).length;
-    const availablePageBudget = Math.max(0, this.pages.capacity - this.pages.pinnedPages);
+    const occupiedPageBudget = Math.max(this.pages.pinnedPages, this.frameReservedPageCount);
+    const availablePageBudget = Math.max(0, this.pages.capacity - occupiedPageBudget);
     if (availablePageBudget < 20) return false;
     const transitionBudget = Math.max(20, availablePageBudget - sourceCount);
     const selectionTime = clockNow();
@@ -236,6 +238,9 @@ export class WebGPUGeodesicSurfaceSystem {
     for (const state of sourceStates) unionByKey.set(state.tile.id.key, state.tile);
     for (const tile of targetTiles) unionByKey.set(tile.id.key, tile);
     const retainedTiles = [...unionByKey.values()];
+    // Резервуємо також ще не завантажені сторінки, щоб наступні планети
+    // не перепланували той самий вільний GPU-бюджет до завершення Worker uploads.
+    this.frameReservedPageCount += retainedTiles.length;
     const retainedMeshKeys = new Set([...sourceStates, ...states].map(state =>
       state.tile.id.key + ':' + this.settings.meshResolution + ':' + profile.meanRadiusM + ':' + state.stitchMask
     ));

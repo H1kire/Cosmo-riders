@@ -569,7 +569,7 @@ test('orbit rendering uses smooth visibility, adaptive tessellation and WebGPU-m
 test('WebGPU geodesic startup reserves the twenty-face root cover before selecting refinement tiles',async()=>{
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/rendering/webgpu/webgpu-geodesic-surface-system.ts',import.meta.url),'utf8');
- assert.ok(source.includes('const transitionBudget = Math.max(20, this.pages.capacity - sourceCount)'));
+ assert.ok(source.includes('const transitionBudget = Math.max(20, availablePageBudget - sourceCount)'));
  assert.ok(source.includes('maxTiles: transitionBudget'));
  assert.ok(source.includes('if (!topology.transition && this.pages.capacity < 40)'));
  assert.ok(source.includes('selection = { tiles: baseGeoTiles(), stats: selection.stats }'));
@@ -638,12 +638,13 @@ test('WebGPU LOD transitions retain the previous complete cover until every targ
  assert.ok(source.includes('runtime.setVisibleTiles(retainedTiles)'));
  assert.ok(source.includes('const targetReady = targetItems.length > 0 && targetItems.every'));
  assert.ok(source.includes('if (topology.transition)'));
- assert.ok(source.includes('if (!targetReady) return true'));
+ assert.ok(source.includes('if (!targetReady) {'));
+ assert.ok(source.includes("transitionRole: 'depth'"));
  assert.ok(source.includes('if (blend >= 1)'));
  assert.ok(source.includes('const sourceReady = sourceItems.length > 0 && sourceItems.every'));
  assert.ok(source.includes('this.drawTileStates(pass, sourceItems'));
  assert.ok(source.includes('runtime.setVisibleTiles(targetTiles)'));
- assert.ok(source.includes('const transitionBudget = Math.max(20, this.pages.capacity - sourceCount)'));
+ assert.ok(source.includes('const transitionBudget = Math.max(20, availablePageBudget - sourceCount)'));
 });
 
 test('WebGPU LOD transition keeps source mesh variants and releases them only after target activation',async()=>{
@@ -699,7 +700,8 @@ test('WebGPU geodesic LOD performs a real pixel alpha crossfade after every targ
  assert.ok(system.includes('forceMorph: true'));
  assert.ok(system.includes('this.drawTileStates(pass, sourceItems'));
  assert.ok(system.indexOf('this.drawTileStates(pass, sourceItems')<system.indexOf('transitionAlpha: blend'));
- assert.ok(system.includes('if (!targetReady) return true'));
+ assert.ok(system.includes('if (!targetReady) {'));
+ assert.ok(system.includes("transitionRole: 'depth'"));
  assert.ok(system.includes('if (blend >= 1)'));
 });
 

@@ -226,23 +226,30 @@ export class WebGPUGeodesicSurfaceSystem {
       const source = topology.runtime.getTileStates().filter(state => state.visible);
       const canCrossfade = source.length > 0 &&
         source.length + Math.max(20, selection.tiles.length) <= availablePageBudget;
-      const nextTransition: TopologyTransition | null = canCrossfade
-        ? { source, targetSignature: signature, blendStartedAt: null }
-        : null;
-      try {
-        // Спочатку атомарно приймаємо нове дерево. Незавершений transition не можна
-        // публікувати до успішної балансировки та перевірки бюджету сторінок.
-        topology.runtime.reconcile(
-          selection.tiles,
-          new Set(selection.tiles.map(tile => tile.id.key)),
-          nextTransition ? availablePageBudget - source.length : availablePageBudget
-        );
-        topology.transition = nextTransition;
-        topology.visibleSignature = signature;
-        topology.lastStats = selection.stats;
-        topology.splitKeys = collectSplitKeys(topology.runtime.activeTiles);
-      } catch {
-        // Зберігаємо останнє коректне покриття; transition залишається null.
+      if (source.length > 0 && !canCrossfade) {
+        // Не перемикаємо дерево без бюджету на одночасне старе й нове покриття:
+        // інакше старі сторінки будуть відкріплені раніше, ніж завантажаться нові.
+        // Поточна поверхня залишається стабільною, а новий LOD буде повторно оцінено
+        // на наступних кадрах, коли спільний бюджет дозволить безпечний crossfade.
+      } else {
+        const nextTransition: TopologyTransition | null = canCrossfade
+          ? { source, targetSignature: signature, blendStartedAt: null }
+          : null;
+        try {
+          // Спочатку атомарно приймаємо нове дерево. Незавершений transition не можна
+          // публікувати до успішної балансировки та перевірки бюджету сторінок.
+          topology.runtime.reconcile(
+            selection.tiles,
+            new Set(selection.tiles.map(tile => tile.id.key)),
+            nextTransition ? availablePageBudget - source.length : availablePageBudget
+          );
+          topology.transition = nextTransition;
+          topology.visibleSignature = signature;
+          topology.lastStats = selection.stats;
+          topology.splitKeys = collectSplitKeys(topology.runtime.activeTiles);
+        } catch {
+          // Зберігаємо останнє коректне покриття; transition залишається null.
+        }
       }
     }
     // Поки поточний LOD crossfade не завершений, не замінюємо його цільовий набір новим.

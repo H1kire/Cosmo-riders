@@ -174,6 +174,6 @@ test('LOD transition is published only after topology reconciliation succeeds', 
   const catchBlock = source.indexOf('} catch {', reconcile);
   assert.ok(reconcile >= 0);
   assert.ok(publish > reconcile);
-  assert.ok(catchBlock > reconcile && catchBlock < publish);
+  assert.ok(publish > reconcile && catchBlock > publish);
   assert.ok(source.includes('const nextTransition: TopologyTransition | null'));
 });

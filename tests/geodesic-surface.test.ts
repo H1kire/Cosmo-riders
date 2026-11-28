@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ICOSAHEDRON_FACES,barycentricDirection,baseGeoTiles,childrenOf,resolveGeoTile,tileId } from '../src/rendering/geodesic/icosphere.ts';
-import { generateSurfaceTile,surfaceTileKey } from '../src/rendering/geodesic/surface-tile.ts';
+import { generateSurfaceTile,surfacePageSampleDirection,surfaceTileKey } from '../src/rendering/geodesic/surface-tile.ts';
 import { createGeologicalProfile } from '../src/rendering/geodesic/surface-profile.ts';
 import { createSolarSystemWorld } from '../src/physics/solar-system.ts';
 import { SOLAR_SYSTEM_DATA } from '../src/physics/solar-system.ts';
@@ -181,4 +181,17 @@ test('temperature and atmospheric pressure influence polar frost and surface wea
  const vacuumPage=generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tileId(0),resolution:8,gutter:1,profile:vacuum});
  const densePage=generateSurfaceTile({planetId:'environment-probe',seed:base.seed,tile:tileId(0),resolution:8,gutter:1,profile:denseAtmosphere});
  assert.notDeepEqual(vacuumPage.roughness,densePage.roughness);
+});
+
+
+test('surface page edge samples coincide with the geodesic triangle vertices used by mesh displacement', () => {
+ const tile=resolveGeoTile(tileId(0,'2')),resolution=32;
+ const a=surfacePageSampleDirection(tile,0,0,resolution);
+ const b=surfacePageSampleDirection(tile,resolution-1,0,resolution);
+ const c=surfacePageSampleDirection(tile,resolution-1,resolution-1,resolution);
+ for(const [actual,expected] of [[a,tile.triangle.a],[b,tile.triangle.b],[c,tile.triangle.c]] as const){
+  assert.ok(Math.hypot(actual[0]-expected[0],actual[1]-expected[1],actual[2]-expected[2])<1e-12);
+ }
+ const gutter=surfacePageSampleDirection(tile,-1,0,resolution);
+ assert.ok(gutter.every(Number.isFinite),'gutter samples remain valid across the spherical tile edge');
 });

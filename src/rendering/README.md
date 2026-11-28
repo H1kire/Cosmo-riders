@@ -79,6 +79,14 @@ The page cache is shared between all solid bodies. Its capacity is constrained b
 
 The existing `AdaptiveQuality` controller is connected to the active `Solar3DView → WebGPUBackend` frame path. It evaluates a rolling 30–90 frame interval, steps down after sustained frame-time overruns and recovers after sustained headroom. It is capped by the user-selected preset and can be disabled in Graphics settings. Adaptation changes render scale, MSAA, atmosphere/cloud sampling, post-processing cost and the geodesic screen-space error threshold; it does not change simulation data or rebuild the geodesic page cache when only the LOD threshold changes.
 
+## Correctness and resource-lifetime invariants
+
+- The camera projection maps WebGPU clip depth to [0, 1]; projected labels and star visibility use the same normalized depth interval.
+- Surface-page samples are generated at the same normalized triangular-grid coordinates used by the geodesic mesh UV mapping. TypeScript and Rust/WASM use the same endpoint mapping so height displacement, albedo and normals share tile-edge coordinates.
+- The shared page cache budget is allocated in body-priority order. Current resident pins and not-yet-uploaded pages reserved by earlier bodies both consume the per-frame budget.
+- A topology transition is published only after successful balancing/reconciliation. While child meshes are unavailable, the retained parent coverage also writes depth.
+- Mesh buffers and resized scene/depth/post-process textures are retired only after submitted GPU work completes; device disposal remains a separate terminal path.
+
 ## Solar illumination contract
 
 The WebGPU body, geodesic, atmosphere, cloud and ring paths use the same solar-distance policy. Render positions are camera-relative AU, so the renderer computes the body-to-star distance in AU, applies inverse-square attenuation, then applies the bounded display compensation from `solarIrradianceForDisplay()`. This keeps the physical falloff explicit while preventing distant bodies from collapsing to near-black in the HDR display. It is not a second physical light source and does not alter simulation data.

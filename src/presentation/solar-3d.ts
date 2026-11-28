@@ -19,7 +19,14 @@ const RING_SHADOW_OPACITY:Record<string,number>={saturn:.72,jupiter:.22,uranus:.
 const TEXTURE_DETAIL_CAPS={low:.65,medium:.95,high:1.25,ultra:1.5};
 const NAMES={sun:'Солнце',mercury:'Меркурий',venus:'Венера',earth:'Земля',moon:'Луна',mars:'Марс',jupiter:'Юпитер',saturn:'Сатурн',uranus:'Уран',neptune:'Нептун'};
 const sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],norm=a=>{const m=Math.hypot(...a)||1;return a.map(v=>v/m);};
-function perspective(f,a,n,fz){const q=1/Math.tan(f/2),d=1/(n-fz);return[q/a,0,0,0,0,q,0,0,0,0,(fz+n)*d,-1,0,0,2*fz*n*d,0];}
+export function createPerspectiveMatrix(fovRadians:number,aspect:number,near:number,far:number):number[]{
+ if(!Number.isFinite(fovRadians)||fovRadians<=0||fovRadians>=Math.PI)throw new RangeError('Perspective field of view must be between zero and pi.');
+ if(!Number.isFinite(aspect)||aspect<=0)throw new RangeError('Perspective aspect ratio must be positive.');
+ if(!Number.isFinite(near)||!Number.isFinite(far)||near<=0||far<=near)throw new RangeError('Perspective clip planes must satisfy 0 < near < far.');
+ const q=1/Math.tan(fovRadians/2),d=1/(near-far);
+ // WebGPU використовує clip-space depth [0, 1], а не OpenGL [-1, 1].
+ return[q/aspect,0,0,0,0,q,0,0,0,0,far*d,-1,0,0,far*near*d,0];
+}
 function lookAt(e,t,u){const z=norm(sub(e,t)),x=norm(cross(u,z)),y=cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1];}
 function multiply(a,b){const o=Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o;}
 export function bodyModelMatrix(body,radius,p,timeSeconds,state,parentState,rotationAngle=0){
@@ -496,7 +503,7 @@ export class Solar3DView{
   const eye=[this.target[0]+this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),this.target[1]+this.distance*Math.sin(this.pitch),this.target[2]+this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)];
   const focusRadius=focus?focus.meanRadiusM/AU:0;
   const [near,far]=calculateCameraClipPlanes(Math.hypot(...eye),focusRadius);
-  const vp=multiply(perspective(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
+  const vp=multiply(createPerspectiveMatrix(Math.PI/3,w/h,near,far),lookAt(eye,this.target,[0,1,0]));
   this.projected=[];
   const webgpuBodies:WebGPUBodyDraw[]=[];this.webgpuOrbits=[];this.webgpuRings=[];
   const renderOrigin=focusState?focusState.position:sun;
@@ -556,7 +563,7 @@ export class Solar3DView{
     webgpuDraw.clouds=cloudLayers.map(layer=>({altitudeRatio:layer.altitudeM/body.meanRadiusM,thicknessRatio:(layer.thicknessM??Math.max(1000,layer.altitudeM*.22))/body.meanRadiusM,coverage:layer.coverage,opacity:layer.opacity,scale:layer.scale,wind:layer.wind,erosion:layer.erosion??.45,banding:layer.banding??0,detail:layer.detail??3}));
    }
    const screen=projectedScreen;
-   if(screen&&screen.z>=-1&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
+   if(screen&&screen.z>=0&&screen.z<=1&&screen.x>=-20&&screen.x<=w/dpr+20&&screen.y>=-20&&screen.y<=h/dpr+20)this.projected.push([body.id,{...screen,world:p,radius,projectedRadius:px,viewDistance,labelOpacity:planetaryLabelOpacity(viewDistance,radius)}]);
   }
   // Корабль временно исключён из сцены: активна только Солнечная система.
   const labelCandidates=this.projected.filter(([id])=>Boolean(world.bodies.get(id))).sort((a,b)=>Number(Boolean(world.bodies.get(b[0])?.parentId===null))-Number(Boolean(world.bodies.get(a[0])?.parentId===null))+(b[1].projectedRadius??0)-(a[1].projectedRadius??0));
@@ -566,7 +573,7 @@ export class Solar3DView{
   for(const [id,p] of labelCandidates){const body=world.bodies.get(id);if(!body)continue;let node=this.labelNodes.get(id);if(!node){node=document.createElement('span');node.className='body-label';this.labels.append(node);this.labelNodes.set(id,node);}node.textContent=body.name;const width=Math.max(34,body.name.length*6.4),height=14;let chosen=null;for(const [dx,dy] of offsets){const left=p.x+dx-(dx<0?width:0),top=p.y+dy,rect={left:left-4,top:top-3,right:left+width+4,bottom:top+height+3};if(rect.left<4||rect.top<4||rect.right>w/dpr-4||rect.bottom>h/dpr-4)continue;if(occupied.every(other=>rect.right<other.left||rect.left>other.right||rect.bottom<other.top||rect.top>other.bottom)){chosen=[left,top];occupied.push(rect);break;}}const labelOpacity=p.labelOpacity??1;if(chosen&&labelOpacity>0.005){node.hidden=false;node.style.opacity=String(labelOpacity);node.style.transform='translate3d('+Math.round(chosen[0])+'px,'+Math.round(chosen[1])+'px,0)';visibleLabels.add(id);}else node.hidden=true;}
   for(const [id,node] of this.labelNodes)if(!visibleLabels.has(id))node.hidden=true;
   const sunScreen=this.project(vp,sunRenderPosition,w/dpr,h/dpr);
-  let sunVisible=Boolean(sunScreen&&sunScreen.z>=-1&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);
+  let sunVisible=Boolean(sunScreen&&sunScreen.z>=0&&sunScreen.z<=1&&sunScreen.x>=0&&sunScreen.x<=w/dpr&&sunScreen.y>=0&&sunScreen.y<=h/dpr);
   if(sunVisible){
    const observerSI={x:renderOrigin.x+eye[0]*AU,y:renderOrigin.y+eye[2]*AU,z:renderOrigin.z+eye[1]*AU};
    const observer=[observerSI.x,observerSI.y,observerSI.z] as [number,number,number];

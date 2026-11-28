@@ -15,5 +15,7 @@ export function focusedSolarExposureMultiplier(_distanceAU:number):number {
 export function solarIrradianceForDisplay(distanceAU:number):number {
  if(!Number.isFinite(distanceAU)||distanceAU<=0)return 1;
  const distance=Math.max(distanceAU,0.05);
- return 1/(distance*distance);
+ // Фізичний спад 1/r² зберігається; окремий обмежений display gain стискає
+ // міжпланетний HDR-діапазон, щоб зовнішні тіла не губили деталі після tone mapping.
+ return planetaryDisplayGain(distance)/(distance*distance);
 }
